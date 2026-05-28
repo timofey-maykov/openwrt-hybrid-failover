@@ -1,6 +1,8 @@
-# Podkop Hybrid Failover: полное описание
+# Hybrid Failover: полное описание
 
-Доработка [Podkop](https://github.com/itdoginfo/podkop) для OpenWrt: нативный **VPN + резервные proxy** через **urltest** в sing-box, поддержка **Amnezia `vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** на русском.
+> Не является Podkop и не одобрено itdoginfo. Основано на [Podkop](https://github.com/itdoginfo/podkop) с открытым исходным кодом. [docs/TRADEMARK.md](TRADEMARK.md)
+
+Дополнения для OpenWrt (совместимость с upstream [Podkop](https://github.com/itdoginfo/podkop)): нативный **VPN + резервные proxy** через **urltest** в sing-box, поддержка **Amnezia `vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** на русском.
 
 Базовая версия upstream: **podkop v0.7.10** (`/usr/bin/podkop`).
 
@@ -114,13 +116,13 @@ flowchart TB
 
 1. `opkg install python3-light`
 2. На роутере: `/usr/lib/podkop/amnezia_vpn_uri_to_vless.py` (из репозитория)
-3. Патч facade с веткой `vpn)` (в пакете `podkop-hybrid-failover` уже включён)
+3. Патч facade с веткой `vpn)` (в пакете `hybrid-failover-patch` уже включён)
 
 Поддерживается типичный экспорт **amnezia-xray** с VLESS в `last_config`. В LuCI строка `vpn://…` проходит валидацию как есть.
 
 ### Amnezia AWG2 (`awg2://`) {#amnezia-awg2-awg2}
 
-`awg2://` **не** отдельный сетевой протокол и **не** публичная URI-схема (в отличие от `vless://`, `trojan://` и т.п.). Это **внутренний формат Podkop** для настройки **AmneziaWG 2.0** на роутере:
+`awg2://` **не** отдельный сетевой протокол и **не** публичная URI-схема (в отличие от `vless://`, `trojan://` и т.п.). Это **служебный формат в патче podkop** для настройки **AmneziaWG 2.0** на роутере:
 
 1. создаётся интерфейс `amneziawg`;
 2. конфиг применяется через `awg setconf`;
@@ -166,13 +168,13 @@ uci commit podkop
 
 ## Пакеты OpenWrt
 
-Собираются `./scripts/build-packages.sh`, публикуются в [Releases](https://github.com/timofey-maykov/podkop-hybrid-failover/releases).
+Собираются `./scripts/build-packages.sh`, публикуются в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
 
 | Пакет | Architecture | Содержимое |
 |-------|----------------|------------|
-| `podkop-hybrid-failover` | all | Патченный `podkop`, `sing_box_config_facade.sh`, `amnezia_vpn_uri_to_vless.py`, `section.js` |
-| `podkop-telegram-bot` | per-arch | Go-бинарник, `init.d`, JSON/UCI-шаблон |
-| `luci-app-podkop-bot` | all | Страница LuCI бота (RU), menu, ACL |
+| `hybrid-failover-patch` | all | Патченный `podkop`, `sing_box_config_facade.sh`, `amnezia_vpn_uri_to_vless.py`, `section.js` |
+| `hybrid-failover-bot` | per-arch | Go-бинарник, `init.d`, JSON/UCI-шаблон |
+| `luci-app-hybrid-failover-bot` | all | Страница LuCI бота (RU), menu, ACL |
 
 Архитектуры бота: `aarch64_cortex-a53`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc`, `x86_64`.
 
@@ -180,7 +182,7 @@ uci commit podkop
 
 - **hybrid:** `podkop`, `sing-box`, `jq`, `curl`, `python3-light`, `coreutils-base64`
 - **бот:** `uci`, `procd`
-- **LuCI бота:** `luci-base`, `luci-compat`, `podkop-telegram-bot`
+- **LuCI бота:** `luci-base`, `luci-compat`, `hybrid-failover-bot`
 
 ---
 
@@ -192,33 +194,33 @@ uci commit podkop
 
 ```sh
 wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/podkop-hybrid-failover/main/scripts/install-on-router.sh
+  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
 ash /tmp/install.sh
 ```
 
 Скрипт **сам**:
 
 - определяет архитектуру (`/etc/openwrt_release` → `DISTRIB_ARCH`);
-- берёт последний релиз GitHub (`PODKOP_HF_VERSION=latest`) или фиксированный тег;
+- берёт последний релиз GitHub (`HF_VERSION=latest`) или фиксированный тег;
 - ставит зависимости через `opkg`;
 - устанавливает `.ipk` через `opkg install`.
 
-### Режимы (`PODKOP_HF_MODE`)
+### Режимы (`HF_MODE`)
 
 | Режим | Устанавливает |
 |-------|----------------|
-| `full` (по умолчанию) | hybrid + telegram-bot + luci-app-podkop-bot |
-| `bot` | только telegram-bot + luci-app-podkop-bot |
-| `patches` | только podkop-hybrid-failover |
+| `full` (по умолчанию) | hybrid + telegram-bot + luci-app-hybrid-failover-bot |
+| `bot` | только telegram-bot + luci-app-hybrid-failover-bot |
+| `patches` | только hybrid-failover-patch |
 
 Если `.ipk` hybrid нет в релизе: скрипт скачает файлы с `raw.githubusercontent.com` (fallback).
 
 ### После установки бота
 
 1. Создать бота в [@BotFather](https://t.me/BotFather).
-2. `/etc/podkop-telegram-bot.json`: `token`, `admin_ids`, `clash_api` (часто `http://192.168.x.1:9090`).
-3. `uci set podkop-telegram-bot.main.enabled=1 && uci commit podkop-telegram-bot`
-4. `/etc/init.d/podkop-telegram-bot restart`
+2. `/etc/hybrid-failover-bot.json`: `token`, `admin_ids`, `clash_api` (часто `http://192.168.x.1:9090`).
+3. `uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot`
+4. `/etc/init.d/hybrid-failover-bot restart`
 5. В Telegram: `/panel`
 
 ### С хоста (SSH)
@@ -245,10 +247,10 @@ ash /tmp/install.sh
 
 Нужен патч **`main.js`** (`patches/main-js-dashboard-vpn-failover.patch`): отдельные строки Fastest, VPN-интерфейс и резервные URI (как у proxy urltest). Только `section.js` дашборд не меняет.
 
-### Telegram-бот Podkop
+### Telegram-бот Hybrid Failover
 
-**Сервисы → Telegram-бот Podkop**  
-`/cgi-bin/luci/admin/services/podkop-bot`
+**Сервисы → Telegram-бот Hybrid Failover**  
+`/cgi-bin/luci/admin/services/hybrid-failover-bot`
 
 Русский интерфейс: сервис, JSON-конфиг (токен, admin_ids, Clash API, policy), pending validate/apply/rollback.
 
@@ -267,7 +269,7 @@ ash /tmp/install.sh
 - pending-конфиг бота (validate / apply / rollback);
 - только пользователи из `admin_ids`.
 
-### Конфиг `/etc/podkop-telegram-bot.json`
+### Конфиг `/etc/hybrid-failover-bot.json`
 
 | Поле | Описание |
 |------|----------|
@@ -279,7 +281,7 @@ ash /tmp/install.sh
 | `podkop_init_script` | Путь к `/etc/init.d/podkop` |
 | `log_path`, `audit_path` | Логи |
 
-UCI сервиса: `podkop-telegram-bot.main.enabled`, `binary`, `config_path`.
+UCI сервиса: `hybrid-failover-bot.main.enabled`, `binary`, `config_path`.
 
 ### Основные команды
 
@@ -327,7 +329,7 @@ wget -qO- 'http://ROUTER:9090/proxies/glob-awg-out/delay?timeout=5000&url=http:/
 
 ### После `opkg upgrade podkop`
 
-Патчи к `/usr/bin/podkop` могут затереться: переустановите `podkop-hybrid-failover` или `install-on-router.sh` (режим `patches`).
+Патчи к `/usr/bin/podkop` могут затереться: переустановите `hybrid-failover-patch` или `install-on-router.sh` (режим `patches`).
 
 ---
 
@@ -335,7 +337,7 @@ wget -qO- 'http://ROUTER:9090/proxies/glob-awg-out/delay?timeout=5000&url=http:/
 
 | Путь | Назначение |
 |------|------------|
-| `packaging/podkop-hybrid-failover/` | Патченный `podkop` для сборки пакетов |
+| `packaging/hybrid-failover-patch/` | Патченный `podkop` для сборки пакетов |
 | `patches/` | Патчи к stock-файлам и upstream `main` |
 | `luci/` | `section.js`, патчи `main.js` / fe-app |
 | `bot/` | Исходники Telegram-бота |

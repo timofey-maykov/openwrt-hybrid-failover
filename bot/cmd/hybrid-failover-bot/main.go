@@ -8,12 +8,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/app"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/botconfig"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/app"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
 )
 
 func main() {
-	configPath := flag.String("config", "/etc/podkop-telegram-bot.json", "Path to bot config")
+	configPath := flag.String("config", "/etc/hybrid-failover-bot.json", "Path to bot config")
 	mode := flag.String("mode", "run", "run|validate-config|apply-config|rollback-config|set-pending")
 	key := flag.String("key", "", "pending key for set-pending")
 	value := flag.String("value", "", "pending value for set-pending")

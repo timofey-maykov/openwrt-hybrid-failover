@@ -1,4 +1,4 @@
-# Файлы пакета podkop-hybrid-failover
+# Файлы пакета hybrid-failover-patch
 
 Содержимое для сборки `.ipk` и установки с GitHub (в CI и на роутере).
 

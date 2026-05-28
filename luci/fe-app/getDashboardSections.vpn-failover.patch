@@ -1,5 +1,5 @@
---- /Users/tmaykov/podkop-hybrid-failover/luci/fe-app/getDashboardSections.upstream.ts	2026-04-14 02:50:49.235335870 +0300
-+++ /Users/tmaykov/podkop-hybrid-failover/luci/fe-app/getDashboardSections.ts	2026-04-14 02:51:21.274402633 +0300
+--- /Users/tmaykov/openwrt-hybrid-failover/luci/fe-app/getDashboardSections.upstream.ts	2026-04-14 02:50:49.235335870 +0300
++++ /Users/tmaykov/openwrt-hybrid-failover/luci/fe-app/getDashboardSections.ts	2026-04-14 02:51:21.274402633 +0300
 @@ -157,6 +157,52 @@
        }
  

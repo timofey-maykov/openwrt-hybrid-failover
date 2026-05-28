@@ -8,8 +8,8 @@
 var fieldStyle = 'width:100%;max-width:100%;box-sizing:border-box;';
 
 return view.extend({
-	configFile: '/etc/podkop-telegram-bot.json',
-	botBinary: '/usr/bin/podkop-telegram-bot',
+	configFile: '/etc/hybrid-failover-bot.json',
+	botBinary: '/usr/bin/hybrid-failover-bot',
 
 	handleAction: function(mode) {
 		return fs.exec(this.botBinary, [
@@ -92,7 +92,7 @@ return view.extend({
 		};
 
 		return E('div', { 'class': 'cbi-section', 'style': 'width:100%;' }, [
-			E('h3', 'Подкоп Telegram Bot: JSON-конфиг (редактирование)'),
+			E('h3', 'Hybrid Failover Bot: JSON-конфиг (редактирование)'),
 			mkInput('Токен', 'pdkb_token', cfg.token || '', { 'placeholder': '123456789:ABC...' }),
 			mkInput('ID администраторов (через запятую)', 'pdkb_admin_ids', (cfg.admin_ids || []).join(', '), { 'placeholder': '123456789, 987654321' }),
 			mkSelect('Политика failover', 'pdkb_policy', [
@@ -101,8 +101,8 @@ return view.extend({
 			], cfg.policy),
 			mkInput('URL Clash API', 'pdkb_clash_api', cfg.clash_api || 'http://192.168.42.1:9090'),
 			mkInput('Скрипт init.d Podkop', 'pdkb_podkop_init_script', cfg.podkop_init_script || '/etc/init.d/podkop'),
-			mkInput('Путь к логам', 'pdkb_log_path', cfg.log_path || '/var/log/podkop-telegram-bot.log'),
-			mkInput('Путь к audit-логу', 'pdkb_audit_path', cfg.audit_path || '/var/log/podkop-telegram-bot.audit.log'),
+			mkInput('Путь к логам', 'pdkb_log_path', cfg.log_path || '/var/log/hybrid-failover-bot.log'),
+			mkInput('Путь к audit-логу', 'pdkb_audit_path', cfg.audit_path || '/var/log/hybrid-failover-bot.audit.log'),
 			mkInput('Таймаут проверки, сек', 'pdkb_probe_timeout_seconds', String(cfg.probe_timeout_seconds || 5), { 'type': 'number', 'min': '1', 'style': 'max-width:200px;width:100%;' }),
 			E('div', { 'style': 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;' }, [
 				E('button', {
@@ -117,7 +117,7 @@ return view.extend({
 		var m, s, o;
 		var self = this;
 
-		m = new form.Map('podkop-telegram-bot', 'Telegram-бот Podkop',
+		m = new form.Map('hybrid-failover-bot', 'Telegram-бот Hybrid Failover',
 			'Настройка бота, pending-конфиг и безопасное применение изменений.');
 
 		s = m.section(form.NamedSection, 'main', 'bot', 'Сервис');
@@ -128,17 +128,17 @@ return view.extend({
 
 		o = s.option(form.Value, 'binary', 'Путь к бинарнику');
 		o.datatype = 'string';
-		o.default = '/usr/bin/podkop-telegram-bot';
+		o.default = '/usr/bin/hybrid-failover-bot';
 		o.width = '100%';
 
 		o = s.option(form.Value, 'config_path', 'Путь к конфигу JSON');
 		o.datatype = 'string';
-		o.default = '/etc/podkop-telegram-bot.json';
+		o.default = '/etc/hybrid-failover-bot.json';
 		o.width = '100%';
 
 		o = s.option(form.Value, 'log_path', 'Путь к лог-файлу');
 		o.datatype = 'string';
-		o.default = '/var/log/podkop-telegram-bot.log';
+		o.default = '/var/log/hybrid-failover-bot.log';
 		o.width = '100%';
 
 		s = m.section(form.TypedSection, 'bot_actions', 'Действия с конфигом');
@@ -161,7 +161,7 @@ return view.extend({
 					}, 'Откатить'),
 					E('button', {
 						'class': 'btn cbi-button cbi-button-action',
-						'click': ui.createHandlerFn(this, function() { return fs.exec('/etc/init.d/podkop-telegram-bot', ['restart']); })
+						'click': ui.createHandlerFn(this, function() { return fs.exec('/etc/init.d/hybrid-failover-bot', ['restart']); })
 					}, 'Перезапустить бота')
 				])
 			]);

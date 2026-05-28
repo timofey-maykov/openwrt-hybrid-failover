@@ -61,7 +61,7 @@ function createSectionContent(section) {
     "failover_vpn_enabled",
     _("VPN failover (proxy backups)"),
     _(
-      "Try the VPN interface first, then URLTest among the listed proxy URIs if the primary path fails. Requires patched podkop (see podkop-hybrid-failover).",
+      "Try the VPN interface first, then URLTest among the listed proxy URIs if the primary path fails. Requires patched podkop (see hybrid-failover-patch).",
     ),
   );
   o.default = "0";
@@ -73,7 +73,7 @@ function createSectionContent(section) {
     "failover_proxy_links",
     _("Failover proxy URIs"),
     _(
-      "One URI per entry: vless://, ss://, trojan://, … or Amnezia vpn:// export. vpn:// needs python3-light on the router and /usr/lib/podkop/amnezia_vpn_uri_to_vless.py (see podkop-hybrid-failover).",
+      "One URI per entry: vless://, ss://, trojan://, … or Amnezia vpn:// export. vpn:// needs python3-light on the router and /usr/lib/podkop/amnezia_vpn_uri_to_vless.py (see hybrid-failover-patch).",
     ),
   );
   o.depends("connection_type", "vpn");

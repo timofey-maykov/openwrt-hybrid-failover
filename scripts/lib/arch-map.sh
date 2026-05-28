@@ -3,7 +3,7 @@
 # shellcheck disable=SC2034
 
 # Architectures we build release packages for.
-PODKOP_HF_BUILD_ARCHS=(
+HF_BUILD_ARCHS=(
 	aarch64_cortex-a53
 	arm_cortex-a7
 	mipsel_24kc

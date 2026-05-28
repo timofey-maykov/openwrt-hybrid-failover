@@ -1,9 +1,10 @@
 dist/
-bot/podkop-telegram-bot
-packages/podkop-telegram-bot/binaries/
+bot/hybrid-failover-bot
+packages/hybrid-failover-bot/binaries/
 *.ipk
 .DS_Store
 work/
 upstream-main/
 upstream-main-patched/
 .cursor/
+bot/podkop-telegram-bot

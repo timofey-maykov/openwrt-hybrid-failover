@@ -1,4 +1,4 @@
-# Опции UCI (Podkop Hybrid Failover)
+# Опции UCI (Hybrid Failover)
 
 Секция маршрутизации: `config section 'glob'` (имя любое: от него теги sing-box: `glob-out`, `glob-urltest-out`, …).
 

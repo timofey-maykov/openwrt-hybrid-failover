@@ -1,4 +1,0 @@
-#!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
-/etc/init.d/podkop-telegram-bot enable 2>/dev/null || true
-exit 0

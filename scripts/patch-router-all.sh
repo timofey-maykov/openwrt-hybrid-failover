@@ -7,7 +7,7 @@ ROUTER_USER="${ROUTER_USER:-root}"
 SSH_TARGET="${ROUTER_USER}@${ROUTER_HOST}"
 SSH_OPTS=( -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new )
 
-PODKOP_BIN="$ROOT_DIR/packaging/podkop-hybrid-failover/usr/bin/podkop"
+PODKOP_BIN="$ROOT_DIR/packaging/hybrid-failover-patch/usr/bin/podkop"
 FACADE_SH="$ROOT_DIR/vendor/sing_box_config_facade.sh"
 AMNEZIA_PY="$ROOT_DIR/scripts/amnezia_vpn_uri_to_vless.py"
 LUCI_SECTION_JS="$ROOT_DIR/luci/section.js"

@@ -1,5 +1,5 @@
---- /Users/tmaykov/podkop-hybrid-failover/work/usr/bin/podkop.orig	2026-04-14 02:17:17.015137808 +0300
-+++ /Users/tmaykov/podkop-hybrid-failover/work/usr/bin/podkop	2026-04-14 11:45:31.249972017 +0300
+--- /Users/tmaykov/openwrt-hybrid-failover/work/usr/bin/podkop.orig	2026-04-14 02:17:17.015137808 +0300
++++ /Users/tmaykov/openwrt-hybrid-failover/work/usr/bin/podkop	2026-04-14 11:45:31.249972017 +0300
 @@ -211,8 +211,64 @@
  }
  

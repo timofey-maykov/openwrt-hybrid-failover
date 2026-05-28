@@ -1,5 +1,5 @@
---- /Users/tmaykov/podkop-hybrid-failover/luci/section.js.orig	2026-04-14 02:20:54.639888309 +0300
-+++ /Users/tmaykov/podkop-hybrid-failover/luci/section.js	2026-04-14 02:55:43.411711642 +0300
+--- /Users/tmaykov/openwrt-hybrid-failover/luci/section.js.orig	2026-04-14 02:20:54.639888309 +0300
++++ /Users/tmaykov/openwrt-hybrid-failover/luci/section.js	2026-04-14 02:55:43.411711642 +0300
 @@ -5,6 +5,46 @@
  "require tools.widgets as widgets";
  "require view.podkop.main as main";
@@ -55,7 +55,7 @@
 +    "failover_vpn_enabled",
 +    _("VPN failover (proxy backups)"),
 +    _(
-+      "Try the VPN interface first, then URLTest among the listed proxy URIs if the primary path fails. Requires patched podkop (see podkop-hybrid-failover).",
++      "Try the VPN interface first, then URLTest among the listed proxy URIs if the primary path fails. Requires patched podkop (see openwrt-hybrid-failover).",
 +    ),
 +  );
 +  o.default = "0";
@@ -67,7 +67,7 @@
 +    "failover_proxy_links",
 +    _("Failover proxy URIs"),
 +    _(
-+      "One URI per entry: vless://, ss://, trojan://, … or Amnezia vpn:// export. vpn:// needs python3-light on the router and /usr/lib/podkop/amnezia_vpn_uri_to_vless.py (see podkop-hybrid-failover).",
++      "One URI per entry: vless://, ss://, trojan://, … or Amnezia vpn:// export. vpn:// needs python3-light on the router and /usr/lib/podkop/amnezia_vpn_uri_to_vless.py (see openwrt-hybrid-failover).",
 +    ),
 +  );
 +  o.depends("connection_type", "vpn");

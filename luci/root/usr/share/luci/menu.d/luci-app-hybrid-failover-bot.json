@@ -1,0 +1,10 @@
+{
+  "admin/services/hybrid-failover-bot": {
+    "title": "Telegram-бот Hybrid Failover",
+    "order": 95,
+    "action": {
+      "type": "view",
+      "path": "hybrid-failover/bot"
+    }
+  }
+}

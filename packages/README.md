@@ -11,9 +11,9 @@ chmod +x scripts/build-packages.sh scripts/lib/*.sh
 
 | Пакет | Architecture | Содержимое |
 |-------|----------------|------------|
-| `podkop-telegram-bot` | per-target | Go-бинарник, init.d, UCI, JSON-конфиг |
-| `luci-app-podkop-bot` | all | LuCI-страница бота (RU) |
-| `podkop-hybrid-failover` | all | Патчи `/usr/bin/podkop`, facade, `section.js` |
+| `hybrid-failover-bot` | per-target | Go-бинарник, init.d, UCI, JSON-конфиг |
+| `luci-app-hybrid-failover-bot` | all | LuCI-страница бота (RU) |
+| `hybrid-failover-patch` | all | Патчи `/usr/bin/podkop`, facade, `section.js` |
 
 Поддерживаемые GO/OpenWrt arch: `aarch64_cortex-a53`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc`, `x86_64`.
 
@@ -21,7 +21,7 @@ chmod +x scripts/build-packages.sh scripts/lib/*.sh
 
 ```sh
 wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/podkop-hybrid-failover/main/scripts/install-on-router.sh
+  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
 ash /tmp/install.sh
 ```
 
@@ -29,4 +29,4 @@ ash /tmp/install.sh
 
 ## OpenWrt SDK (опционально)
 
-Makefiles в подкаталогах: для сборки в дереве OpenWrt. Сначала выполните `scripts/build-packages.sh` и скопируйте бинарники в `packages/podkop-telegram-bot/binaries/<ARCH>/`.
+Makefiles в подкаталогах: для сборки в дереве OpenWrt. Сначала выполните `scripts/build-packages.sh` и скопируйте бинарники в `packages/hybrid-failover-bot/binaries/<ARCH>/`.
