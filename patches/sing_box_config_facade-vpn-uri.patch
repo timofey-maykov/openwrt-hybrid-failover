@@ -1,0 +1,18 @@
+--- usr/lib/podkop/sing_box_config_facade.sh
++++ usr/lib/podkop/sing_box_config_facade.sh
+@@ -162,6 +162,15 @@
+             "$obfuscator_password" "$upload_mbps" "$download_mbps")
+         config=$(_add_outbound_security "$config" "$tag" "$url")
+         ;;
++    vpn)
++        if ! command -v python3 >/dev/null 2>&1; then
++            log "vpn:// URIs require python3-light (opkg install python3-light). Aborted." "fatal"
++            exit 1
++        fi
++        local decoded_url
++        decoded_url="$(python3 /usr/lib/podkop/amnezia_vpn_uri_to_vless.py "$url")" || exit $?
++        config="$(sing_box_cf_add_proxy_outbound "$config" "$section" "$decoded_url" "$udp_over_tcp")"
++        ;;
+     *)
+         log "Unsupported proxy $scheme type. Aborted." "fatal"
+         exit 1

@@ -1,0 +1,5 @@
+config bot 'main'
+	option enabled '0'
+	option config_path '/etc/podkop-telegram-bot.json'
+	option binary '/usr/bin/podkop-telegram-bot'
+	option log_path '/var/log/podkop-telegram-bot.log'

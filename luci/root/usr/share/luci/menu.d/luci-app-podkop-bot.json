@@ -1,0 +1,10 @@
+{
+  "admin/services/podkop-bot": {
+    "title": "Telegram-бот Podkop",
+    "order": 95,
+    "action": {
+      "type": "view",
+      "path": "podkop/bot"
+    }
+  }
+}

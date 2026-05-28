@@ -1,0 +1,17 @@
+# Пример: секция glob: AmneziaWG awg0 + резерв VLESS
+# Подставьте свой vless:// из приложения (UUID, pbk, sid, sni).
+
+uci set podkop.glob.failover_vpn_enabled='1'
+uci del podkop.glob.failover_proxy_links 2>/dev/null
+uci add_list podkop.glob.failover_proxy_links='vless://<UUID>@<HOST>:<PORT>?encryption=none&flow=xtls-rprx-vision&security=reality&sni=<SNI>&fp=chrome&pbk=<PUBLIC_KEY>&sid=<SHORT_ID>&type=tcp&headerType=none'
+
+# Опционально: быстрее рвать сессии при смене узла
+uci set podkop.glob.urltest_interrupt_exist_connections='1'
+uci set podkop.glob.urltest_check_interval='20s'
+
+uci commit podkop
+/etc/init.d/podkop restart
+
+# Отключить резерв, оставить только AWG:
+# uci set podkop.glob.failover_vpn_enabled='0'
+# uci commit podkop && /etc/init.d/podkop restart
