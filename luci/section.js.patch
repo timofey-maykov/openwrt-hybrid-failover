@@ -1,0 +1,194 @@
+--- /Users/tmaykov/podkop-hybrid-failover/luci/section.js.orig	2026-04-14 02:20:54.639888309 +0300
++++ /Users/tmaykov/podkop-hybrid-failover/luci/section.js	2026-04-14 02:55:43.411711642 +0300
+@@ -5,6 +5,46 @@
+ "require tools.widgets as widgets";
+ "require view.podkop.main as main";
+ 
++/** Accepts Podkop proxy URIs plus Amnezia `vpn://…` (decoded on router by python3 + sing_box_config_facade). */
++function validateProxyUrlOrAmneziaVpn(value) {
++  if (!value || value.length === 0) {
++    return true;
++  }
++  if (typeof value === "string") {
++    const t = value.trim();
++    if (/^vpn:\/\//i.test(t)) {
++      return t.length >= 24
++        ? true
++        : _("Amnezia vpn:// link looks too short");
++    }
++    const validation = main.validateProxyUrl(value);
++    return validation.valid ? true : validation.message;
++  }
++  if (Array.isArray(value)) {
++    const shortVpn = value.some(
++      (v) =>
++        typeof v === "string" &&
++        /^vpn:\/\//i.test(v.trim()) &&
++        v.trim().length < 24,
++    );
++    if (shortVpn) {
++      return _("Amnezia vpn:// link looks too short");
++    }
++    const nonVpn = value.filter(
++      (v) => !(typeof v === "string" && /^vpn:\/\//i.test(v.trim())),
++    );
++    if (nonVpn.length === 0) {
++      return true;
++    }
++    const validation = main.validateProxyUrl(
++      nonVpn.length === 1 ? nonVpn[0] : nonVpn,
++    );
++    return validation.valid ? true : validation.message;
++  }
++  const validation = main.validateProxyUrl(value);
++  return validation.valid ? true : validation.message;
++}
++
+ function createSectionContent(section) {
+   let o = section.option(
+     form.ListValue,
+@@ -17,6 +57,34 @@
+   o.value("block", "Block");
+ 
+   o = section.option(
++    form.Flag,
++    "failover_vpn_enabled",
++    _("VPN failover (proxy backups)"),
++    _(
++      "Try the VPN interface first, then URLTest among the listed proxy URIs if the primary path fails. Requires patched podkop (see podkop-hybrid-failover).",
++    ),
++  );
++  o.default = "0";
++  o.rmempty = false;
++  o.depends("connection_type", "vpn");
++
++  o = section.option(
++    form.DynamicList,
++    "failover_proxy_links",
++    _("Failover proxy URIs"),
++    _(
++      "One URI per entry: vless://, ss://, trojan://, … or Amnezia vpn:// export. vpn:// needs python3-light on the router and /usr/lib/podkop/amnezia_vpn_uri_to_vless.py (see podkop-hybrid-failover).",
++    ),
++  );
++  o.depends("connection_type", "vpn");
++  o.depends("failover_vpn_enabled", "1");
++  o.placeholder = "vless://… or vpn://…";
++  o.rmempty = false;
++  o.validate = function (section_id, value) {
++    return validateProxyUrlOrAmneziaVpn(value);
++  };
++
++  o = section.option(
+     form.ListValue,
+     "proxy_config_type",
+     _("Configuration Type"),
+@@ -42,20 +110,14 @@
+   o.textarea = true;
+   o.rmempty = false;
+   o.sectionDescriptions = new Map();
+-  o.placeholder = "vless://uuid@server:port?type=tcp&security=tls#main";
++  o.placeholder = "vless://… or single-line vpn://…";
+   o.validate = function (section_id, value) {
+     // Optional
+     if (!value || value.length === 0) {
+       return true;
+     }
+ 
+-    const validation = main.validateProxyUrl(value);
+-
+-    if (validation.valid) {
+-      return true;
+-    }
+-
+-    return validation.message;
++    return validateProxyUrlOrAmneziaVpn(value);
+   };
+ 
+   o = section.option(
+@@ -87,7 +149,7 @@
+     _("URLTest Proxy Links"),
+   );
+   o.depends("proxy_config_type", "urltest");
+-  o.placeholder = "vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links";
++  o.placeholder = "vless://, ss://, vpn://…, socks4/5://, hy2/hysteria2:// links";
+   o.rmempty = false;
+   o.validate = function (section_id, value) {
+     // Optional
+@@ -95,13 +157,7 @@
+       return true;
+     }
+ 
+-    const validation = main.validateProxyUrl(value);
+-
+-    if (validation.valid) {
+-      return true;
+-    }
+-
+-    return validation.message;
++    return validateProxyUrlOrAmneziaVpn(value);
+   };
+ 
+   o = section.option(
+@@ -116,6 +172,7 @@
+   o.value("5m", _("Every 5 minutes"));
+   o.default = "3m";
+   o.depends("proxy_config_type", "urltest");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
+ 
+   o = section.option(
+     form.Value,
+@@ -126,6 +183,7 @@
+   o.default = "50";
+   o.rmempty = false;
+   o.depends("proxy_config_type", "urltest");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
+   o.validate = function (section_id, value) {
+     if (!value || value.length === 0) {
+       return true;
+@@ -153,6 +211,7 @@
+   o.default = "https://www.gstatic.com/generate_204";
+   o.rmempty = false;
+   o.depends("proxy_config_type", "urltest");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
+ 
+   o.validate = function (section_id, value) {
+     if (!value || value.length === 0) {
+@@ -169,6 +228,30 @@
+   };
+ 
+   o = section.option(
++    form.Value,
++    "urltest_idle_timeout",
++    _("URLTest idle timeout"),
++    _(
++      "Optional. Passed to sing-box urltest (e.g. 5m). Leave empty for default. Used for Proxy URLTest and for VPN failover.",
++    ),
++  );
++  o.placeholder = "5m";
++  o.rmempty = true;
++  o.depends("proxy_config_type", "urltest");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
++
++  o = section.option(
++    form.Flag,
++    "urltest_interrupt_exist_connections",
++    _("URLTest interrupt existing connections"),
++    _("When switching to a better outbound, close existing connections (sing-box urltest)."),
++  );
++  o.default = "0";
++  o.rmempty = false;
++  o.depends("proxy_config_type", "urltest");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
++
++  o = section.option(
+     form.Flag,
+     "enable_udp_over_tcp",
+     _("UDP over TCP"),
+@@ -176,6 +259,7 @@
+   );
+   o.default = "0";
+   o.depends("connection_type", "proxy");
++  o.depends({ connection_type: "vpn", failover_vpn_enabled: "1" });
+   o.rmempty = false;
+ 
+   o = section.option(

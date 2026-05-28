@@ -1,0 +1,9 @@
+dist/
+bot/podkop-telegram-bot
+packages/podkop-telegram-bot/binaries/
+*.ipk
+.DS_Store
+work/
+upstream-main/
+upstream-main-patched/
+.cursor/

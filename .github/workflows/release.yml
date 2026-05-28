@@ -1,0 +1,42 @@
+name: Release packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: bot/go.mod
+          cache-dependency-path: bot/go.sum
+
+      - name: Build all .ipk packages
+        run: |
+          chmod +x scripts/build-packages.sh scripts/lib/*.sh
+          ./scripts/build-packages.sh
+
+      - name: Upload release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/ipk/*
+          generate_release_notes: true
+
+      - name: Upload artifacts (manual run)
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        uses: actions/upload-artifact@v6
+        with:
+          name: openwrt-ipk
+          path: dist/ipk/*.ipk

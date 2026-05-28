@@ -1,0 +1,12 @@
+{
+  "token": "CHANGE_ME",
+  "admin_ids": [
+    123456789
+  ],
+  "log_path": "/var/log/podkop-telegram-bot.log",
+  "audit_path": "/var/log/podkop-telegram-bot.audit.log",
+  "clash_api": "http://127.0.0.1:9090",
+  "podkop_init_script": "/etc/init.d/podkop",
+  "policy": "outage-only",
+  "probe_timeout_seconds": 5
+}

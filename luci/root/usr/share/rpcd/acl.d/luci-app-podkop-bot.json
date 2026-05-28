@@ -1,0 +1,13 @@
+{
+  "luci-app-podkop-bot": {
+    "description": "Grant access to Podkop Telegram bot config",
+    "read": {
+      "uci": [ "podkop-telegram-bot" ],
+      "file": [ "/etc/podkop-telegram-bot.json", "/etc/podkop-telegram-bot.json.pending" ]
+    },
+    "write": {
+      "uci": [ "podkop-telegram-bot" ],
+      "file": [ "/etc/podkop-telegram-bot.json", "/etc/podkop-telegram-bot.json.pending" ]
+    }
+  }
+}
