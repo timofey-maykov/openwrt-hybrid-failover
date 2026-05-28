@@ -19,6 +19,6 @@ base64 <"${ROOT_DIR}/scripts/install-on-router.sh" | ssh "${USER}@${ROUTER}" \
 	"base64 -d > /tmp/podkop-install.sh && chmod +x /tmp/podkop-install.sh"
 
 ssh "${USER}@${ROUTER}" \
-	"PODKOP_HF_DIST_DIR=${REMOTE_DIR} PODKOP_HF_MODE=${PODKOP_HF_MODE:-full} ash /tmp/podkop-install.sh"
+	"HF_DIST_DIR=${REMOTE_DIR} HF_MODE=${HF_MODE:-full} ash /tmp/podkop-install.sh"
 
 echo "Done."

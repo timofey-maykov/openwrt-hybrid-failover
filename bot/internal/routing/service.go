@@ -1,4 +1,4 @@
-package podkop
+package routing
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/routerexec"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/validation"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/validation"
 )
 
 type Service struct {

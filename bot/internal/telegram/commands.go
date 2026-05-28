@@ -6,18 +6,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/botconfig"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/podkop"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/validation"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/validation"
 )
 
 type CommandHandler struct {
-	podkop podkop.Service
+	routing routing.Service
 	store  botconfig.Store
 }
 
-func NewCommandHandler(p podkop.Service, s botconfig.Store) CommandHandler {
-	return CommandHandler{podkop: p, store: s}
+func NewCommandHandler(p routing.Service, s botconfig.Store) CommandHandler {
+	return CommandHandler{routing: p, store: s}
 }
 
 func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (string, error) {
@@ -38,16 +38,16 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 	case "/param_menu":
 		return paramMenuText(), nil
 	case "/status":
-		return h.podkop.Status(ctx)
+		return h.routing.Status(ctx)
 	case "/params", "/param_list":
-		return h.podkop.ListRouterParams(ctx)
+		return h.routing.ListRouterParams(ctx)
 	case "/uci_show":
 		if len(fields) == 1 {
-			return h.podkop.ListRouterParams(ctx)
+			return h.routing.ListRouterParams(ctx)
 		}
-		return h.podkop.ShowRouterSection(ctx, fields[1])
+		return h.routing.ShowRouterSection(ctx, fields[1])
 	case "/uci_sections":
-		raw, err := h.podkop.ListRouterSections(ctx)
+		raw, err := h.routing.ListRouterSections(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -77,7 +77,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		}
 		key := resolveParamKey(fields[1])
 		val := strings.Join(fields[2:], " ")
-		if err := h.podkop.AddListRouterParam(ctx, key, val); err != nil {
+		if err := h.routing.AddListRouterParam(ctx, key, val); err != nil {
 			return "", err
 		}
 		return "Элемент добавлен в list (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -87,7 +87,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		}
 		key := resolveParamKey(fields[1])
 		val := strings.Join(fields[2:], " ")
-		if err := h.podkop.DelListRouterParam(ctx, key, val); err != nil {
+		if err := h.routing.DelListRouterParam(ctx, key, val); err != nil {
 			return "", err
 		}
 		return "Элемент удален из list (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -101,7 +101,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			return "", fmt.Errorf("использование: /param_get <key>\nпример: /param_get disable_quic")
 		}
 		key := resolveParamKey(fields[1])
-		value, err := h.podkop.GetRouterParam(ctx, key)
+		value, err := h.routing.GetRouterParam(ctx, key)
 		if err != nil {
 			return "", err
 		}
@@ -112,7 +112,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		}
 		key := resolveParamKey(fields[1])
 		value := strings.Join(fields[2:], " ")
-		if err := h.podkop.SetRouterParam(ctx, key, value); err != nil {
+		if err := h.routing.SetRouterParam(ctx, key, value); err != nil {
 			return "", err
 		}
 		return "Параметр изменен в UCI (pending).\n1) /param_preview\n2) /param_apply\nили /param_rollback", nil
@@ -121,7 +121,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			return "", fmt.Errorf("использование: /param_del <key>")
 		}
 		key := resolveParamKey(fields[1])
-		if err := h.podkop.DelRouterParam(ctx, key); err != nil {
+		if err := h.routing.DelRouterParam(ctx, key); err != nil {
 			return "", err
 		}
 		return "Параметр удален из UCI (pending).\n1) /param_preview\n2) /param_apply\nили /param_rollback", nil
@@ -133,7 +133,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.settings.disable_quic", value); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.settings.disable_quic", value); err != nil {
 			return "", err
 		}
 		return "QUIC обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -145,7 +145,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if policy != "outage-only" && policy != "prefer-primary" {
 			return "", fmt.Errorf("допустимо только outage-only или prefer-primary")
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.glob.failover_policy", policy); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.glob.failover_policy", policy); err != nil {
 			return "", err
 		}
 		return "Policy обновлена (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -157,7 +157,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.glob.urltest_interval", normalized); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_interval", normalized); err != nil {
 			return "", err
 		}
 		return "URLTest interval обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -169,7 +169,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.glob.urltest_tolerance", normalized); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_tolerance", normalized); err != nil {
 			return "", err
 		}
 		return "URLTest tolerance обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -181,7 +181,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.glob.urltest_idle_timeout", normalized); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_idle_timeout", normalized); err != nil {
 			return "", err
 		}
 		return "URLTest idle_timeout обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -193,19 +193,19 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.podkop.SetRouterParam(ctx, "podkop.glob.urltest_interrupt_exist_connections", value); err != nil {
+		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_interrupt_exist_connections", value); err != nil {
 			return "", err
 		}
 		return "interrupt_exist_connections обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/param_preview":
-		return h.podkop.PendingChanges(ctx)
+		return h.routing.PendingChanges(ctx)
 	case "/param_apply":
-		if err := h.podkop.Apply(ctx); err != nil {
+		if err := h.routing.Apply(ctx); err != nil {
 			return "", err
 		}
-		return "Изменения параметров применены и Podkop перезапущен", nil
+		return "Изменения применены, сервис маршрутизации (init.d podkop) перезапущен", nil
 	case "/param_rollback":
-		if err := h.podkop.Rollback(ctx); err != nil {
+		if err := h.routing.Rollback(ctx); err != nil {
 			return "", err
 		}
 		return "Изменения параметров откатаны", nil
@@ -218,13 +218,13 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			}
 			lines, _ = strconv.Atoi(n)
 		}
-		return h.podkop.Logs(ctx, lines)
+		return h.routing.Logs(ctx, lines)
 	case "/channels", "/failover_list":
-		return h.podkop.ListFailover(ctx)
+		return h.routing.ListFailover(ctx)
 	case "/health", "/check_channels":
-		health, err := h.podkop.ChannelHealth(ctx)
+		health, err := h.routing.ChannelHealth(ctx)
 		if err != nil {
-			status, serr := h.podkop.Status(ctx)
+			status, serr := h.routing.Status(ctx)
 			if serr != nil {
 				return "", fmt.Errorf("%v. Также не удалось получить статус podkop: %v", err, serr)
 			}
@@ -236,7 +236,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 				status,
 				"",
 				"Что сделать:",
-				"1) /podkop_restart",
+				"1) /routing_restart",
 				"2) подождать 5-10 сек",
 				"3) /health",
 			}, "\n"), nil
@@ -263,7 +263,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		}
 		out := []string{"Параметры failover:"}
 		for _, key := range keys {
-			val, err := h.podkop.GetRouterParam(ctx, key)
+			val, err := h.routing.GetRouterParam(ctx, key)
 			if err != nil {
 				out = append(out, fmt.Sprintf("%s=<не задан>", key))
 				continue
@@ -284,11 +284,11 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			"/param_preview",
 			"/param_apply",
 		}, "\n"), nil
-	case "/podkop_restart":
-		if err := h.podkop.Restart(ctx); err != nil {
+	case "/routing_restart", "/podkop_restart":
+		if err := h.routing.Restart(ctx); err != nil {
 			return "", err
 		}
-		return "Podkop перезапущен", nil
+		return "Сервис маршрутизации (init.d podkop) перезапущен", nil
 	case "/failover_add":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /failover_add <uri>")
@@ -297,7 +297,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err := validation.ValidateProxyURI(uri); err != nil {
 			return "", err
 		}
-		if err := h.podkop.AddFailover(ctx, uri); err != nil {
+		if err := h.routing.AddFailover(ctx, uri); err != nil {
 			return "", err
 		}
 		return "Резерв добавлен, примените /failover_apply", nil
@@ -305,20 +305,20 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /failover_rm <uri>")
 		}
-		if err := h.podkop.RemoveFailover(ctx, fields[1]); err != nil {
+		if err := h.routing.RemoveFailover(ctx, fields[1]); err != nil {
 			return "", err
 		}
 		return "Резерв удален, примените /failover_apply", nil
 	case "/failover_apply":
-		if err := h.podkop.Apply(ctx); err != nil {
+		if err := h.routing.Apply(ctx); err != nil {
 			return "", err
 		}
-		return "Изменения Podkop применены", nil
+		return "Изменения применены (podkop)", nil
 	case "/switch":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /switch <outbound>")
 		}
-		if err := h.podkop.SwitchOutbound(ctx, fields[1]); err != nil {
+		if err := h.routing.SwitchOutbound(ctx, fields[1]); err != nil {
 			return "", err
 		}
 		return "Переключение выполнено", nil
@@ -393,7 +393,7 @@ func helpText() string {
 		"/channels",
 		"/health",
 		"/check_channels",
-		"/podkop_restart",
+		"/routing_restart",
 		"/failover_list",
 		"/failover_params",
 		"/failover_help",
@@ -411,12 +411,12 @@ func helpText() string {
 }
 
 func mainPanelText() string {
-	return "Панель управления Podkop. Выберите раздел кнопками ниже."
+	return "Панель Hybrid Failover. Выберите раздел кнопками ниже."
 }
 
 func uciMenuText() string {
 	return strings.Join([]string{
-		"UCI управление всеми параметрами Podkop:",
+		"UCI конфигурация upstream podkop:",
 		"",
 		"Просмотр:",
 		"/uci_show",
@@ -462,7 +462,7 @@ func quickGuideText() string {
 
 func paramMenuText() string {
 	return strings.Join([]string{
-		"Меню параметров роутера (Podkop):",
+		"Меню параметров роутера (конфиг podkop):",
 		"",
 		"1) Показать все параметры:",
 		"   /params",

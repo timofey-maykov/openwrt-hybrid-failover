@@ -1,35 +1,37 @@
 #!/bin/ash
-# Podkop Hybrid Failover: установка на OpenWrt одной командой.
+# Hybrid Failover: установка на OpenWrt одной командой.
 #
 # Полная установка (бот + LuCI + патчи Podkop):
 #   wget -O /tmp/install.sh https://raw.githubusercontent.com/OWNER/REPO/main/scripts/install-on-router.sh \
-#     && PODKOP_HF_REPO=OWNER/REPO ash /tmp/install.sh
+#     && HF_REPO=OWNER/REPO ash /tmp/install.sh
 #
 # Только Telegram-бот и LuCI:
-#   PODKOP_HF_MODE=bot ash /tmp/install.sh
+#   HF_MODE=bot ash /tmp/install.sh
 #
 # Переменные:
-#   PODKOP_HF_REPO     : GitHub owner/repo (по умолчанию timofey-maykov/podkop-hybrid-failover)
-#   PODKOP_HF_VERSION  : тег релиза (v1.0.0) или latest
-#   PODKOP_HF_MODE     : full | bot | patches
-#   PODKOP_HF_BRANCH   : ветка для скачивания исходников (main)
-#   PODKOP_HF_TOKEN    : токен бота (опционально, сразу в JSON)
-#   PODKOP_HF_ADMIN_IDS: ID админов через запятую (опционально)
+#   HF_REPO     : GitHub owner/repo (по умолчанию timofey-maykov/openwrt-hybrid-failover)
+#   HF_VERSION  : тег релиза (v1.0.0) или latest
+#   HF_MODE     : full | bot | patches
+#   HF_BRANCH   : ветка для скачивания исходников (main)
+#   HF_TOKEN    : токен бота (опционально, сразу в JSON)
+#   HF_ADMIN_IDS: ID админов через запятую (опционально)
 
 set -eu
 
-PODKOP_HF_REPO="${PODKOP_HF_REPO:-timofey-maykov/podkop-hybrid-failover}"
-PODKOP_HF_VERSION="${PODKOP_HF_VERSION:-latest}"
-PODKOP_HF_MODE="${PODKOP_HF_MODE:-full}"
-PODKOP_HF_BRANCH="${PODKOP_HF_BRANCH:-main}"
-GITHUB_RAW="https://raw.githubusercontent.com/${PODKOP_HF_REPO}/${PODKOP_HF_BRANCH}"
-GITHUB_API="https://api.github.com/repos/${PODKOP_HF_REPO}"
-WORKDIR="/tmp/podkop-hf-install.$$"
+HF_REPO="${HF_REPO:-${PODKOP_HF_REPO:-timofey-maykov/openwrt-hybrid-failover}}"
+HF_VERSION="${HF_VERSION:-${PODKOP_HF_VERSION:-latest}}"
+HF_MODE="${HF_MODE:-${PODKOP_HF_MODE:-full}}"
+HF_BRANCH="${HF_BRANCH:-${PODKOP_HF_BRANCH:-main}}"
+HF_TOKEN="${HF_TOKEN:-${PODKOP_HF_TOKEN:-}}"
+HF_ADMIN_IDS="${HF_ADMIN_IDS:-${PODKOP_HF_ADMIN_IDS:-}}"
+GITHUB_RAW="https://raw.githubusercontent.com/${HF_REPO}/${HF_BRANCH}"
+GITHUB_API="https://api.github.com/repos/${HF_REPO}"
+WORKDIR="/tmp/hybrid-failover-install.$$"
 DIST_CACHE="${WORKDIR}/dist"
 
-log() { printf '[podkop-hf] %s\n' "$*"; }
-warn() { printf '[podkop-hf] WARN: %s\n' "$*" >&2; }
-die() { printf '[podkop-hf] ERROR: %s\n' "$*" >&2; exit 1; }
+log() { printf '[hybrid-failover] %s\n' "$*"; }
+warn() { printf '[hybrid-failover] WARN: %s\n' "$*" >&2; }
+die() { printf '[hybrid-failover] ERROR: %s\n' "$*" >&2; exit 1; }
 
 cleanup() { rm -rf "$WORKDIR" 2>/dev/null || true; }
 trap cleanup EXIT
@@ -65,7 +67,7 @@ install_deps() {
 		opkg list-installed 2>/dev/null | grep -q "^${pkg} " && continue
 		opkg install "$pkg" >/dev/null 2>&1 || warn "не удалось установить $pkg"
 	done
-	case "$PODKOP_HF_MODE" in
+	case "$HF_MODE" in
 		full|patches)
 			for pkg in sing-box jq python3-light patch; do
 				opkg list-installed 2>/dev/null | grep -q "^${pkg} " && continue
@@ -94,8 +96,8 @@ download_file_optional() {
 }
 
 resolve_release_tag() {
-	if [ "$PODKOP_HF_VERSION" != "latest" ]; then
-		echo "$PODKOP_HF_VERSION"
+	if [ "$HF_VERSION" != "latest" ]; then
+		echo "$HF_VERSION"
 		return 0
 	fi
 	_tag=""
@@ -121,7 +123,7 @@ install_ipk_url() {
 
 try_install_ipk() {
 	_ver="$(echo "$1" | sed 's/^v//')"
-	_base="https://github.com/${PODKOP_HF_REPO}/releases/download/$1"
+	_base="https://github.com/${HF_REPO}/releases/download/$1"
 	_pkg="$2"
 	_arch="$3"
 	for _name in "${_pkg}_${_ver}-1_${_arch}.ipk"; do
@@ -139,30 +141,30 @@ install_from_release() {
 	log "Релиз: $_tag, архитектура: $_arch"
 	_ver="$(echo "$_tag" | sed 's/^v//')"
 
-	case "$PODKOP_HF_MODE" in
+	case "$HF_MODE" in
 		bot)
-			try_install_ipk "$_tag" "podkop-telegram-bot" "$_arch" || \
-				die "Не найден podkop-telegram-bot для $_arch в релизе $_tag"
-			try_install_ipk "$_tag" "luci-app-podkop-bot" "all" || \
-				die "Не найден luci-app-podkop-bot в релизе $_tag"
+			try_install_ipk "$_tag" "hybrid-failover-bot" "$_arch" || \
+				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
+			try_install_ipk "$_tag" "luci-app-hybrid-failover-bot" "all" || \
+				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
 			;;
 		patches)
-			try_install_ipk "$_tag" "podkop-hybrid-failover" "all" || apply_hybrid_from_source
+			try_install_ipk "$_tag" "hybrid-failover-patch" "all" || apply_hybrid_from_source
 			;;
 		full)
-			try_install_ipk "$_tag" "podkop-telegram-bot" "$_arch" || \
-				die "Не найден podkop-telegram-bot для $_arch в релизе $_tag"
-			try_install_ipk "$_tag" "luci-app-podkop-bot" "all" || \
-				die "Не найден luci-app-podkop-bot в релизе $_tag"
-			try_install_ipk "$_tag" "podkop-hybrid-failover" "all" || apply_hybrid_from_source
+			try_install_ipk "$_tag" "hybrid-failover-bot" "$_arch" || \
+				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
+			try_install_ipk "$_tag" "luci-app-hybrid-failover-bot" "all" || \
+				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
+			try_install_ipk "$_tag" "hybrid-failover-patch" "all" || apply_hybrid_from_source
 			;;
-		*) die "Неизвестный PODKOP_HF_MODE=$PODKOP_HF_MODE (full|bot|patches)" ;;
+		*) die "Неизвестный HF_MODE=$HF_MODE (full|bot|patches)" ;;
 	esac
 	return 0
 }
 
 apply_hybrid_from_source() {
-	log "Применение патчей Podkop из GitHub (${PODKOP_HF_BRANCH})..."
+	log "Применение патчей Podkop из GitHub (${HF_BRANCH})..."
 
 	_backup="/root/podkop-hf-backup-$(date +%Y%m%d-%H%M%S)"
 	mkdir -p "$_backup"
@@ -172,7 +174,7 @@ apply_hybrid_from_source() {
 	cp -a /www/luci-static/resources/view/podkop/main.js "$_backup/" 2>/dev/null || true
 	log "Резервная копия: $_backup"
 
-	download_file "${GITHUB_RAW}/packaging/podkop-hybrid-failover/usr/bin/podkop" /usr/bin/podkop
+	download_file "${GITHUB_RAW}/packaging/hybrid-failover-patch/usr/bin/podkop" /usr/bin/podkop
 	chmod 755 /usr/bin/podkop
 	mkdir -p /usr/lib/podkop /etc/sing-box
 	download_file "${GITHUB_RAW}/vendor/sing_box_config_facade.sh" /usr/lib/podkop/sing_box_config_facade.sh
@@ -205,36 +207,36 @@ apply_hybrid_from_source() {
 install_from_local_dist() {
 	# Если скрипт запущен из клонированного репозитория на роутере (редко)
 	_arch="$(normalize_arch)"
-	_dist="${PODKOP_HF_DIST_DIR:-/tmp/podkop-hf-dist}"
+	_dist="${HF_DIST_DIR:-/tmp/podkop-hf-dist}"
 	[ -d "$_dist/ipk" ] || return 1
 	log "Установка из локального каталога $_dist/ipk"
-	case "$PODKOP_HF_MODE" in
+	case "$HF_MODE" in
 		bot|full)
-			opkg install "${_dist}/ipk"/podkop-telegram-bot_*_"${_arch}".ipk
-			opkg install "${_dist}/ipk"/luci-app-podkop-bot_*_all.ipk
+			opkg install "${_dist}/ipk"/hybrid-failover-bot_*_"${_arch}".ipk
+			opkg install "${_dist}/ipk"/luci-app-hybrid-failover-bot_*_all.ipk
 			;;
 	esac
-	case "$PODKOP_HF_MODE" in
+	case "$HF_MODE" in
 		full|patches)
-			opkg install "${_dist}/ipk"/podkop-hybrid-failover_*_all.ipk 2>/dev/null || apply_hybrid_from_source
+			opkg install "${_dist}/ipk"/hybrid-failover-patch_*_all.ipk 2>/dev/null || apply_hybrid_from_source
 			;;
 	esac
 	return 0
 }
 
 configure_bot_json() {
-	_cfg="/etc/podkop-telegram-bot.json"
+	_cfg="/etc/hybrid-failover-bot.json"
 	[ -f "$_cfg" ] || return 0
 	_changed=0
-	if [ -n "${PODKOP_HF_TOKEN:-}" ]; then
-		sed -i "s|\"token\": *\"[^\"]*\"|\"token\": \"${PODKOP_HF_TOKEN}\"|" "$_cfg" 2>/dev/null && _changed=1
+	if [ -n "${HF_TOKEN:-}" ]; then
+		sed -i "s|\"token\": *\"[^\"]*\"|\"token\": \"${HF_TOKEN}\"|" "$_cfg" 2>/dev/null && _changed=1
 	fi
-	if [ -n "${PODKOP_HF_ADMIN_IDS:-}" ]; then
-		_ids="$(echo "$PODKOP_HF_ADMIN_IDS" | tr ',' ' ' | awk '{for(i=1;i<=NF;i++) if($i!="") print $i}' | paste -sd, -)"
+	if [ -n "${HF_ADMIN_IDS:-}" ]; then
+		_ids="$(echo "$HF_ADMIN_IDS" | tr ',' ' ' | awk '{for(i=1;i<=NF;i++) if($i!="") print $i}' | paste -sd, -)"
 		# minimal json array replace
 		warn "Задайте admin_ids в LuCI или отредактируйте $_cfg вручную: $_ids"
 	fi
-	[ "$_changed" = 1 ] && /etc/init.d/podkop-telegram-bot restart 2>/dev/null || true
+	[ "$_changed" = 1 ] && /etc/init.d/hybrid-failover-bot restart 2>/dev/null || true
 }
 
 post_install() {
@@ -245,16 +247,16 @@ post_install() {
 
 	log "Готово."
 	log "LuCI бот: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/podkop-bot"
-	log "Настройте /etc/podkop-telegram-bot.json (token, admin_ids), затем:"
-	log "  uci set podkop-telegram-bot.main.enabled=1 && uci commit podkop-telegram-bot"
-	log "  /etc/init.d/podkop-telegram-bot restart"
+	log "Настройте /etc/hybrid-failover-bot.json (token, admin_ids), затем:"
+	log "  uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot"
+	log "  /etc/init.d/hybrid-failover-bot restart"
 }
 
 main() {
 	need_openwrt
 	ARCH="$(normalize_arch)"
-	log "Podkop Hybrid Failover installer"
-	log "Репозиторий: ${PODKOP_HF_REPO}, режим: ${PODKOP_HF_MODE}, arch: ${ARCH}"
+	log "Hybrid Failover installer"
+	log "Репозиторий: ${HF_REPO}, режим: ${HF_MODE}, arch: ${ARCH}"
 
 	mkdir -p "$WORKDIR"
 	install_deps

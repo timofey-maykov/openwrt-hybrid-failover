@@ -1,14 +1,16 @@
-# Podkop Telegram Bot (OpenWrt)
+# Hybrid Failover Bot (OpenWrt)
 
-Легковесный Telegram-бот для управления Podkop и failover на роутере OpenWrt.
+> Не является Podkop. См. [docs/TRADEMARK.md](../docs/TRADEMARK.md).
+
+Легковесный Telegram-бот для управления UCI **podkop** (upstream) и failover на роутере OpenWrt.
 
 **Telegram:** свой бот (токен из [@BotFather](https://t.me/BotFather))  
-**LuCI:** Сервисы → Telegram-бот Podkop  
-**Установка:** [docs/INSTALL.md](../docs/INSTALL.md) или пакеты из [Releases](https://github.com/timofey-maykov/podkop-hybrid-failover/releases)
+**LuCI:** Сервисы → Telegram-бот Hybrid Failover  
+**Установка:** [docs/INSTALL.md](../docs/INSTALL.md) или пакеты из [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases)
 
 ## Принципы
 
-- Один бинарник (`/usr/bin/podkop-telegram-bot`)
+- Один бинарник (`/usr/bin/hybrid-failover-bot`)
 - Минимум зависимостей (stdlib + Telegram SDK)
 - Без дополнительных runtime (Python/Node)
 
@@ -18,106 +20,47 @@
 cd bot
 go mod tidy
 CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
-  go build -trimpath -ldflags="-s -w" -o podkop-telegram-bot ./cmd/podkop-telegram-bot
+  go build -trimpath -ldflags="-s -w" -o hybrid-failover-bot ./cmd/hybrid-failover-bot
 ```
 
 ## Конфиг
 
-Файл: `/etc/podkop-telegram-bot.json`
+Файл: `/etc/hybrid-failover-bot.json`
 
 Обязательные поля:
 - `token`
 - `admin_ids`
 
-Поддерживаемые policy:
-- `outage-only`
-- `prefer-primary`
+Опционально:
+- `clash_api` (по умолчанию `http://127.0.0.1:9090`)
+- `routing_init_script` (по умолчанию `/etc/init.d/podkop`; устаревший ключ `podkop_init_script` тоже читается)
+- `policy`: `outage-only` | `prefer-primary`
+- `probe_timeout_seconds`
 
-## Telegram команды
+UCI: `hybrid-failover-bot.main.enabled`, `binary`, `config_path`.
 
-- `/status`
-- `/quick` (быстрые сценарии)
-- `/panel` (главная кнопочная панель)
-- `/param_menu` (меню популярных операций)
-- `/uci_menu` (полное UCI-управление podkop)
-- `/params`
-- `/param_list`
-- `/param_get <key|alias>`
-- `/param_set <key|alias> <value>`
-- `/param_del <key|alias>`
-- `/param_preview`
-- `/param_apply`
-- `/param_rollback`
-- `/uci_show [podkop.section]`
-- `/uci_sections`
-- `/uci_get <key>`
-- `/uci_set <key> <value>`
-- `/uci_add_list <key> <value>`
-- `/uci_del_list <key> <value>`
-- `/uci_del <key>`
-- `/set_quic on|off`
-- `/set_policy outage-only|prefer-primary`
-- `/set_urltest_interval <seconds>`
+## Команды (основные)
 
-`/param_menu` теперь отправляет inline-кнопки:
-- Статус
-- Параметры
-- QUIC ON/OFF
-- Policy outage-only / prefer-primary
-- Preview / Apply / Rollback
+- `/panel`, `/help`
+- `/status`, `/routing_restart` (алиас `/podkop_restart`)
+- `/health`, `/failover_list`, `/failover_add`, `/failover_apply`
+- UCI: `/uci_get`, `/uci_set`, `/param_apply`, `/param_rollback`
 
-`/panel` открывает многоуровневую навигацию:
-- Service
-- Failover
-- Params
-- Config
-- безопасные подтверждения для опасных действий (apply/rollback/restart)
-- `/channels`
-- `/health` (`/check_channels`): проверка доступности каналов
-- `/podkop_restart`
-- `/failover_list`
-- `/failover_params`
-- `/failover_help`
-- `/failover_add <uri>`
-- `/failover_rm <uri>`
-- `/failover_apply`
-- `/set_urltest_tolerance <ms>`
-- `/set_urltest_idle_timeout <seconds>`
-- `/set_interrupt_existing on|off`
-- `/switch <outbound>`
-- `/config_show`
-- `/config_set <key> <value>`
-- `/config_validate`
-- `/config_apply`
-- `/config_rollback`
+Полный список: `/help` в боте.
 
 ## LuCI
 
-Отдельная страница **Сервисы → Telegram-бот Podkop** (интерфейс на русском):
+Отдельная страница **Сервисы → Telegram-бот Hybrid Failover** (интерфейс на русском):
 
-- включение и выключение сервиса;
-- пути к бинарнику, конфигу и логам;
-- редактирование JSON-конфига (токен, администраторы, Clash API, политика failover);
-- действия: проверить / применить / откатить pending-конфиг, перезапустить бота.
+- редактирование JSON;
+- pending-конфиг (apply/rollback);
+- validate.
 
-## Деплой
+Путь: `/cgi-bin/luci/admin/services/hybrid-failover-bot`
 
-**На роутере (рекомендуется):**
-
-```sh
-wget -O /tmp/install.sh https://raw.githubusercontent.com/timofey-maykov/podkop-hybrid-failover/main/scripts/install-on-router.sh
-PODKOP_HF_MODE=bot ash /tmp/install.sh
-```
-
-**Сборка пакетов на ПК:**
+## Установка одной командой
 
 ```sh
-./scripts/build-packages.sh
-# dist/ipk/podkop-telegram-bot_*_<arch>.ipk
-```
-
-**С хоста по SSH (разработка):**
-
-```sh
-./scripts/deploy-telegram-bot.sh 192.168.42.1
+wget -O /tmp/install.sh https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
+HF_MODE=bot ash /tmp/install.sh
 ```

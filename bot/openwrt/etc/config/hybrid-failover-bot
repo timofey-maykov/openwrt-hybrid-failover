@@ -1,0 +1,5 @@
+config bot 'main'
+	option enabled '0'
+	option config_path '/etc/hybrid-failover-bot.json'
+	option binary '/usr/bin/hybrid-failover-bot'
+	option log_path '/var/log/hybrid-failover-bot.log'

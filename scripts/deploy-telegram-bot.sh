@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROUTER_IP="${1:-192.168.42.1}"
 ROUTER_USER="${ROUTER_USER:-root}"
-BIN_NAME="podkop-telegram-bot"
+BIN_NAME="hybrid-failover-bot"
 LOCAL_BIN="$(pwd)/bot/${BIN_NAME}"
 
 if [[ ! -x "$LOCAL_BIN" ]]; then
   echo "Building ${BIN_NAME}..."
-  (cd bot && CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -trimpath -ldflags="-s -w" -o "${BIN_NAME}" ./cmd/podkop-telegram-bot)
+  (cd bot && CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -trimpath -ldflags="-s -w" -o "${BIN_NAME}" ./cmd/hybrid-failover-bot)
 fi
 
 echo "Uploading binary and configs to ${ROUTER_USER}@${ROUTER_IP}..."

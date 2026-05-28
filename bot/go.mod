@@ -1,4 +1,4 @@
-module github.com/tmaykov/podkop-hybrid-failover/bot
+module github.com/tmaykov/openwrt-hybrid-failover/bot
 
 go 1.22
 

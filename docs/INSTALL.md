@@ -2,14 +2,14 @@
 
 ## Одна команда на роутере
 
-После публикации [релиза](https://github.com/timofey-maykov/podkop-hybrid-failover/releases) на GitHub:
+После публикации [релиза](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) на GitHub:
 
 ```sh
 opkg update
 opkg install curl ca-bundle wget
 
 wget -O /tmp/podkop-install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/podkop-hybrid-failover/main/scripts/install-on-router.sh
+  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
 
 ash /tmp/podkop-install.sh
 ```
@@ -18,32 +18,32 @@ ash /tmp/podkop-install.sh
 
 ### Режимы установки
 
-| `PODKOP_HF_MODE` | Что устанавливается |
+| `HF_MODE` | Что устанавливается |
 |------------------|---------------------|
 | `full` (по умолчанию) | Патчи Podkop + Telegram-бот + LuCI |
-| `bot` | Только `podkop-telegram-bot` и `luci-app-podkop-bot` |
-| `patches` | Только `podkop-hybrid-failover` (без бота) |
+| `bot` | Только `hybrid-failover-bot` и `luci-app-hybrid-failover-bot` |
+| `patches` | Только `hybrid-failover-patch` (без бота) |
 
 ### Переменные окружения
 
 ```sh
-PODKOP_HF_REPO=timofey-maykov/podkop-hybrid-failover   # репозиторий GitHub
-PODKOP_HF_VERSION=latest                               # или v1.0.1, v1.0.2, …
-PODKOP_HF_BRANCH=main                                  # ветка для fallback-файлов
-PODKOP_HF_TOKEN=123456789:ABC...                       # опционально: токен в JSON на роутере
-PODKOP_HF_ADMIN_IDS=123456789                          # ваш Telegram user ID (подсказка в логе)
+HF_REPO=timofey-maykov/openwrt-hybrid-failover   # репозиторий GitHub
+HF_VERSION=latest                               # или v1.0.1, v1.0.2, …
+HF_BRANCH=main                                  # ветка для fallback-файлов
+HF_TOKEN=123456789:ABC...                       # опционально: токен в JSON на роутере
+HF_ADMIN_IDS=123456789                          # ваш Telegram user ID (подсказка в логе)
 ```
 
 ### После установки
 
-1. Отредактируйте `/etc/podkop-telegram-bot.json`: `token`, `admin_ids`, `clash_api` (часто `http://192.168.x.1:9090`, не `127.0.0.1`).
+1. Отредактируйте `/etc/hybrid-failover-bot.json`: `token`, `admin_ids`, `clash_api` (часто `http://192.168.x.1:9090`, не `127.0.0.1`).
 2. Включите сервис бота:
    ```sh
-   uci set podkop-telegram-bot.main.enabled=1
-   uci commit podkop-telegram-bot
-   /etc/init.d/podkop-telegram-bot restart
+   uci set hybrid-failover-bot.main.enabled=1
+   uci commit hybrid-failover-bot
+   /etc/init.d/hybrid-failover-bot restart
    ```
-3. Откройте LuCI: **Сервисы → Telegram-бот Podkop**  
+3. Откройте LuCI: **Сервисы → Telegram-бот Hybrid Failover**  
    `http://ROUTER/cgi-bin/luci/admin/services/podkop-bot`
 4. В Telegram откройте своего бота и отправьте `/panel`.
 
@@ -60,9 +60,9 @@ PODKOP_HF_ADMIN_IDS=123456789                          # ваш Telegram user ID
 ```sh
 . /etc/openwrt_release && echo "$DISTRIB_ARCH"
 
-opkg install /tmp/podkop-telegram-bot_*_aarch64_cortex-a53.ipk
-opkg install /tmp/luci-app-podkop-bot_*_all.ipk
-opkg install /tmp/podkop-hybrid-failover_*_all.ipk
+opkg install /tmp/hybrid-failover-bot_*_aarch64_cortex-a53.ipk
+opkg install /tmp/luci-app-hybrid-failover-bot_*_all.ipk
+opkg install /tmp/hybrid-failover-patch_*_all.ipk
 ```
 
 ## Установка с хоста по SSH
@@ -85,4 +85,4 @@ opkg install /tmp/podkop-hybrid-failover_*_all.ipk
 
 ## Релизы GitHub
 
-Тег `v*.*.*` запускает [workflow сборки](../.github/workflows/release.yml): все `.ipk` публикуются в [Releases](https://github.com/timofey-maykov/podkop-hybrid-failover/releases).
+Тег `v*.*.*` запускает [workflow сборки](../.github/workflows/release.yml): все `.ipk` публикуются в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).

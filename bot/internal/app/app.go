@@ -9,13 +9,13 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/audit"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/botconfig"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/config"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/podkop"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/routerexec"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/security"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/telegram"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/audit"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/telegram"
 )
 
 func Run(ctx context.Context, configPath string) error {
@@ -33,9 +33,9 @@ func Run(ctx context.Context, configPath string) error {
 	}
 	logger := slog.New(slog.NewJSONHandler(logOut, nil))
 	runner := routerexec.New(time.Duration(cfg.ProbeTimeoutSeconds) * time.Second)
-	podkopSvc := podkop.NewService(runner, cfg.ClashAPI, cfg.PodkopInitScript, time.Duration(cfg.ProbeTimeoutSeconds)*time.Second)
+	routingSvc := routing.NewService(runner, cfg.ClashAPI, cfg.RoutingInitScript, time.Duration(cfg.ProbeTimeoutSeconds)*time.Second)
 	store := botconfig.NewStore(configPath)
-	handler := telegram.NewCommandHandler(podkopSvc, store)
+	handler := telegram.NewCommandHandler(routingSvc, store)
 	auth := security.NewAuthorizer(cfg.AdminIDs)
 	auditLogger := audit.New(cfg.AuditPath)
 

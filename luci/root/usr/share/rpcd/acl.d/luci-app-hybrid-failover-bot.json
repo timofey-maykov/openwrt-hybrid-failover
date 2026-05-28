@@ -1,0 +1,13 @@
+{
+  "luci-app-hybrid-failover-bot": {
+    "description": "Grant access to Hybrid Failover Telegram bot config",
+    "read": {
+      "uci": [ "hybrid-failover-bot" ],
+      "file": [ "/etc/hybrid-failover-bot.json", "/etc/hybrid-failover-bot.json.pending" ]
+    },
+    "write": {
+      "uci": [ "hybrid-failover-bot" ],
+      "file": [ "/etc/hybrid-failover-bot.json", "/etc/hybrid-failover-bot.json.pending" ]
+    }
+  }
+}

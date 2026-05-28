@@ -13,7 +13,7 @@ func mainPanelKeyboard() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("Конфиг", "nav:config"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("UCI Podkop", "nav:uci"),
+			tgbotapi.NewInlineKeyboardButtonData("UCI (podkop)", "nav:uci"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 80"),
@@ -83,7 +83,7 @@ func serviceKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Статус", "cmd:/status"),
-			tgbotapi.NewInlineKeyboardButtonData("Перезапуск", "cmd:/podkop_restart"),
+			tgbotapi.NewInlineKeyboardButtonData("Перезапуск", "cmd:/routing_restart"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 100"),

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/audit"
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/security"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/audit"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
 )
 
 type Handler interface {
@@ -298,7 +298,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 	case strings.HasPrefix(cmd, "/config_"):
 		k := configKeyboard()
 		return &k
-	case cmd == "/status", cmd == "/podkop_restart", strings.HasPrefix(cmd, "/logs"), cmd == "/channels":
+	case cmd == "/status", cmd == "/routing_restart", cmd == "/podkop_restart", strings.HasPrefix(cmd, "/logs"), cmd == "/channels":
 		k := serviceKeyboard()
 		return &k
 	default:
@@ -309,7 +309,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 
 func (b Bot) requiresConfirmation(cmd string) bool {
 	switch cmd {
-	case "/param_apply", "/param_rollback", "/failover_apply", "/podkop_restart", "/config_apply", "/config_rollback":
+	case "/param_apply", "/param_rollback", "/failover_apply", "/routing_restart", "/podkop_restart", "/config_apply", "/config_rollback":
 		return true
 	default:
 		return false

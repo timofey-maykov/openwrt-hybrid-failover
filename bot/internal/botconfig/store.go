@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tmaykov/podkop-hybrid-failover/bot/internal/config"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
 )
 
 type Store struct {
@@ -53,8 +53,8 @@ func (s Store) SetPendingKey(key, value string) error {
 		cfg.AuditPath = value
 	case "clash_api":
 		cfg.ClashAPI = value
-	case "podkop_init_script":
-		cfg.PodkopInitScript = value
+	case "routing_init_script", "podkop_init_script":
+		cfg.RoutingInitScript = value
 	case "token":
 		cfg.Token = value
 	case "admin_ids":
