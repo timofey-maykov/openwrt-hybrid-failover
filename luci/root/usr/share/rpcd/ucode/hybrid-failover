@@ -1,0 +1,160 @@
+'use strict';
+
+import { popen, access } from 'fs';
+
+const BIN = '/usr/sbin/hybrid-failover';
+
+function shellquote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+}
+
+function run_cli(args) {
+	if (access(BIN) != true)
+		return { ok: false, code: 127, output: 'hybrid-failover binary not found' };
+
+	let cmd = join(' ', map(args, (a) => shellquote(a)));
+	cmd = `${shellquote(BIN)} ${cmd}`;
+
+	let fd = popen(`(${cmd}) 2>&1; echo __HF_EXIT:$?`, 'r');
+	let all = fd ? fd.read('all') : '';
+	if (fd)
+		fd.close();
+
+	let m = match(all, /__HF_EXIT:(\d+)\s*$/);
+	let code = m ? int(m[1]) : 1;
+	let output = trim(replace(all, /__HF_EXIT:\d+\s*$/, ''));
+
+	return { ok: code == 0, code, output };
+}
+
+function run_rpc(method) {
+	return run_cli(['rpc', method]);
+}
+
+function parse_json_output(res) {
+	if (!res.ok)
+		return res;
+
+	if (!length(res.output))
+		return { ok: true, data: null };
+
+	try {
+		return { ok: true, data: json(res.output) };
+	}
+	catch (err) {
+		return { ok: true, output: res.output };
+	}
+}
+
+function method_call(rpc_name, cli_args) {
+	return {
+		call: function() {
+			let res = rpc_name ? run_rpc(rpc_name) : run_cli(cli_args);
+			let parsed = parse_json_output(res);
+
+			if (parsed.data != null)
+				return { ok: parsed.ok, data: parsed.data };
+
+			if (parsed.ok && parsed.data == null)
+				return { ok: true, data: [] };
+
+			if (parsed.output != null)
+				return { ok: parsed.ok, output: parsed.output };
+
+			return { ok: res.ok, code: res.code, output: res.output };
+		}
+	};
+}
+
+function method_switch_proxy() {
+	return {
+		call: function(req) {
+			let section = req.section ?? '';
+			let outbound = req.outbound ?? '';
+			let res = run_cli(['rpc', 'SwitchProxy', section, outbound]);
+			let parsed = parse_json_output(res);
+			if (parsed.data != null)
+				return { ok: parsed.ok, data: parsed.data };
+			if (parsed.output != null)
+				return { ok: parsed.ok, output: parsed.output };
+			return { ok: res.ok, code: res.code, output: res.output };
+		}
+	};
+}
+
+function method_rpc_args(method, keys) {
+	return {
+		call: function(req) {
+			let args = ['rpc', method];
+			for (let i = 0; i < length(keys); i++) {
+				let k = keys[i];
+				if (req[k] != null && req[k] != '')
+					push(args, req[k]);
+			}
+			let res = run_cli(args);
+			let parsed = parse_json_output(res);
+			if (parsed.data != null)
+				return { ok: parsed.ok, data: parsed.data };
+			if (parsed.output != null)
+				return { ok: parsed.ok, output: parsed.output };
+			return { ok: res.ok, code: res.code, output: res.output };
+		}
+	};
+}
+
+function method_decode_uri() {
+	return {
+		call: function(req) {
+			let uri = req.uri ?? '';
+			let res = run_cli(['rpc', 'DecodeURI', uri]);
+			let parsed = parse_json_output(res);
+			if (parsed.data != null)
+				return { ok: parsed.ok, data: parsed.data };
+			if (parsed.output != null)
+				return { ok: parsed.ok, output: parsed.output };
+			return { ok: res.ok, code: res.code, output: res.output };
+		}
+	};
+}
+
+function method_apply() {
+	return {
+		call: function() {
+			let res = run_cli(['apply']);
+			if (!res.ok)
+				return { ok: false, code: res.code, output: res.output };
+
+			let needs_reload = match(res.output, /changed=true/);
+			if (!needs_reload)
+				return { ok: true, output: res.output };
+
+			let reload = run_cli(['reload']);
+			let output = trim(res.output + '\n' + reload.output);
+			return { ok: reload.ok, code: reload.code, output: output };
+		}
+	};
+}
+
+	return {
+	'hybrid-failover': {
+		status: method_call('Status', null),
+		health: method_call('Health', null),
+		history: method_call('History', null),
+		export_history: method_call('ExportHistory', null),
+		validate: method_call('Validate', null),
+		check_nft: method_call('CheckNft', null),
+		check_fakeip: method_call('CheckFakeip', null),
+		global_check: method_call('GlobalCheck', null),
+		decode_uri: method_decode_uri(),
+		switch_proxy: method_switch_proxy(),
+		backup_uci: method_call('BackupUCI', null),
+		restore_uci: method_rpc_args('RestoreUCI', ['path']),
+		duplicate_section: method_rpc_args('DuplicateSection', ['from', 'to']),
+		apply: method_apply(),
+		reload: method_call(null, ['reload']),
+		pending_validate: method_call('PendingValidate', null),
+		pending_capture: method_call('CapturePending', null),
+		pending_apply: method_call('PendingApply', null),
+		pending_rollback: method_call('PendingRollback', null),
+	}
+};

@@ -1,0 +1,36 @@
+{
+	"luci-app-hybrid-failover": {
+		"description": "Hybrid Failover LuCI access",
+		"read": {
+			"uci": [ "hybrid-failover", "hybrid-failover-bot" ],
+			"file": {
+				"/etc/config/hybrid-failover": [ "read" ],
+				"/etc/config/hybrid-failover-bot": [ "read" ],
+				"/etc/hybrid-failover-bot.json": [ "read" ],
+				"/var/log/hybrid-failover/history.jsonl": [ "read" ]
+			},
+			"ubus": {
+				"hybrid-failover": [
+					"status", "health", "history", "export_history", "validate",
+					"check_nft", "check_fakeip", "global_check", "decode_uri",
+					"pending_validate", "backup_uci", "duplicate_section"
+				]
+			}
+		},
+		"write": {
+			"uci": [ "hybrid-failover", "hybrid-failover-bot" ],
+			"file": {
+				"/etc/config/hybrid-failover": [ "write" ],
+				"/etc/config/hybrid-failover-bot": [ "write" ],
+				"/etc/hybrid-failover/pending": [ "write" ],
+				"/etc/hybrid-failover-bot.json": [ "write" ]
+			},
+			"ubus": {
+				"hybrid-failover": [
+					"apply", "reload", "pending_capture", "pending_apply",
+					"pending_rollback", "switch_proxy", "restore_uci"
+				]
+			}
+		}
+	}
+}

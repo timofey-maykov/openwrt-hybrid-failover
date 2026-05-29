@@ -7,9 +7,9 @@ Supported generated schemes:
 - vless://
 - trojan://
 - ss://
-- awg2:// (synthetic URI for podkop failover helper)
+- awg2:// (synthetic URI for hybrid-failover)
 
-This keeps compatibility with podkop sing_box_cf_add_proxy_outbound() parser.
+Output URIs are consumed by hybrid-failover / sing-box builder.
 """
 from __future__ import annotations
 

@@ -1,21 +1,31 @@
 package telegram
 
-import "testing"
+import (
+	"testing"
 
-func TestResolveParamKeyAlias(t *testing.T) {
-	got := resolveParamKey("disable_quic")
-	if got != "podkop.settings.disable_quic" {
-		t.Fatalf("unexpected alias resolution: %s", got)
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+)
+
+func TestResolveParamKey(t *testing.T) {
+	if got := resolveParamKey("disable_quic", paths.DefaultMainSection); got != "hybrid-failover.settings.disable_quic" {
+		t.Fatalf("got %q", got)
+	}
+	if got := resolveParamKey("urltest_interval", paths.DefaultMainSection); got != "hybrid-failover.glob.urltest_check_interval" {
+		t.Fatalf("got %q", got)
+	}
+	if got := resolveParamKey("urltest_interval", "custom"); got != "hybrid-failover.custom.urltest_check_interval" {
+		t.Fatalf("got %q", got)
+	}
+	if got := resolveParamKey("policy", "vpn1"); got != "hybrid-failover.vpn1.failover_policy" {
+		t.Fatalf("got %q", got)
 	}
 }
 
-func TestOnOffToBoolValue(t *testing.T) {
-	v, err := onOffToBoolValue("on")
-	if err != nil || v != "1" {
-		t.Fatalf("unexpected on mapping: v=%s err=%v", v, err)
+func TestUCISectionKey(t *testing.T) {
+	if got := uciSectionKey("", "home", "urltest_tolerance"); got != "hybrid-failover.home.urltest_tolerance" {
+		t.Fatalf("got %q", got)
 	}
-	v, err = onOffToBoolValue("off")
-	if err != nil || v != "0" {
-		t.Fatalf("unexpected off mapping: v=%s err=%v", v, err)
+	if got := uciSectionKey("custom-pkg", "sec", "failover_policy"); got != "custom-pkg.sec.failover_policy" {
+		t.Fatalf("got %q", got)
 	}
 }

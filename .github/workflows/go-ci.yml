@@ -1,0 +1,66 @@
+name: Go CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: false
+      - name: Install sing-box
+        run: |
+          VER="${SING_BOX_VERSION:-1.12.4}"
+          curl -fsSL -o /tmp/sing-box.tgz \
+            "https://github.com/SagerNet/sing-box/releases/download/v${VER}/sing-box-${VER}-linux-amd64.tar.gz"
+          tar -xzf /tmp/sing-box.tgz -C /tmp
+          sudo install -m 755 "/tmp/sing-box-${VER}-linux-amd64/sing-box" /usr/local/bin/sing-box
+          sing-box version
+      - name: Test core
+        run: GOFLAGS=-mod=mod go test ./...
+      - name: Sing-box config check
+        run: HF_SINGBOX_CHECK=1 GOFLAGS=-mod=mod go test -run TestBuilderSingboxCheckOptional ./internal/singbox/...
+      - name: Regression smoke
+        run: chmod +x ./scripts/verify-smoke.sh && ./scripts/verify-smoke.sh
+      - name: Test bot
+        run: |
+          cd bot
+          go mod tidy
+          GOFLAGS=-mod=mod go test ./...
+      - name: Build hybrid-failover
+        run: GOFLAGS=-mod=mod go build -o /tmp/hybrid-failover ./core/cmd/hybrid-failover
+
+  qemu-lab:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 curl
+      - name: Build packages and run host smoke
+        run: |
+          chmod +x ./scripts/build-packages.sh ./scripts/verify-smoke.sh ./scripts/verify-qemu.sh
+          ./scripts/verify-qemu.sh build smoke
+      - name: QEMU lab (optional)
+        continue-on-error: true
+        run: |
+          if ! command -v qemu-system-x86_64 >/dev/null; then
+            echo "QEMU not available: skipping lab"
+            exit 0
+          fi
+          echo "Starting QEMU lab (may take several minutes)..."
+          ./scripts/verify-qemu.sh lab remote smoke || {
+            echo "QEMU lab failed or timed out: run locally: ./scripts/verify-qemu.sh build lab remote"
+            exit 1
+          }

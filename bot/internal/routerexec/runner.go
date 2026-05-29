@@ -17,6 +17,8 @@ func New(timeout time.Duration) Runner {
 	return Runner{timeout: timeout}
 }
 
+const coreBinary = "/usr/sbin/hybrid-failover"
+
 func (r Runner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	timeout := r.timeout
 	if timeout <= 0 {
@@ -34,4 +36,8 @@ func (r Runner) Run(ctx context.Context, name string, args ...string) (string, e
 		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func (r Runner) RunCoreRPC(ctx context.Context, method string) (string, error) {
+	return r.Run(ctx, coreBinary, "rpc", method)
 }

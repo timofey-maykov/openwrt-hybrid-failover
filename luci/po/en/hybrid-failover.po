@@ -1,0 +1,56 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: hybrid-failover 1.5.0\n"
+"Language: en\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Hybrid Failover"
+msgstr "Hybrid Failover"
+
+msgid "Маршрутизация"
+msgstr "Routing"
+
+msgid "Статус"
+msgstr "Status"
+
+msgid "Диагностика"
+msgstr "Diagnostics"
+
+msgid "Клиенты"
+msgstr "Clients"
+
+msgid "Telegram-бот"
+msgstr "Telegram bot"
+
+msgid "Hybrid Failover: мониторинг"
+msgstr "Hybrid Failover: monitoring"
+
+msgid "Обновить"
+msgstr "Refresh"
+
+msgid "Экспорт журнала"
+msgstr "Export history"
+
+msgid "Ручное переключение канала"
+msgstr "Manual channel switch"
+
+msgid "Проверить URI"
+msgstr "Check URI"
+
+msgid "Дублировать секцию…"
+msgstr "Duplicate section…"
+
+msgid "Создать бэкап"
+msgstr "Create backup"
+
+msgid "Восстановить из архива"
+msgstr "Restore from archive"
+
+msgid "Hybrid Failover: маршрутизация"
+msgstr "Hybrid Failover: routing"
+
+msgid "Hybrid Failover: диагностика"
+msgstr "Hybrid Failover: diagnostics"
+
+msgid "Hybrid Failover: клиенты"
+msgstr "Hybrid Failover: clients"

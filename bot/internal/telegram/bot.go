@@ -11,6 +11,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/audit"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
 type Handler interface {
@@ -78,10 +79,16 @@ func (b Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text
 		actionName = action[0]
 	}
 
-	if !b.auth.IsAdmin(userID) {
+	if !b.auth.Allowed(userID, text) {
 		_ = b.audit.Write(audit.Event{UserID: userID, Action: actionName, Result: "denied"})
-		b.reply(chatID, "Доступ запрещен: пользователь не в whitelist admin_ids.")
+		b.reply(chatID, "Доступ запрещен: нет прав для этой команды.")
 		return
+	}
+	if b.auth.IsViewer(userID) && !b.auth.IsAdmin(userID) {
+		if kind, ok := b.getPendingInput(userID); ok && kind != "" {
+			b.reply(chatID, "Режим только чтение: изменение конфигурации запрещено.")
+			return
+		}
 	}
 
 	if strings.TrimSpace(text) == "/cancel" {
@@ -182,9 +189,9 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 		k := inputCancelKeyboard()
 		if strings.HasPrefix(inputKind, "uci_") {
 			uk := inputCancelKeyboard()
-			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, promptForInput(inputKind), &uk)
+			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, b.promptForInput(inputKind), &uk)
 		} else {
-			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, promptForInput(inputKind), &k)
+			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, b.promptForInput(inputKind), &k)
 		}
 		return
 	}
@@ -230,7 +237,11 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
 		text = mainPanelText()
 		keyboard = mainPanelKeyboard()
 	case "params":
-		text = paramMenuText()
+		if ch, ok := b.h.(CommandHandler); ok {
+			text = ch.paramMenuText()
+		} else {
+			text = paramMenuText()
+		}
 		keyboard = paramMenuKeyboard()
 	case "service":
 		text = "Раздел: Сервис"
@@ -242,7 +253,11 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
 		text = "Раздел: Конфиг"
 		keyboard = configKeyboard()
 	case "uci":
-		text = uciMenuText()
+		if ch, ok := b.h.(CommandHandler); ok {
+			text = ch.uciMenuText()
+		} else {
+			text = uciMenuText()
+		}
 		keyboard = uciKeyboard()
 	default:
 		text = mainPanelText()
@@ -298,7 +313,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 	case strings.HasPrefix(cmd, "/config_"):
 		k := configKeyboard()
 		return &k
-	case cmd == "/status", cmd == "/routing_restart", cmd == "/podkop_restart", strings.HasPrefix(cmd, "/logs"), cmd == "/channels":
+	case cmd == "/status", cmd == "/routing_restart", strings.HasPrefix(cmd, "/logs"), cmd == "/channels":
 		k := serviceKeyboard()
 		return &k
 	default:
@@ -309,7 +324,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 
 func (b Bot) requiresConfirmation(cmd string) bool {
 	switch cmd {
-	case "/param_apply", "/param_rollback", "/failover_apply", "/routing_restart", "/podkop_restart", "/config_apply", "/config_rollback":
+	case "/param_apply", "/param_rollback", "/failover_apply", "/routing_restart", "/config_apply", "/config_rollback":
 		return true
 	default:
 		return false
@@ -364,10 +379,17 @@ func (b Bot) clearInput(userID int64) {
 	delete(b.pendingInput, userID)
 }
 
-func promptForInput(kind string) string {
+func (b Bot) uciExample(option string) string {
+	if ch, ok := b.h.(interface{ UCISectionKey(string) string }); ok {
+		return ch.UCISectionKey(option)
+	}
+	return paths.UCIPackage + "." + paths.DefaultMainSection + "." + option
+}
+
+func (b Bot) promptForInput(kind string) string {
 	switch kind {
 	case "urltest_interval":
-		return "Введите URLTest interval в секундах (например: 30). Для отмены: /cancel"
+		return "Введите URLTest check_interval (например: 30 или 30s). Для отмены: /cancel"
 	case "urltest_tolerance":
 		return "Введите URLTest tolerance в миллисекундах (например: 100). Для отмены: /cancel"
 	case "urltest_idle_timeout":
@@ -375,18 +397,22 @@ func promptForInput(kind string) string {
 	case "interrupt_existing":
 		return "Введите interrupt existing: on или off. Для отмены: /cancel"
 	case "uci_get":
-		return "Введите ключ: podkop.section.option\nПример: podkop.glob.urltest_interval\nОтмена: /cancel"
+		return "Введите ключ: hybrid-failover.section.option\nПример: " + b.uciExample("urltest_check_interval") + "\nОтмена: /cancel"
 	case "uci_set":
-		return "Введите: <ключ> <значение>\nПример: podkop.glob.urltest_interval 45\nОтмена: /cancel"
+		return "Введите: <ключ> <значение>\nПример: " + b.uciExample("urltest_check_interval") + " 45s\nОтмена: /cancel"
 	case "uci_add_list":
-		return "Введите: <ключ> <значение>\nПример: podkop.glob.failover_proxy_links vless://...\nОтмена: /cancel"
+		return "Введите: <ключ> <значение>\nПример: " + b.uciExample("failover_proxy_links") + " vless://...\nОтмена: /cancel"
 	case "uci_del_list":
-		return "Введите: <ключ> <значение>\nПример: podkop.glob.failover_proxy_links vless://...\nОтмена: /cancel"
+		return "Введите: <ключ> <значение>\nПример: " + b.uciExample("failover_proxy_links") + " vless://...\nОтмена: /cancel"
 	case "uci_del":
-		return "Введите ключ: podkop.section.option\nПример: podkop.glob.urltest_tolerance\nОтмена: /cancel"
+		return "Введите ключ: hybrid-failover.section.option\nПример: " + b.uciExample("urltest_tolerance") + "\nОтмена: /cancel"
 	default:
 		return "Введите значение. Для отмены: /cancel"
 	}
+}
+
+func promptForInput(kind string) string {
+	return Bot{}.promptForInput(kind)
 }
 
 func inputToCommand(kind, value string) (string, error) {

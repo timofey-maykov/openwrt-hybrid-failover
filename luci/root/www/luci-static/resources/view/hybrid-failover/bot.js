@@ -42,7 +42,7 @@ return view.extend({
 			['admin_ids', get('pdkb_admin_ids')],
 			['policy', get('pdkb_policy')],
 			['clash_api', get('pdkb_clash_api')],
-			['podkop_init_script', get('pdkb_podkop_init_script')],
+			['routing_init_script', get('pdkb_routing_init_script')],
 			['log_path', get('pdkb_log_path')],
 			['audit_path', get('pdkb_audit_path')],
 			['probe_timeout_seconds', get('pdkb_probe_timeout_seconds')]
@@ -100,7 +100,8 @@ return view.extend({
 				E('option', { 'value': 'prefer-primary', 'selected': cfg.policy === 'prefer-primary' }, 'prefer-primary (предпочитать основной)')
 			], cfg.policy),
 			mkInput('URL Clash API', 'pdkb_clash_api', cfg.clash_api || 'http://192.168.42.1:9090'),
-			mkInput('Скрипт init.d Podkop', 'pdkb_podkop_init_script', cfg.podkop_init_script || '/etc/init.d/podkop'),
+			mkInput('Скрипт init.d hybrid-failover', 'pdkb_routing_init_script',
+				cfg.routing_init_script || '/etc/init.d/hybrid-failover'),
 			mkInput('Путь к логам', 'pdkb_log_path', cfg.log_path || '/var/log/hybrid-failover-bot.log'),
 			mkInput('Путь к audit-логу', 'pdkb_audit_path', cfg.audit_path || '/var/log/hybrid-failover-bot.audit.log'),
 			mkInput('Таймаут проверки, сек', 'pdkb_probe_timeout_seconds', String(cfg.probe_timeout_seconds || 5), { 'type': 'number', 'min': '1', 'style': 'max-width:200px;width:100%;' }),

@@ -1,0 +1,171 @@
+{
+  "log": {
+    "disabled": false,
+    "level": "info",
+    "timestamp": false
+  },
+  "dns": {
+    "final": "dns-server",
+    "independent_cache": true,
+    "rules": [
+      {
+        "action": "reject",
+        "query_type": [
+          "HTTPS"
+        ]
+      },
+      {
+        "action": "reject",
+        "domain_suffix": [
+          "use-application-dns.net"
+        ]
+      },
+      {
+        "action": "route",
+        "domain": [
+          "fakeip.hybrid-failover",
+          "ip.hybrid-failover"
+        ],
+        "rewrite_ttl": 60,
+        "server": "fakeip-server"
+      }
+    ],
+    "servers": [
+      {
+        "server": "77.88.8.8",
+        "server_port": 53,
+        "tag": "bootstrap-dns-server",
+        "type": "udp"
+      },
+      {
+        "path": "/dns-query",
+        "server": "1.1.1.1",
+        "server_port": 443,
+        "tag": "dns-server",
+        "type": "https"
+      },
+      {
+        "inet4_range": "198.18.0.0/15",
+        "tag": "fakeip-server",
+        "type": "fakeip"
+      }
+    ],
+    "strategy": "ipv4_only"
+  },
+  "ntp": {},
+  "certificate": {},
+  "endpoints": [],
+  "inbounds": [
+    {
+      "listen": "::",
+      "listen_port": 1602,
+      "sniff": true,
+      "sniff_override_destination": true,
+      "tag": "tproxy-in",
+      "type": "tproxy"
+    },
+    {
+      "listen": "127.0.0.42",
+      "listen_port": 53,
+      "tag": "dns-in",
+      "type": "direct"
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct-out",
+      "type": "direct"
+    },
+    {
+      "bind_interface": "awg0",
+      "tag": "glob-awg-out",
+      "type": "direct"
+    },
+    {
+      "server": "example.com",
+      "server_port": 443,
+      "tag": "glob-1-out",
+      "tls": {
+        "enabled": true,
+        "reality": {
+          "enabled": true,
+          "public_key": "VDx8FnyKEJntMxyrVqRXJqfdhnnz9tNTsQr064RBTWU",
+          "short_id": "abcd"
+        },
+        "server_name": "example.com",
+        "utls": {
+          "enabled": true,
+          "fingerprint": "chrome"
+        }
+      },
+      "type": "vless",
+      "uuid": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "idle_timeout": "5m",
+      "interval": "30s",
+      "outbounds": [
+        "glob-1-out"
+      ],
+      "tag": "glob-urltest-out",
+      "tolerance": 50,
+      "type": "urltest",
+      "url": "https://www.gstatic.com/generate_204"
+    },
+    {
+      "default": "glob-awg-out",
+      "outbounds": [
+        "glob-awg-out",
+        "glob-urltest-out",
+        "glob-1-out"
+      ],
+      "tag": "glob-out",
+      "type": "selector"
+    }
+  ],
+  "route": {
+    "auto_detect_interface": true,
+    "default_domain_resolver": "dns-server",
+    "final": "direct-out",
+    "rules": [
+      {
+        "action": "sniff",
+        "inbound": [
+          "tproxy-in",
+          "dns-in"
+        ]
+      },
+      {
+        "action": "hijack-dns",
+        "protocol": "dns"
+      },
+      {
+        "action": "route",
+        "domain": "ip.hybrid-failover",
+        "inbound": "tproxy-in",
+        "outbound": "glob-out"
+      },
+      {
+        "action": "route-options",
+        "domain": "fakeip.hybrid-failover",
+        "override_port": 8443
+      },
+      {
+        "action": "route",
+        "inbound": "tproxy-in",
+        "outbound": "glob-out"
+      }
+    ]
+  },
+  "services": [],
+  "experimental": {
+    "cache_file": {
+      "enabled": true,
+      "path": "/etc/sing-box/cache.db",
+      "store_fakeip": true
+    },
+    "clash_api": {
+      "external_controller": "127.0.0.1:9090"
+    }
+  }
+}

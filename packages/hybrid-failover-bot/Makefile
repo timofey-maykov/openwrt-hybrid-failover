@@ -29,7 +29,7 @@ define Package/hybrid-failover-bot
 endef
 
 define Package/hybrid-failover-bot/description
-  Telegram bot for Hybrid Failover on OpenWrt (manages upstream podkop UCI).
+  Telegram bot for Hybrid Failover on OpenWrt (hybrid-failover UCI and status).
 endef
 
 define Build/Compile

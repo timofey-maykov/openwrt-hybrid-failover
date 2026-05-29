@@ -1,29 +1,29 @@
 #!/bin/ash
 # Hybrid Failover: установка на OpenWrt одной командой.
 #
-# Полная установка (бот + LuCI + патчи Podkop):
+# Полная установка (core + bot + LuCI):
 #   wget -O /tmp/install.sh https://raw.githubusercontent.com/OWNER/REPO/main/scripts/install-on-router.sh \
 #     && HF_REPO=OWNER/REPO ash /tmp/install.sh
 #
-# Только Telegram-бот и LuCI:
+# Только Telegram-бот:
 #   HF_MODE=bot ash /tmp/install.sh
 #
 # Переменные:
 #   HF_REPO     : GitHub owner/repo (по умолчанию timofey-maykov/openwrt-hybrid-failover)
 #   HF_VERSION  : тег релиза (v1.0.0) или latest
-#   HF_MODE     : full | bot | patches
+#   HF_MODE     : full | bot
 #   HF_BRANCH   : ветка для скачивания исходников (main)
 #   HF_TOKEN    : токен бота (опционально, сразу в JSON)
 #   HF_ADMIN_IDS: ID админов через запятую (опционально)
 
 set -eu
 
-HF_REPO="${HF_REPO:-${PODKOP_HF_REPO:-timofey-maykov/openwrt-hybrid-failover}}"
-HF_VERSION="${HF_VERSION:-${PODKOP_HF_VERSION:-latest}}"
-HF_MODE="${HF_MODE:-${PODKOP_HF_MODE:-full}}"
-HF_BRANCH="${HF_BRANCH:-${PODKOP_HF_BRANCH:-main}}"
-HF_TOKEN="${HF_TOKEN:-${PODKOP_HF_TOKEN:-}}"
-HF_ADMIN_IDS="${HF_ADMIN_IDS:-${PODKOP_HF_ADMIN_IDS:-}}"
+HF_REPO="${HF_REPO:-timofey-maykov/openwrt-hybrid-failover}"
+HF_VERSION="${HF_VERSION:-latest}"
+HF_MODE="${HF_MODE:-full}"
+HF_BRANCH="${HF_BRANCH:-main}"
+HF_TOKEN="${HF_TOKEN:-}"
+HF_ADMIN_IDS="${HF_ADMIN_IDS:-}"
 GITHUB_RAW="https://raw.githubusercontent.com/${HF_REPO}/${HF_BRANCH}"
 GITHUB_API="https://api.github.com/repos/${HF_REPO}"
 WORKDIR="/tmp/hybrid-failover-install.$$"
@@ -49,6 +49,7 @@ detect_arch() {
 		_arch="$(uname -m)"
 	fi
 	case "$_arch" in
+		aarch64_generic) echo "aarch64_generic" ;;
 		aarch64*|arm64*) echo "aarch64_cortex-a53" ;;
 		mipsel*|mips64el*) echo "mipsel_24kc" ;;
 		mips_*) echo "mips_24kc" ;;
@@ -60,19 +61,77 @@ detect_arch() {
 
 normalize_arch() { detect_arch; }
 
+pkg_manager() {
+	if command -v apk >/dev/null 2>&1; then
+		echo apk
+	elif command -v opkg >/dev/null 2>&1; then
+		echo opkg
+	else
+		echo unknown
+	fi
+}
+
+pkg_update() {
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		apk) apk update >/dev/null 2>&1 || warn "apk update failed" ;;
+		opkg) opkg update >/dev/null 2>&1 || warn "opkg update failed" ;;
+		*) warn "нет apk/opkg" ;;
+	esac
+}
+
+pkg_is_installed() {
+	_pkg="$1"
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		apk) apk info -e "$_pkg" 2>/dev/null | grep -q "^${_pkg}-" ;;
+		opkg) opkg list-installed 2>/dev/null | grep -q "^${_pkg} " ;;
+		*) return 1 ;;
+	esac
+}
+
+pkg_install_file() {
+	_path="$1"
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		apk)
+			apk add --allow-untrusted "$_path" 2>/dev/null || \
+				apk add --force-overwrite --allow-untrusted "$_path" 2>/dev/null || true
+			;;
+		opkg)
+			opkg install "$_path" 2>/dev/null || \
+				opkg install --force-reinstall "$_path" 2>/dev/null || true
+			;;
+		*) return 1 ;;
+	esac
+}
+
+pkg_install_named() {
+	_pkg="$1"
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		apk) apk add "$_pkg" 2>/dev/null || true ;;
+		opkg) opkg install "$_pkg" 2>/dev/null || true ;;
+	esac
+}
+
 install_deps() {
-	log "Установка зависимостей opkg..."
-	opkg update >/dev/null 2>&1 || warn "opkg update failed"
+	_pm="$(pkg_manager)"
+	log "Установка зависимостей (${_pm})..."
+	pkg_update
 	for pkg in curl ca-bundle wget coreutils-base64; do
-		opkg list-installed 2>/dev/null | grep -q "^${pkg} " && continue
-		opkg install "$pkg" >/dev/null 2>&1 || warn "не удалось установить $pkg"
+		pkg_is_installed "$pkg" && continue
+		pkg_install_named "$pkg" || warn "не удалось установить $pkg"
 	done
 	case "$HF_MODE" in
-		full|patches)
-			for pkg in sing-box jq python3-light patch; do
-				opkg list-installed 2>/dev/null | grep -q "^${pkg} " && continue
-				opkg install "$pkg" >/dev/null 2>&1 || warn "не удалось установить $pkg"
+		full)
+			for pkg in sing-box; do
+				pkg_is_installed "$pkg" && continue
+				pkg_install_named "$pkg" || warn "не удалось установить $pkg"
 			done
+			;;
+		patches)
+			die "HF_MODE=patches удалён: используйте HF_MODE=full"
 			;;
 	esac
 }
@@ -109,26 +168,53 @@ resolve_release_tag() {
 	echo "$_tag"
 }
 
-install_ipk_url() {
+HF_PKG_RELEASE="${HF_PKG_RELEASE:-1}"
+
+install_pkg_url() {
 	_url="$1"
+	_pkg="$2"
 	_name="$(basename "$_url")"
 	_path="${WORKDIR}/${_name}"
-	_pkg="$(echo "$_name" | sed 's/_.*//')"
 	download_file_optional "$_url" "$_path" || return 1
 	log "Установка $_name ..."
-	opkg install "$_path" 2>/dev/null || opkg install --force-reinstall "$_path" 2>/dev/null || true
-	opkg list-installed 2>/dev/null | grep -q "^${_pkg} " && return 0
+	pkg_install_file "$_path"
+	pkg_is_installed "$_pkg" && return 0
 	return 1
 }
 
-try_install_ipk() {
-	_ver="$(echo "$1" | sed 's/^v//')"
+release_pkg_names() {
+	_tag="$1"
+	_pkg="$2"
+	_arch="$3"
+	_ver="$(echo "$_tag" | sed 's/^v//')"
+	_rel="${HF_PKG_RELEASE}"
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		apk)
+			_base="${_pkg}-${_ver}-r${_rel}"
+			if [ "$_arch" = "all" ]; then
+				echo "${_base}.apk"
+			else
+				echo "${_base}_${_arch}.apk"
+				echo "${_base}.apk"
+			fi
+			;;
+		opkg)
+			echo "${_pkg}_${_ver}-${_rel}_${_arch}.ipk"
+			;;
+		*)
+			echo "${_pkg}_${_ver}-${_rel}_${_arch}.ipk"
+			;;
+	esac
+}
+
+try_install_pkg() {
 	_base="https://github.com/${HF_REPO}/releases/download/$1"
 	_pkg="$2"
 	_arch="$3"
-	for _name in "${_pkg}_${_ver}-1_${_arch}.ipk"; do
+	for _name in $(release_pkg_names "$1" "$_pkg" "$_arch"); do
 		_url="${_base}/${_name}"
-		if install_ipk_url "$_url"; then
+		if install_pkg_url "$_url" "$_pkg"; then
 			return 0
 		fi
 	done
@@ -143,82 +229,65 @@ install_from_release() {
 
 	case "$HF_MODE" in
 		bot)
-			try_install_ipk "$_tag" "hybrid-failover-bot" "$_arch" || \
+			try_install_pkg "$_tag" "hybrid-failover-bot" "$_arch" || \
 				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
-			try_install_ipk "$_tag" "luci-app-hybrid-failover-bot" "all" || \
+			try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
 				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
 			;;
 		patches)
-			try_install_ipk "$_tag" "hybrid-failover-patch" "all" || apply_hybrid_from_source
+			die "HF_MODE=patches удалён: используйте HF_MODE=full (hybrid-failover-core)"
 			;;
 		full)
-			try_install_ipk "$_tag" "hybrid-failover-bot" "$_arch" || \
+			try_install_pkg "$_tag" "hybrid-failover-core" "$_arch" || \
+				die "Не найден hybrid-failover-core для $_arch в релизе $_tag"
+			try_install_pkg "$_tag" "hybrid-failover-bot" "$_arch" || \
 				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
-			try_install_ipk "$_tag" "luci-app-hybrid-failover-bot" "all" || \
-				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
-			try_install_ipk "$_tag" "hybrid-failover-patch" "all" || apply_hybrid_from_source
+			try_install_pkg "$_tag" "luci-app-hybrid-failover" "all" || \
+				try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
+				die "Не найден luci-app-hybrid-failover в релизе $_tag"
 			;;
-		*) die "Неизвестный HF_MODE=$HF_MODE (full|bot|patches)" ;;
+		*) die "Неизвестный HF_MODE=$HF_MODE (full|bot)" ;;
 	esac
 	return 0
 }
 
-apply_hybrid_from_source() {
-	log "Применение патчей Podkop из GitHub (${HF_BRANCH})..."
-
-	_backup="/root/podkop-hf-backup-$(date +%Y%m%d-%H%M%S)"
-	mkdir -p "$_backup"
-	cp -a /usr/bin/podkop "$_backup/" 2>/dev/null || true
-	cp -a /usr/lib/podkop/sing_box_config_facade.sh "$_backup/" 2>/dev/null || true
-	cp -a /www/luci-static/resources/view/podkop/section.js "$_backup/" 2>/dev/null || true
-	cp -a /www/luci-static/resources/view/podkop/main.js "$_backup/" 2>/dev/null || true
-	log "Резервная копия: $_backup"
-
-	download_file "${GITHUB_RAW}/packaging/hybrid-failover-patch/usr/bin/podkop" /usr/bin/podkop
-	chmod 755 /usr/bin/podkop
-	mkdir -p /usr/lib/podkop /etc/sing-box
-	download_file "${GITHUB_RAW}/vendor/sing_box_config_facade.sh" /usr/lib/podkop/sing_box_config_facade.sh
-	download_file "${GITHUB_RAW}/scripts/amnezia_vpn_uri_to_vless.py" /usr/lib/podkop/amnezia_vpn_uri_to_vless.py
-	chmod 644 /usr/lib/podkop/sing_box_config_facade.sh /usr/lib/podkop/amnezia_vpn_uri_to_vless.py
-	mkdir -p /www/luci-static/resources/view/podkop
-	download_file "${GITHUB_RAW}/luci/section.js" /www/luci-static/resources/view/podkop/section.js
-
-	if [ -f /www/luci-static/resources/view/podkop/main.js ]; then
-		if grep -q failoverOn /www/luci-static/resources/view/podkop/main.js 2>/dev/null; then
-			log "main.js уже содержит патч дашборда"
-		elif command -v patch >/dev/null 2>&1; then
-			download_file "${GITHUB_RAW}/patches/main-js-dashboard-vpn-failover.patch" "${WORKDIR}/main.patch"
-			cp /www/luci-static/resources/view/podkop/main.js "${WORKDIR}/main.js"
-			cd "${WORKDIR}" && patch -p0 main.js < main.patch >/dev/null 2>&1 && \
-				cp main.js /www/luci-static/resources/view/podkop/main.js && \
-				log "Патч main.js применён" || warn "не удалось применить патч main.js"
-		else
-			warn "patch не установлен: дашборд VPN+failover может не отображаться"
-		fi
-	else
-		warn "luci-app-podkop не найден: пропуск main.js"
-	fi
-
-	uci set podkop.settings.cache_path='/etc/sing-box/cache.db' 2>/dev/null || true
-	uci commit podkop 2>/dev/null || true
-	/etc/init.d/podkop restart 2>/dev/null || true
-}
-
 install_from_local_dist() {
-	# Если скрипт запущен из клонированного репозитория на роутере (редко)
 	_arch="$(normalize_arch)"
-	_dist="${HF_DIST_DIR:-/tmp/podkop-hf-dist}"
-	[ -d "$_dist/ipk" ] || return 1
-	log "Установка из локального каталога $_dist/ipk"
+	_dist="${HF_DIST_DIR:-/tmp/hf-dist}"
+	_pm="$(pkg_manager)"
+	_sub=""
+	case "$_pm" in
+		apk) [ -d "$_dist/apk" ] && _sub="apk" ;;
+		opkg) [ -d "$_dist/ipk" ] && _sub="ipk" ;;
+	esac
+	[ -n "$_sub" ] || return 1
+	_dir="${_dist}/${_sub}"
+	log "Установка из локального каталога $_dir (${_pm})"
 	case "$HF_MODE" in
 		bot|full)
-			opkg install "${_dist}/ipk"/hybrid-failover-bot_*_"${_arch}".ipk
-			opkg install "${_dist}/ipk"/luci-app-hybrid-failover-bot_*_all.ipk
-			;;
-	esac
-	case "$HF_MODE" in
-		full|patches)
-			opkg install "${_dist}/ipk"/hybrid-failover-patch_*_all.ipk 2>/dev/null || apply_hybrid_from_source
+			if [ "$HF_MODE" = "full" ]; then
+				for _f in "${_dir}"/hybrid-failover-core_*_"${_arch}".* \
+					"${_dir}"/hybrid-failover-core-*_"${_arch}".* \
+					"${_dir}"/hybrid-failover-core-*."${_sub}"; do
+					[ -f "$_f" ] || continue
+					pkg_install_file "$_f"
+					break
+				done
+			fi
+			for _f in "${_dir}"/hybrid-failover-bot_*_"${_arch}".* "${_dir}"/hybrid-failover-bot-*_"${_arch}".* \
+				"${_dir}"/hybrid-failover-bot-*."${_sub}"; do
+				[ -f "$_f" ] || continue
+				pkg_install_file "$_f"
+				break
+			done
+			for _f in "${_dir}"/luci-app-hybrid-failover_*_all.* \
+				"${_dir}"/luci-app-hybrid-failover-*."${_sub}" \
+				"${_dir}"/luci-app-hybrid-failover-bot_*_all.* \
+				"${_dir}"/luci-app-hybrid-failover-bot-*."${_sub}"; do
+				[ -f "$_f" ] || continue
+				pkg_install_file "$_f"
+				break
+			done
 			;;
 	esac
 	return 0
@@ -246,7 +315,7 @@ post_install() {
 	configure_bot_json
 
 	log "Готово."
-	log "LuCI бот: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/podkop-bot"
+	log "LuCI: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/hybrid-failover"
 	log "Настройте /etc/hybrid-failover-bot.json (token, admin_ids), затем:"
 	log "  uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot"
 	log "  /etc/init.d/hybrid-failover-bot restart"
@@ -256,7 +325,7 @@ main() {
 	need_openwrt
 	ARCH="$(normalize_arch)"
 	log "Hybrid Failover installer"
-	log "Репозиторий: ${HF_REPO}, режим: ${HF_MODE}, arch: ${ARCH}"
+	log "Репозиторий: ${HF_REPO}, режим: ${HF_MODE}, arch: ${ARCH}, pkg: $(pkg_manager)"
 
 	mkdir -p "$WORKDIR"
 	install_deps

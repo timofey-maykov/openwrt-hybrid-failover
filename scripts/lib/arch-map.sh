@@ -2,14 +2,20 @@
 # OpenWrt DISTRIB_ARCH <-> Go cross-compile mapping.
 # shellcheck disable=SC2034
 
-# Architectures we build release packages for.
+# Architectures we build release packages for (override: HF_BUILD_ARCHS="x86_64")
 HF_BUILD_ARCHS=(
 	aarch64_cortex-a53
+	aarch64_generic
 	arm_cortex-a7
 	mipsel_24kc
 	mips_24kc
 	x86_64
 )
+
+if [ -n "${HF_BUILD_ARCHS_OVERRIDE:-}" ]; then
+	# shellcheck disable=SC2206
+	HF_BUILD_ARCHS=(${HF_BUILD_ARCHS_OVERRIDE})
+fi
 
 openwrt_arch_to_go() {
 	local owrt_arch="$1"
@@ -45,6 +51,7 @@ openwrt_arch_to_gomips() {
 normalize_openwrt_arch() {
 	local raw="${1:-}"
 	case "$raw" in
+		aarch64_generic) echo "aarch64_generic" ;;
 		aarch64*|arm64*) echo "aarch64_cortex-a53" ;;
 		mipsel*|mips64el*) echo "mipsel_24kc" ;;
 		mips_*) echo "mips_24kc" ;;
