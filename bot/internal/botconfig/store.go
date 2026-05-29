@@ -53,7 +53,7 @@ func (s Store) SetPendingKey(key, value string) error {
 		cfg.AuditPath = value
 	case "clash_api":
 		cfg.ClashAPI = value
-	case "routing_init_script", "podkop_init_script":
+	case "routing_init_script":
 		cfg.RoutingInitScript = value
 	case "token":
 		cfg.Token = value

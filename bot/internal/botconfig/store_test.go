@@ -9,13 +9,13 @@ import (
 func TestSetPendingValidateApplyAndRollback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bot.json")
-	t.Setenv("PODKOP_BOT_TOKEN", "x")
+	t.Setenv("HF_BOT_TOKEN", "x")
 	initial := `{
   "token": "x",
   "admin_ids": [1],
   "policy": "outage-only",
   "clash_api": "http://127.0.0.1:9090",
-  "podkop_init_script": "/etc/init.d/podkop"
+  "routing_init_script": "/etc/init.d/hybrid-failover"
 }`
 	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {
 		t.Fatal(err)
@@ -59,7 +59,7 @@ func TestSetPendingEditableBotFields(t *testing.T) {
   "admin_ids": [1],
   "policy": "outage-only",
   "clash_api": "http://127.0.0.1:9090",
-  "podkop_init_script": "/etc/init.d/podkop",
+  "routing_init_script": "/etc/init.d/hybrid-failover",
   "probe_timeout_seconds": 5
 }`
 	if err := os.WriteFile(path, []byte(initial), 0o600); err != nil {

@@ -13,14 +13,18 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/validation"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type Service struct {
-	runner    routerexec.Runner
-	clashAPI  string
-	initScript string
-	httpCli   *http.Client
+	runner       routerexec.Runner
+	clashAPI     string
+	initScript   string
+	uciPackage   string
+	mainSection  string
+	httpCli      *http.Client
 }
 
 type ChannelHealth struct {
@@ -30,33 +34,80 @@ type ChannelHealth struct {
 	Detail    string
 }
 
-func NewService(runner routerexec.Runner, clashAPI, initScript string, timeout time.Duration) Service {
+func NewService(runner routerexec.Runner, clashAPI, initScript, uciPackage, mainSection string, timeout time.Duration) Service {
+	if uciPackage == "" {
+		uciPackage = paths.UCIPackage
+	}
+	if mainSection == "" {
+		mainSection = paths.DefaultMainSection
+	}
 	return Service{
-		runner:    runner,
-		clashAPI:  strings.TrimRight(clashAPI, "/"),
-		initScript: initScript,
+		runner:      runner,
+		clashAPI:    strings.TrimRight(clashAPI, "/"),
+		initScript:  initScript,
+		uciPackage:  uciPackage,
+		mainSection: mainSection,
 		httpCli: &http.Client{
 			Timeout: timeout,
 		},
 	}
 }
 
+func (s Service) SettingsKey(option string) string  { return s.settingsKey(option) }
+func (s Service) MainSectionKey(option string) string { return s.mainKey(option) }
+
+func (s Service) UCIPackage() string  { return s.uciPackage }
+func (s Service) MainSection() string  { return s.mainSection }
+
+func (s Service) sectionKey(section, option string) string {
+	return s.uciPackage + "." + section + "." + option
+}
+
+func (s Service) mainKey(option string) string {
+	return s.sectionKey(s.mainSection, option)
+}
+
+func (s Service) settingsKey(option string) string {
+	return s.sectionKey("settings", option)
+}
+
+func (s Service) selectorTag() string {
+	return s.mainSection + "-out"
+}
+
 func (s Service) Status(ctx context.Context) (string, error) {
+	if out, err := s.runner.RunCoreRPC(ctx, "Status"); err == nil {
+		var report diag.Report
+		if json.Unmarshal([]byte(out), &report) == nil {
+			lines := formatDiagReport(report)
+			if health, herr := s.ChannelHealth(ctx); herr == nil && len(health) > 0 {
+				var down []string
+				for _, ch := range health {
+					if !ch.Available {
+						down = append(down, ch.Name)
+					}
+				}
+				if len(down) > 0 {
+					lines += "\nwarning: недоступны каналы -> " + strings.Join(down, ", ")
+				} else {
+					lines += "\nканалы: все доступны"
+				}
+			}
+			return lines, nil
+		}
+		return out, nil
+	}
+
 	var lines []string
 	out, err := s.runner.Run(ctx, s.initScript, "status")
 	if err != nil {
-		// OpenWrt init.d often returns exit code 5 for "not running".
 		if strings.Contains(err.Error(), "exit status 5") {
-			lines = append(lines, "podkop init.d: not running (oneshot mode)")
+			lines = append(lines, "hybrid-failover init.d: not running (oneshot mode)")
 		} else {
 			return "", err
 		}
 	} else {
-		lines = append(lines, "podkop init.d: "+out)
-	}
-
-	if out != "" && !strings.Contains(out, "not running") {
-		lines = append(lines, out)
+		lines = append(lines, "hybrid-failover init.d: "+out)
 	}
 
 	singboxState := "stopped"
@@ -74,9 +125,9 @@ func (s Service) Status(ctx context.Context) (string, error) {
 	}
 
 	if singboxState != "running" && perr != nil {
-		lines = append(lines, "podkop state: inactive")
+		lines = append(lines, "routing state: inactive")
 	} else {
-		lines = append(lines, "podkop state: active")
+		lines = append(lines, "routing state: active")
 	}
 
 	if health, herr := s.ChannelHealth(ctx); herr == nil {
@@ -100,33 +151,41 @@ func (s Service) Restart(ctx context.Context) error {
 	return err
 }
 
+func (s Service) Validate(ctx context.Context) error {
+	_, err := s.runner.RunCoreRPC(ctx, "Validate")
+	return err
+}
+
 func (s Service) Apply(ctx context.Context) error {
-	_, err := s.runner.Run(ctx, "/sbin/uci", "commit", "podkop")
-	if err != nil {
+	if err := s.PendingValidate(ctx); err != nil {
 		return err
 	}
-	return s.Restart(ctx)
+	return s.PendingApply(ctx)
 }
 
 func (s Service) Rollback(ctx context.Context) error {
-	_, err := s.runner.Run(ctx, "/sbin/uci", "revert", "podkop")
-	if err != nil {
+	if err := s.PendingRollback(ctx); err != nil {
 		return err
 	}
-	return s.Restart(ctx)
+	_, err := s.runner.Run(ctx, "/sbin/uci", "revert", s.uciPackage)
+	return err
 }
 
 func (s Service) ListFailover(ctx context.Context) (string, error) {
-	return s.runner.Run(ctx, "/sbin/uci", "get", "podkop.glob.failover_proxy_links")
+	return s.runner.Run(ctx, "/sbin/uci", "get", s.mainKey("failover_proxy_links"))
+}
+
+// FailoverHistory returns recent failover events from core RPC History.
+func (s Service) FailoverHistory(ctx context.Context) (string, error) {
+	return s.runner.RunCoreRPC(ctx, "History")
 }
 
 func (s Service) ListRouterParams(ctx context.Context) (string, error) {
-	return s.runner.Run(ctx, "/sbin/uci", "show", "podkop")
+	return s.runner.Run(ctx, "/sbin/uci", "show", s.uciPackage)
 }
 
 func (s Service) ListRouterSections(ctx context.Context) (string, error) {
-	// Use shell tools on-device to avoid parsing multiline list values in Go.
-	cmd := "uci show podkop | cut -d= -f1 | cut -d. -f1-2 | sort -u"
+	cmd := fmt.Sprintf("uci show %s | cut -d= -f1 | cut -d. -f1-2 | sort -u", s.uciPackage)
 	return s.runner.Run(ctx, "/bin/sh", "-lc", cmd)
 }
 
@@ -152,9 +211,32 @@ func (s Service) SetRouterParam(ctx context.Context, key, value string) error {
 	if value == "" {
 		return fmt.Errorf("empty value is not allowed, use delete command")
 	}
+	normalized, err := validation.NormalizeUCIOptionValue(key, value)
+	if err != nil {
+		return err
+	}
+	value = normalized
+	if err := s.validateURLTestPair(ctx, key, value); err != nil {
+		return err
+	}
 	quoted := shellQuote(value)
-	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci set %s=%s", key, quoted))
-	return err
+	_, err = s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci set %s=%s", key, quoted))
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
+}
+
+func (s Service) validateURLTestPair(ctx context.Context, key, newValue string) error {
+	peerKey := validation.PeerURLTestUCIKey(key)
+	if peerKey == "" {
+		return nil
+	}
+	peer, err := s.GetRouterParam(ctx, peerKey)
+	if err != nil {
+		peer = ""
+	}
+	return validation.ValidateURLTestUCISet(key, newValue, peer)
 }
 
 func (s Service) DelRouterParam(ctx context.Context, key string) error {
@@ -162,7 +244,10 @@ func (s Service) DelRouterParam(ctx context.Context, key string) error {
 		return err
 	}
 	_, err := s.runner.Run(ctx, "/sbin/uci", "delete", key)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
 }
 
 func (s Service) AddListRouterParam(ctx context.Context, key, value string) error {
@@ -175,7 +260,10 @@ func (s Service) AddListRouterParam(ctx context.Context, key, value string) erro
 	}
 	quoted := shellQuote(value)
 	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci add_list %s=%s", key, quoted))
-	return err
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
 }
 
 func (s Service) DelListRouterParam(ctx context.Context, key, value string) error {
@@ -188,11 +276,19 @@ func (s Service) DelListRouterParam(ctx context.Context, key, value string) erro
 	}
 	quoted := shellQuote(value)
 	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci del_list %s=%s", key, quoted))
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
+}
+
+func (s Service) capturePending(ctx context.Context) error {
+	_, err := s.runner.Run(ctx, "/usr/sbin/hybrid-failover", "pending", "capture")
 	return err
 }
 
 func (s Service) PendingChanges(ctx context.Context) (string, error) {
-	out, err := s.runner.Run(ctx, "/sbin/uci", "changes", "podkop")
+	out, err := s.runner.Run(ctx, "/sbin/uci", "changes", s.uciPackage)
 	if err != nil {
 		return "", err
 	}
@@ -202,23 +298,46 @@ func (s Service) PendingChanges(ctx context.Context) (string, error) {
 	return out, nil
 }
 
+func (s Service) PendingValidate(ctx context.Context) error {
+	_, err := s.runner.RunCoreRPC(ctx, "PendingValidate")
+	return err
+}
+
+func (s Service) PendingApply(ctx context.Context) error {
+	if _, err := s.runner.RunCoreRPC(ctx, "PendingApply"); err != nil {
+		return err
+	}
+	return s.Restart(ctx)
+}
+
+func (s Service) PendingRollback(ctx context.Context) error {
+	_, err := s.runner.RunCoreRPC(ctx, "PendingRollback")
+	return err
+}
+
 func (s Service) AddFailover(ctx context.Context, uri string) error {
 	if err := validation.ValidateProxyURI(uri); err != nil {
 		return err
 	}
 	escaped := strings.ReplaceAll(uri, "'", "'\\''")
-	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci add_list podkop.glob.failover_proxy_links='%s'", escaped))
-	return err
+	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci add_list %s='%s'", s.mainKey("failover_proxy_links"), escaped))
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
 }
 
 func (s Service) RemoveFailover(ctx context.Context, uri string) error {
 	escaped := strings.ReplaceAll(uri, "'", "'\\''")
-	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci del_list podkop.glob.failover_proxy_links='%s'", escaped))
-	return err
+	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci del_list %s='%s'", s.mainKey("failover_proxy_links"), escaped))
+	if err != nil {
+		return err
+	}
+	return s.capturePending(ctx)
 }
 
 func (s Service) SwitchOutbound(ctx context.Context, outbound string) error {
-	endpoint := s.clashAPI + "/proxies/glob-out"
+	endpoint := s.clashAPI + "/proxies/" + url.PathEscape(s.selectorTag())
 	values := url.Values{}
 	values.Set("name", outbound)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(values.Encode()))
@@ -238,7 +357,7 @@ func (s Service) SwitchOutbound(ctx context.Context, outbound string) error {
 }
 
 func (s Service) CurrentProxy(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.clashAPI+"/proxies/glob-out", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.clashAPI+"/proxies/"+url.PathEscape(s.selectorTag()), nil)
 	if err != nil {
 		return "", err
 	}
@@ -267,14 +386,14 @@ func (s Service) Logs(ctx context.Context, lines int) (string, error) {
 	if lines > 500 {
 		lines = 500
 	}
-	return s.runner.Run(ctx, "/sbin/logread", "-e", "podkop", "-l", fmt.Sprintf("%d", lines))
+	return s.runner.Run(ctx, "/sbin/logread", "-e", "hybrid-failover", "-l", fmt.Sprintf("%d", lines))
 }
 
 func (s Service) ChannelHealth(ctx context.Context) ([]ChannelHealth, error) {
-	names, err := s.globOutboundNames(ctx)
+	names, err := s.mainOutboundNames(ctx)
 	if err != nil {
 		if strings.Contains(err.Error(), "connect: connection refused") {
-			return nil, fmt.Errorf("clash api недоступен (%s). Вероятно podkop/sing-box не запущен", s.clashAPI)
+			return nil, fmt.Errorf("clash api недоступен (%s). Вероятно hybrid-failover/sing-box не запущен", s.clashAPI)
 		}
 		return nil, err
 	}
@@ -295,6 +414,46 @@ func (s Service) ChannelHealth(ctx context.Context) ([]ChannelHealth, error) {
 	return result, nil
 }
 
+func formatDiagReport(r diag.Report) string {
+	var lines []string
+	if r.SingboxRunning {
+		lines = append(lines, "sing-box: running")
+	} else {
+		lines = append(lines, "sing-box: stopped")
+	}
+	if r.NFTOK {
+		lines = append(lines, "nft: ok")
+	} else {
+		lines = append(lines, "nft: not ok")
+	}
+	if r.ClashOK {
+		lines = append(lines, "clash api: ok")
+		if r.ActiveOutbound != "" {
+			lines = append(lines, "active_outbound: "+r.ActiveOutbound)
+		}
+	} else {
+		lines = append(lines, "clash api: unavailable")
+	}
+	if r.FakeIPSkipped {
+		lines = append(lines, "fakeip: skipped")
+	} else if r.FakeIPOK != nil {
+		if *r.FakeIPOK {
+			lines = append(lines, "fakeip: ok")
+		} else {
+			lines = append(lines, "fakeip: not ok")
+		}
+	}
+	if len(r.Errors) > 0 {
+		lines = append(lines, "errors: "+strings.Join(r.Errors, "; "))
+	}
+	if r.SingboxRunning && r.NFTOK && r.ClashOK {
+		lines = append(lines, "routing state: active")
+	} else {
+		lines = append(lines, "routing state: inactive")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func shellQuote(in string) string {
 	return "'" + strings.ReplaceAll(in, "'", "'\\''") + "'"
 }
@@ -304,7 +463,7 @@ func (s Service) isSingBoxRunning(ctx context.Context) bool {
 	return err == nil
 }
 
-func (s Service) globOutboundNames(ctx context.Context) ([]string, error) {
+func (s Service) mainOutboundNames(ctx context.Context) ([]string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.clashAPI+"/proxies", nil)
 	if err != nil {
 		return nil, err
@@ -323,9 +482,11 @@ func (s Service) globOutboundNames(ctx context.Context) ([]string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		return nil, err
 	}
+	prefix := s.mainSection + "-"
 	var names []string
 	for name := range payload.Proxies {
-		if strings.HasPrefix(name, "glob-") && strings.HasSuffix(name, "-out") && name != "glob-out" && name != "glob-urltest-out" {
+		if strings.HasPrefix(name, prefix) && strings.HasSuffix(name, "-out") &&
+			name != s.selectorTag() && name != prefix+"urltest-out" {
 			names = append(names, name)
 		}
 	}

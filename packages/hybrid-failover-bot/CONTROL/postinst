@@ -1,4 +1,5 @@
 #!/bin/sh
 [ -n "${IPKG_INSTROOT}" ] && exit 0
+chmod 755 /etc/init.d/hybrid-failover-bot 2>/dev/null || true
 /etc/init.d/hybrid-failover-bot enable 2>/dev/null || true
 exit 0

@@ -1,0 +1,3 @@
+#!/bin/sh
+# luci-app-hybrid-failover postinst
+exit 0

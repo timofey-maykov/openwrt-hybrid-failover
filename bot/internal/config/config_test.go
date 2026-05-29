@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadFromFileAndEnvOverride(t *testing.T) {
-	t.Setenv("PODKOP_BOT_TOKEN", "env-token")
+	t.Setenv("HF_BOT_TOKEN", "env-token")
 
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "bot.json")
@@ -17,7 +17,7 @@ func TestLoadFromFileAndEnvOverride(t *testing.T) {
 		"log_path": "/tmp/hybrid-failover-bot.log",
 		"audit_path": "/tmp/hybrid-failover-bot.audit.log",
 		"clash_api": "http://127.0.0.1:9090",
-		"podkop_init_script": "/etc/init.d/podkop",
+		"routing_init_script": "/etc/init.d/legacy-routing",
 		"policy": "outage-only",
 		"probe_timeout_seconds": 5
 	}`
@@ -35,8 +35,8 @@ func TestLoadFromFileAndEnvOverride(t *testing.T) {
 	if len(cfg.AdminIDs) != 2 {
 		t.Fatalf("unexpected admin ids len: %d", len(cfg.AdminIDs))
 	}
-	if cfg.RoutingInitScript != "/etc/init.d/podkop" {
-		t.Fatalf("expected legacy podkop_init_script, got %q", cfg.RoutingInitScript)
+	if cfg.RoutingInitScript != "/etc/init.d/legacy-routing" {
+		t.Fatalf("routing_init_script: got %q", cfg.RoutingInitScript)
 	}
 }
 

@@ -8,7 +8,8 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/validation"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type CommandHandler struct {
@@ -28,15 +29,15 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 
 	switch fields[0] {
 	case "/start", "/help":
-		return helpText(), nil
+		return h.helpText(), nil
 	case "/quick", "/wizard":
-		return quickGuideText(), nil
+		return h.quickGuideText(), nil
 	case "/panel":
 		return mainPanelText(), nil
 	case "/uci_menu":
-		return uciMenuText(), nil
+		return h.uciMenuText(), nil
 	case "/param_menu":
-		return paramMenuText(), nil
+		return h.paramMenuText(), nil
 	case "/status":
 		return h.routing.Status(ctx)
 	case "/params", "/param_list":
@@ -52,10 +53,11 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			return "", err
 		}
 		lines := strings.Split(strings.TrimSpace(raw), "\n")
-		out := []string{"Секции podkop:"}
+		out := []string{"Секции hybrid-failover:"}
 		for _, line := range lines {
 			line = strings.TrimSpace(line)
-			if line == "" || !strings.HasPrefix(line, "podkop.") {
+			prefix := h.routing.UCIPackage() + "."
+			if line == "" || !strings.HasPrefix(line, prefix) {
 				continue
 			}
 			out = append(out, line)
@@ -63,19 +65,19 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return strings.Join(out, "\n"), nil
 	case "/uci_get":
 		if len(fields) < 2 {
-			return "", fmt.Errorf("использование: /uci_get <podkop.section.option>")
+			return "", fmt.Errorf("использование: /uci_get <hybrid-failover.section.option>")
 		}
 		return h.Handle(ctx, 0, "/param_get "+fields[1])
 	case "/uci_set":
 		if len(fields) < 3 {
-			return "", fmt.Errorf("использование: /uci_set <podkop.section.option> <value>")
+			return "", fmt.Errorf("использование: /uci_set <hybrid-failover.section.option> <value>")
 		}
 		return h.Handle(ctx, 0, "/param_set "+fields[1]+" "+strings.Join(fields[2:], " "))
 	case "/uci_add_list":
 		if len(fields) < 3 {
-			return "", fmt.Errorf("использование: /uci_add_list <podkop.section.option> <value>")
+			return "", fmt.Errorf("использование: /uci_add_list <hybrid-failover.section.option> <value>")
 		}
-		key := resolveParamKey(fields[1])
+		key := resolveParamKey(fields[1], h.routing.MainSection())
 		val := strings.Join(fields[2:], " ")
 		if err := h.routing.AddListRouterParam(ctx, key, val); err != nil {
 			return "", err
@@ -83,9 +85,9 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return "Элемент добавлен в list (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/uci_del_list":
 		if len(fields) < 3 {
-			return "", fmt.Errorf("использование: /uci_del_list <podkop.section.option> <value>")
+			return "", fmt.Errorf("использование: /uci_del_list <hybrid-failover.section.option> <value>")
 		}
-		key := resolveParamKey(fields[1])
+		key := resolveParamKey(fields[1], h.routing.MainSection())
 		val := strings.Join(fields[2:], " ")
 		if err := h.routing.DelListRouterParam(ctx, key, val); err != nil {
 			return "", err
@@ -93,14 +95,14 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return "Элемент удален из list (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/uci_del":
 		if len(fields) < 2 {
-			return "", fmt.Errorf("использование: /uci_del <podkop.section.option>")
+			return "", fmt.Errorf("использование: /uci_del <hybrid-failover.section.option>")
 		}
 		return h.Handle(ctx, 0, "/param_del "+fields[1])
 	case "/param_get":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /param_get <key>\nпример: /param_get disable_quic")
 		}
-		key := resolveParamKey(fields[1])
+		key := resolveParamKey(fields[1], h.routing.MainSection())
 		value, err := h.routing.GetRouterParam(ctx, key)
 		if err != nil {
 			return "", err
@@ -110,7 +112,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if len(fields) < 3 {
 			return "", fmt.Errorf("использование: /param_set <key> <value>\nпример: /param_set disable_quic on")
 		}
-		key := resolveParamKey(fields[1])
+		key := resolveParamKey(fields[1], h.routing.MainSection())
 		value := strings.Join(fields[2:], " ")
 		if err := h.routing.SetRouterParam(ctx, key, value); err != nil {
 			return "", err
@@ -120,7 +122,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /param_del <key>")
 		}
-		key := resolveParamKey(fields[1])
+		key := resolveParamKey(fields[1], h.routing.MainSection())
 		if err := h.routing.DelRouterParam(ctx, key); err != nil {
 			return "", err
 		}
@@ -133,7 +135,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.settings.disable_quic", value); err != nil {
+		if err := h.routing.SetRouterParam(ctx, h.routing.SettingsKey("disable_quic"), value); err != nil {
 			return "", err
 		}
 		return "QUIC обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -145,7 +147,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if policy != "outage-only" && policy != "prefer-primary" {
 			return "", fmt.Errorf("допустимо только outage-only или prefer-primary")
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.glob.failover_policy", policy); err != nil {
+		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("failover_policy"), policy); err != nil {
 			return "", err
 		}
 		return "Policy обновлена (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -153,14 +155,14 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /set_urltest_interval <seconds>")
 		}
-		normalized, err := parsePositiveInt(fields[1])
+		normalized, err := parseDurationSeconds(fields[1])
 		if err != nil {
 			return "", err
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_interval", normalized); err != nil {
-			return "", err
+		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("urltest_check_interval"), normalized); err != nil {
+			return "", fmt.Errorf("%v\nПодсказка: idle_timeout должен быть ≥ interval (например interval 30s, idle 5m)", err)
 		}
-		return "URLTest interval обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
+		return "URLTest check_interval обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/set_urltest_tolerance":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /set_urltest_tolerance <ms>")
@@ -169,7 +171,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_tolerance", normalized); err != nil {
+		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("urltest_tolerance"), normalized); err != nil {
 			return "", err
 		}
 		return "URLTest tolerance обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -177,12 +179,12 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /set_urltest_idle_timeout <seconds>")
 		}
-		normalized, err := parsePositiveInt(fields[1])
+		normalized, err := parseDurationSeconds(fields[1])
 		if err != nil {
 			return "", err
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_idle_timeout", normalized); err != nil {
-			return "", err
+		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("urltest_idle_timeout"), normalized); err != nil {
+			return "", fmt.Errorf("%v\nПодсказка: idle_timeout должен быть ≥ check_interval (сейчас часто 5m vs 60s)", err)
 		}
 		return "URLTest idle_timeout обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/set_interrupt_existing":
@@ -193,7 +195,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err != nil {
 			return "", err
 		}
-		if err := h.routing.SetRouterParam(ctx, "podkop.glob.urltest_interrupt_exist_connections", value); err != nil {
+		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("urltest_interrupt_exist_connections"), value); err != nil {
 			return "", err
 		}
 		return "interrupt_exist_connections обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
@@ -203,7 +205,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err := h.routing.Apply(ctx); err != nil {
 			return "", err
 		}
-		return "Изменения применены, сервис маршрутизации (init.d podkop) перезапущен", nil
+		return "Изменения применены, сервис маршрутизации (init.d hybrid-failover) перезапущен", nil
 	case "/param_rollback":
 		if err := h.routing.Rollback(ctx); err != nil {
 			return "", err
@@ -220,15 +222,39 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		}
 		return h.routing.Logs(ctx, lines)
 	case "/channels", "/failover_list":
-		return h.routing.ListFailover(ctx)
-	case "/health", "/check_channels":
 		health, err := h.routing.ChannelHealth(ctx)
 		if err != nil {
-			status, serr := h.routing.Status(ctx)
-			if serr != nil {
-				return "", fmt.Errorf("%v. Также не удалось получить статус podkop: %v", err, serr)
+			return "", err
+		}
+		if len(health) == 0 {
+			return "Каналы не найдены.", nil
+		}
+		out := []string{"Каналы:"}
+		for _, ch := range health {
+			mark := "❌"
+			if ch.Available {
+				mark = "✅"
 			}
-			return strings.Join([]string{
+			out = append(out, fmt.Sprintf("%s %s: %s", mark, ch.Name, ch.Detail))
+		}
+		return strings.Join(out, "\n"), nil
+	case "/history", "/failover_history":
+		raw, err := h.routing.FailoverHistory(ctx)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(raw) == "" || raw == "[]" || raw == "null" {
+			return "Событий failover пока нет.", nil
+		}
+		return "Последние события failover:\n" + raw, nil
+	case "/health", "/check_channels":
+		status, statusErr := h.routing.Status(ctx)
+		health, err := h.routing.ChannelHealth(ctx)
+		if err != nil {
+			if statusErr != nil {
+				return "", fmt.Errorf("%v. Также не удалось получить статус hybrid-failover: %v", err, statusErr)
+			}
+			out := []string{
 				"Проверка каналов временно недоступна.",
 				"Причина: " + err.Error(),
 				"",
@@ -239,12 +265,18 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 				"1) /routing_restart",
 				"2) подождать 5-10 сек",
 				"3) /health",
-			}, "\n"), nil
+			}
+			return strings.Join(out, "\n"), nil
+		}
+		out := []string{}
+		if statusErr == nil && strings.TrimSpace(status) != "" {
+			out = append(out, "Состояние:", status, "")
 		}
 		if len(health) == 0 {
-			return "Каналы не найдены", nil
+			out = append(out, "Каналы не найдены")
+			return strings.Join(out, "\n"), nil
 		}
-		out := []string{"Проверка каналов:"}
+		out = append(out, "Проверка каналов:")
 		for _, ch := range health {
 			if ch.Available {
 				out = append(out, fmt.Sprintf("✅ %s: %s", ch.Name, ch.Detail))
@@ -255,11 +287,11 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return strings.Join(out, "\n"), nil
 	case "/failover_params":
 		keys := []string{
-			"podkop.glob.failover_policy",
-			"podkop.glob.urltest_interval",
-			"podkop.glob.urltest_tolerance",
-			"podkop.glob.urltest_idle_timeout",
-			"podkop.glob.urltest_interrupt_exist_connections",
+			h.routing.MainSectionKey("failover_policy"),
+			h.routing.MainSectionKey("urltest_check_interval"),
+			h.routing.MainSectionKey("urltest_tolerance"),
+			h.routing.MainSectionKey("urltest_idle_timeout"),
+			h.routing.MainSectionKey("urltest_interrupt_exist_connections"),
 		}
 		out := []string{"Параметры failover:"}
 		for _, key := range keys {
@@ -284,11 +316,11 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 			"/param_preview",
 			"/param_apply",
 		}, "\n"), nil
-	case "/routing_restart", "/podkop_restart":
+	case "/routing_restart", "/hybrid-failover_restart":
 		if err := h.routing.Restart(ctx); err != nil {
 			return "", err
 		}
-		return "Сервис маршрутизации (init.d podkop) перезапущен", nil
+		return "Сервис маршрутизации (init.d hybrid-failover) перезапущен", nil
 	case "/failover_add":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /failover_add <uri>")
@@ -313,7 +345,7 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		if err := h.routing.Apply(ctx); err != nil {
 			return "", err
 		}
-		return "Изменения применены (podkop)", nil
+		return "Изменения применены (hybrid-failover)", nil
 	case "/switch":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /switch <outbound>")
@@ -360,7 +392,9 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 	}
 }
 
-func helpText() string {
+func (h CommandHandler) helpText() string {
+	sec := h.routing.MainSection()
+	sectionKey := h.routing.UCIPackage() + "." + sec
 	return strings.Join([]string{
 		"Команды:",
 		"Быстрый старт:",
@@ -370,7 +404,7 @@ func helpText() string {
 		"/uci_menu",
 		"/status",
 		"/params",
-		"/uci_show [podkop.section]",
+		"/uci_show [hybrid-failover.section]",
 		"/uci_sections",
 		"/uci_get <key>",
 		"/uci_set <key> <value>",
@@ -407,6 +441,62 @@ func helpText() string {
 		"/config_validate",
 		"/config_apply",
 		"/config_rollback",
+		"",
+		"Основная секция UCI: " + sectionKey,
+	}, "\n")
+}
+
+func helpText() string {
+	sec := paths.DefaultMainSection
+	sectionKey := paths.UCIPackage + "." + sec
+	return strings.Join([]string{
+		"Команды:",
+		"Быстрый старт:",
+		"/quick",
+		"/panel",
+		"/param_menu",
+		"/uci_menu",
+		"/status",
+		"/params",
+		"/uci_show [hybrid-failover.section]",
+		"/uci_sections",
+		"/uci_get <key>",
+		"/uci_set <key> <value>",
+		"/uci_add_list <key> <value>",
+		"/uci_del_list <key> <value>",
+		"/uci_del <key>",
+		"/param_list",
+		"/param_get <key|alias>",
+		"/param_set <key|alias> <value>",
+		"/param_del <key|alias>",
+		"/param_preview",
+		"/param_apply",
+		"/param_rollback",
+		"/set_quic on|off",
+		"/set_policy outage-only|prefer-primary",
+		"/set_urltest_interval <seconds>",
+		"/set_urltest_tolerance <ms>",
+		"/set_urltest_idle_timeout <seconds>",
+		"/set_interrupt_existing on|off",
+		"/channels",
+		"/health",
+		"/check_channels",
+		"/routing_restart",
+		"/failover_list",
+		"/failover_params",
+		"/failover_help",
+		"/failover_add <uri>",
+		"/failover_rm <uri>",
+		"/failover_apply",
+		"/switch <outbound>",
+		"/logs [lines]",
+		"/config_show",
+		"/config_set <key> <value>",
+		"/config_validate",
+		"/config_apply",
+		"/config_rollback",
+		"",
+		"Основная секция UCI: " + sectionKey,
 	}, "\n")
 }
 
@@ -414,26 +504,64 @@ func mainPanelText() string {
 	return "Панель Hybrid Failover. Выберите раздел кнопками ниже."
 }
 
+func (h CommandHandler) uciMenuText() string {
+	return uciMenuTextForSection(h.routing.MainSection(), h.routing.UCIPackage())
+}
+
+func (h CommandHandler) UCISectionKey(option string) string {
+	return uciSectionKey(h.routing.UCIPackage(), h.routing.MainSection(), option)
+}
+
 func uciMenuText() string {
+	return uciMenuTextForSection(paths.DefaultMainSection, paths.UCIPackage)
+}
+
+func uciMenuTextForSection(sec, pkg string) string {
+	sectionKey := pkg + "." + sec
 	return strings.Join([]string{
-		"UCI конфигурация upstream podkop:",
+		"UCI конфигурация upstream hybrid-failover:",
 		"",
 		"Просмотр:",
 		"/uci_show",
 		"/uci_sections",
-		"/uci_show podkop.glob",
+		"/uci_show " + sectionKey,
 		"",
 		"Редактирование:",
-		"/uci_get podkop.glob.urltest_interval",
-		"/uci_set podkop.glob.urltest_interval 45",
-		"/uci_add_list podkop.glob.failover_proxy_links vless://...",
-		"/uci_del_list podkop.glob.failover_proxy_links vless://...",
-		"/uci_del podkop.glob.urltest_tolerance",
+		"/uci_get " + sectionKey + ".urltest_check_interval",
+		"/uci_set " + sectionKey + ".urltest_check_interval 45s",
+		"/uci_add_list " + sectionKey + ".failover_proxy_links vless://...",
+		"/uci_del_list " + sectionKey + ".failover_proxy_links vless://...",
+		"/uci_del " + sectionKey + ".urltest_tolerance",
 		"",
 		"Фиксация изменений:",
 		"/param_preview",
 		"/param_apply",
 		"/param_rollback",
+	}, "\n")
+}
+
+func (h CommandHandler) quickGuideText() string {
+	sectionKey := h.routing.UCIPackage() + "." + h.routing.MainSection()
+	return strings.Join([]string{
+		"Удобные сценарии:",
+		"",
+		"1) Выключить QUIC:",
+		"/set_quic off",
+		"/param_preview",
+		"/param_apply",
+		"",
+		"2) Поменять политику failover:",
+		"/set_policy outage-only",
+		"/param_preview",
+		"/param_apply",
+		"",
+		"3) Изменить любой параметр вручную:",
+		"/param_set hybrid-failover.settings.cache_path /etc/sing-box/cache.db",
+		"/param_preview",
+		"/param_apply",
+		"",
+		"Алиасы ключей: disable_quic, cache_path, urltest_interval, urltest_tolerance",
+		"Основная секция: " + sectionKey,
 	}, "\n")
 }
 
@@ -452,7 +580,7 @@ func quickGuideText() string {
 		"/param_apply",
 		"",
 		"3) Изменить любой параметр вручную:",
-		"/param_set podkop.settings.cache_path /etc/sing-box/cache.db",
+		"/param_set hybrid-failover.settings.cache_path /etc/sing-box/cache.db",
 		"/param_preview",
 		"/param_apply",
 		"",
@@ -460,16 +588,17 @@ func quickGuideText() string {
 	}, "\n")
 }
 
-func paramMenuText() string {
+func (h CommandHandler) paramMenuText() string {
+	sectionKey := h.routing.UCIPackage() + "." + h.routing.MainSection()
 	return strings.Join([]string{
-		"Меню параметров роутера (конфиг podkop):",
+		"Меню параметров роутера (конфиг hybrid-failover):",
 		"",
 		"1) Показать все параметры:",
 		"   /params",
 		"",
 		"2) Проверить конкретный параметр:",
 		"   /param_get disable_quic",
-		"   /param_get podkop.settings.disable_quic",
+		"   /param_get hybrid-failover.settings.disable_quic",
 		"",
 		"3) Выключить QUIC (рекомендуется для проблемного YouTube):",
 		"   /set_quic off",
@@ -479,11 +608,50 @@ func paramMenuText() string {
 		"   /set_policy prefer-primary",
 		"",
 		"5) Изменить интервал URLTest:",
-		"   /set_urltest_interval 30",
+		"   /set_urltest_interval 30   (сохранит как 30s в urltest_check_interval)",
 		"",
-		"6) Ручная правка любого podkop-параметра:",
-		"   /param_set podkop.settings.cache_path /etc/sing-box/cache.db",
-		"   /param_del podkop.glob.urltest_tolerance",
+		"6) Ручная правка любого hybrid-failover-параметра:",
+		"   /param_set hybrid-failover.settings.cache_path /etc/sing-box/cache.db",
+		"   /param_del " + sectionKey + ".urltest_tolerance",
+		"",
+		"7) Перед применением обязательно посмотреть diff:",
+		"   /param_preview",
+		"",
+		"8) Применить или откатить:",
+		"   /param_apply",
+		"   /param_rollback",
+		"",
+		"Короткие алиасы ключей: disable_quic, cache_path, urltest_interval,",
+		"urltest_tolerance, urltest_idle_timeout, urltest_interrupt_exist_connections, policy",
+		"Основная секция: " + sectionKey,
+	}, "\n")
+}
+
+func paramMenuText() string {
+	sectionKey := paths.UCIPackage + "." + paths.DefaultMainSection
+	return strings.Join([]string{
+		"Меню параметров роутера (конфиг hybrid-failover):",
+		"",
+		"1) Показать все параметры:",
+		"   /params",
+		"",
+		"2) Проверить конкретный параметр:",
+		"   /param_get disable_quic",
+		"   /param_get hybrid-failover.settings.disable_quic",
+		"",
+		"3) Выключить QUIC (рекомендуется для проблемного YouTube):",
+		"   /set_quic off",
+		"",
+		"4) Настроить политику failover:",
+		"   /set_policy outage-only",
+		"   /set_policy prefer-primary",
+		"",
+		"5) Изменить интервал URLTest:",
+		"   /set_urltest_interval 30   (сохранит как 30s в urltest_check_interval)",
+		"",
+		"6) Ручная правка любого hybrid-failover-параметра:",
+		"   /param_set hybrid-failover.settings.cache_path /etc/sing-box/cache.db",
+		"   /param_del " + sectionKey + ".urltest_tolerance",
 		"",
 		"7) Перед применением обязательно посмотреть diff:",
 		"   /param_preview",

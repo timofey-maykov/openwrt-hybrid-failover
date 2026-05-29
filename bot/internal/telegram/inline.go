@@ -13,7 +13,7 @@ func mainPanelKeyboard() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("Конфиг", "nav:config"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("UCI (podkop)", "nav:uci"),
+			tgbotapi.NewInlineKeyboardButtonData("UCI (hybrid-failover)", "nav:uci"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 80"),

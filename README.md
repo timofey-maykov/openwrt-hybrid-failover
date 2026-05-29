@@ -1,10 +1,8 @@
 # Hybrid Failover
 
-> **Не является Podkop** и не одобрено itdoginfo. Проект основан на [Podkop](https://github.com/itdoginfo/podkop) с открытым исходным кодом. См. [docs/TRADEMARK.md](docs/TRADEMARK.md) и [политику товарных знаков Podkop](https://github.com/itdoginfo/podkop/blob/docs/trademark/TRADEMARK_RU.md).
+Автономный стек маршрутизации для OpenWrt: **VPN (AmneziaWG / bind_interface) + резервные proxy** через **urltest**, поддержка **`vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** (RU). Пакет **`hybrid-failover-core`**: без зависимости от `jq` и `python3-light`.
 
-Дополнения для OpenWrt: **VPN (AmneziaWG / bind_interface) + резервные proxy** через **urltest**, поддержка **`vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** (RU). Требуется установленный upstream-пакет **podkop**.
-
-Репозиторий: [github.com/timofey-maykov/openwrt-hybrid-failover](https://github.com/timofey-maykov/openwrt-hybrid-failover)
+Репозиторий: [github.com/timofey-maykov/openwrt-hybrid-failover](https://github.com/timofey-maykov/openwrt-hybrid-failover) (полный дистрибутив + LuCI) · Go core/bot и их `.ipk`/`.apk`: [openwrt-hybrid-failover-core](https://github.com/timofey-maykov/openwrt-hybrid-failover-core/releases)
 
 **Полное описание (архитектура, URI, UCI, установка, бот, диагностика):** [**docs/OVERVIEW.md**](docs/OVERVIEW.md)
 
@@ -14,12 +12,12 @@
 
 | Компонент | Что даёт |
 |-----------|----------|
+| **`hybrid-failover-core`** | Go-бинарник `/usr/sbin/hybrid-failover`: UCI → sing-box, nft, dnsmasq, списки |
 | **Hybrid failover** | VPN-интерфейс + резервные `vless`/`ss`/`trojan`/`socks`/`hy2`/`vpn://` через urltest |
-| **Пакет `hybrid-failover-patch`** | Патченный `/usr/bin/podkop`, facade, `section.js`, Amnezia-декодер |
-| **Telegram-бот** | Управление с телефона: UCI `podkop`, failover, `/health`, pending-конфиг |
-| **LuCI** | Поля failover в форме upstream **luci-app-podkop** + страница **Telegram-бот Hybrid Failover** |
+| **Telegram-бот** | Управление с телефона: UCI `hybrid-failover`, failover, `/health`, pending-конфиг |
+| **LuCI** | Маршрутизация, дашборд, per-client, Telegram-бот: **Сервисы → Hybrid Failover** |
 
-Базовая версия upstream: **podkop v0.7.10**.
+Конфиг UCI: **`/etc/config/hybrid-failover`**. Первичная настройка и миграция: `hybrid-failover migrate`.
 
 ---
 
@@ -31,15 +29,13 @@ wget -O /tmp/install.sh \
 ash /tmp/install.sh
 ```
 
-Скрипт сам определяет **архитектуру**, качает **релиз** с GitHub и ставит пакеты (`opkg`).
+Скрипт определяет **архитектуру**, качает **релиз** с GitHub и ставит пакеты (`opkg` / `apk`).
 
 | `HF_MODE` | Содержимое |
-|------------------|------------|
-| `full` (по умолчанию) | hybrid-failover-patch + hybrid-failover-bot + luci-app-hybrid-failover-bot |
+|-----------|------------|
+| `full` (по умолчанию) | hybrid-failover-core + hybrid-failover-bot + luci-app-hybrid-failover |
 | `bot` | только бот + LuCI |
-| `patches` | только hybrid-failover-patch |
-
-Переменные `PODKOP_HF_*` по-прежнему принимаются (устаревшие алиасы к `HF_*`).
+| `core` | только hybrid-failover-core |
 
 Подробнее: [docs/INSTALL.md](docs/INSTALL.md). Сборка `.ipk`: `./scripts/build-packages.sh`.
 
@@ -49,21 +45,21 @@ ash /tmp/install.sh
 
 ## Поддерживаемые ссылки (failover / urltest)
 
-| Схема | Роутер (patched podkop) | Telegram-бот |
-|-------|-------------------------|----------------|
+| Схема | Core | Telegram-бот |
+|-------|------|----------------|
 | `vless://` | да | да |
 | `ss://` | да | да |
 | `trojan://` | да | да |
 | `socks4/4a/5://` | да | нет* |
 | `hysteria2://`, `hy2://` | да | нет* |
-| `vpn://` (Amnezia) | да | да |
+| `vpn://` (Amnezia) | да (Go-декодер) | да |
 | `awg2://` | да (служебный URI)* | нет* |
 
-\*`awg2://` это **не** отдельный сетевой протокол. В патче podkop так помечается внутренняя ссылка для настройки интерфейса **AmneziaWG 2.0** (создание `amneziawg`, `awg setconf`, direct outbound). Обычно появляется при конвертации `vpn://`, если в контейнере Amnezia указан `amnezia-awg2`. Подробнее: [docs/OVERVIEW.md](docs/OVERVIEW.md#amnezia-awg2-awg2).
+\*`awg2://`: внутренняя ссылка для настройки **AmneziaWG 2.0** (direct outbound). Подробнее: [docs/OVERVIEW.md](docs/OVERVIEW.md).
 
-\*В боте при добавлении URI проверяются только `vless`, `trojan`, `ss`, `vpn`: остальное добавляйте через UCI/LuCI.
+\*В боте при добавлении URI проверяются `vless`, `trojan`, `ss`, `vpn`; остальное: через UCI/LuCI.
 
-Два режима: **VPN + failover** (`failover_proxy_links`) и **proxy URLTest** (`urltest_proxy_links`). Схема outbounds: [docs/OVERVIEW.md#архитектура](docs/OVERVIEW.md#архитектура).
+Два режима: **VPN + failover** (`failover_proxy_links`) и **proxy URLTest** (`urltest_proxy_links`).
 
 ---
 
@@ -72,8 +68,7 @@ ash /tmp/install.sh
 | | |
 |---|---|
 | Документация бота | [bot/README.md](bot/README.md) |
-| LuCI бота | **Сервисы → Telegram-бот Hybrid Failover** |
-| LuCI upstream | секция маршрутизации **luci-app-podkop** (`section.js`) |
+| LuCI | **Сервисы → Hybrid Failover** |
 
 ---
 
@@ -82,24 +77,11 @@ ash /tmp/install.sh
 | Файл | Тема |
 |------|------|
 | [**docs/OVERVIEW.md**](docs/OVERVIEW.md) | **Полное описание проекта** |
-| [docs/TRADEMARK.md](docs/TRADEMARK.md) | Товарные знаки Podkop |
 | [docs/UCI.md](docs/UCI.md) | Опции UCI |
 | [docs/INSTALL.md](docs/INSTALL.md) | Установка, режимы, зависимости |
-| [packages/README.md](packages/README.md) | Пакеты `.ipk` |
+| [packages/README.md](packages/README.md) | Пакеты `.ipk` / `.apk` |
 | [luci/README.md](luci/README.md) | LuCI, дашборд, `vpn://` |
 | [examples/glob-uci-commands.txt](examples/glob-uci-commands.txt) | Пример UCI для `glob` |
-
----
-
-## Ручной патч (без пакетов)
-
-```sh
-./scripts/patch-router-all.sh ROUTER_IP
-```
-
-Или патч `patches/podkop-0.7.10-hybrid-urltest.patch` на роутере: см. [docs/OVERVIEW.md](docs/OVERVIEW.md).
-
-**Важно:** уберите старый пост-хук `podkop-failover-apply.sh`, если был: иначе двойной failover.
 
 ---
 
@@ -107,11 +89,11 @@ ash /tmp/install.sh
 
 | Путь | Назначение |
 |------|------------|
-| `packaging/` | Файлы для сборки `hybrid-failover-patch` |
-| `patches/` | Патчи к podkop, facade, LuCI `main.js` |
-| `luci/` | `section.js`, fe-app |
-| `bot/` | Telegram-бот (Go) |
-| `scripts/` | `install-on-router.sh`, `build-packages.sh`, Amnezia-декодер |
+| `core/`, `internal/` | Go core |
+| `bot/` | Telegram-бот |
+| `luci/` | luci-app-hybrid-failover |
+| `packages/` | Сборка `.ipk` / `.apk` |
+| `openwrt/` | init.d, UCI-шаблон |
+| `scripts/` | install-on-router.sh, build-packages.sh, QEMU lab |
 | `docs/` | Документация |
-
-Upstream-патчи: `patches/upstream-main/README.md`.
+| `legacy/` | Устаревшие patch-скрипты (не в релизе по умолчанию) |

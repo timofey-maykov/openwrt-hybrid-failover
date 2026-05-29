@@ -1,0 +1,25 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: hybrid-failover 1.5.0\n"
+"Language: ru\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+# Russian UI uses source strings; catalog for tooling / future overrides.
+
+msgid "Hybrid Failover"
+msgstr "Hybrid Failover"
+
+msgid "Маршрутизация"
+msgstr "Маршрутизация"
+
+msgid "Статус"
+msgstr "Статус"
+
+msgid "Диагностика"
+msgstr "Диагностика"
+
+msgid "Клиенты"
+msgstr "Клиенты"
+
+msgid "Telegram-бот"
+msgstr "Telegram-бот"

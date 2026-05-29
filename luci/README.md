@@ -1,103 +1,66 @@
-# LuCI (luci-app-podkop): поля под доработки
+# LuCI (`luci-app-hybrid-failover`)
 
-Файл **`section.js`**: форма секции маршрутизации Podkop (тип подключения, VPN, URLTest и резервные каналы).
+Единый интерфейс Hybrid Failover для OpenWrt. Меню: **Сервисы → Hybrid Failover**.
 
-Отдельная страница **Telegram-бота** (русский интерфейс): `luci/root/www/luci-static/resources/view/podkop/bot.js`: см. [bot/README.md](../bot/README.md).
+Базовый URL: `/cgi-bin/luci/admin/services/hybrid-failover`
 
-## Что добавлено
+| Подраздел | Путь | Назначение |
+|-----------|------|------------|
+| Маршрутизация | `/routing` | VPN + failover, URLTest, subscription URLs |
+| Статус | `/dashboard` | Мониторинг: карточки сервисов, каналы с задержкой, контроллер failover, журнал переключений |
+| Клиенты | `/clients` | Per-client include/exclude по IP |
+| Telegram-бот | `/bot` | JSON-конфиг, pending validate/apply/rollback |
 
-1. **`failover_vpn_enabled`** и **`failover_proxy_links`**: сразу под **типом подключения**, при **Connection type → VPN** (список URI: при включённом failover). Так проще найти в форме и корректнее для порядка `checkDepends` в LuCI.
-2. **URLTest**: интервал, tolerance, URL проверки, **`urltest_idle_timeout`**, **`urltest_interrupt_exist_connections`**: показываются и для **Proxy → URLTest**, и для **VPN + failover** (через вторую группу `depends`, логика LuCI: **ИЛИ** между группами).
-3. **`UDP over TCP`**: дополнительно при **VPN + failover** (для разбора SOCKS/SS в запасных ссылках).
-4. **`vpn://` (Amnezia)**: в списках ссылок и в поле proxy URL: LuCI пропускает строку; на роутере см. раздел **Amnezia `vpn://`** ниже (Python + патч `sing_box_config_facade`).
+Исходники: `luci/root/www/luci-static/resources/view/hybrid-failover/`, menu: `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover.json`, rpcd: `luci/root/usr/share/rpcd/ucode/hybrid-failover`.
 
-Строки переводов на английском (`_("...")`); при желании добавьте строки в шаблон **podkop.pot** / **ru.po** upstream или в свой `.lmo`.
+## Что настраивается
 
-## Amnezia `vpn://` в failover / proxy / URLTest
+1. **VPN + failover**: `failover_vpn_enabled`, `failover_proxy_links`: резервные URI при `connection_type=vpn`.
+2. **Proxy URLTest**: `urltest_proxy_links` при `connection_type=proxy`.
+3. **URLTest**: `urltest_check_interval`, `urltest_idle_timeout`, `urltest_interrupt_exist_connections`.
+4. **Подписки**: `settings.subscription_urls` → `hybrid-failover subscription-refresh`.
+5. **Per-client**: `settings.include_source_ips`, `settings.exclude_source_ips`.
+6. **`vpn://` (Amnezia)**: в списках URI; декод в core (Go), Python не нужен.
 
-Ссылка **`vpn://…`** (экспорт Amnezia) на роутере превращается в **`vless://…`** скриптом **`scripts/amnezia_vpn_uri_to_vless.py`** (копия на устройство: **`/usr/lib/podkop/amnezia_vpn_uri_to_vless.py`**), затем обрабатывается как обычный VLESS.
+## Backend
 
-1. **`opkg install python3-light`**
-2. Скопировать скрипт:  
-   `scp scripts/amnezia_vpn_uri_to_vless.py root@ROUTER:/usr/lib/podkop/amnezia_vpn_uri_to_vless.py`
-3. Патч к **`/usr/lib/podkop/sing_box_config_facade.sh`**: **`patches/sing_box_config_facade-vpn-uri.patch`**  
-   с хоста:  
-   `scp patches/sing_box_config_facade-vpn-uri.patch root@ROUTER:/tmp/`  
-   `ssh root@ROUTER 'cd / && patch -p0 --forward -i /tmp/sing_box_config_facade-vpn-uri.patch'`  
-   (при повторном запуске patch может сказать «already applied»: это нормально.)
-4. Обновить **`section.js`** на роутере (см. ниже) и **`/etc/init.d/podkop restart`**.
+Действия apply/validate/status вызывают **`/usr/sbin/hybrid-failover`** через rpcd (`hybrid-failover rpc …`).
 
-Поддерживается пока только контейнер **`amnezia-xray`** с первым outbound **`vless`** в `last_config` (как в типичном экспорте).
-
-## Установка на роутер
-
-Путь на устройстве: **`/www/luci-static/resources/view/podkop/section.js`**
+UCI: **`/etc/config/hybrid-failover`**. После сохранения в LuCI:
 
 ```sh
-# С хоста (если нет scp): положить файл в /tmp и перенести
-base64 < luci/section.js | ssh root@ROUTER 'base64 -d > /tmp/section.js && mv /tmp/section.js /www/luci-static/resources/view/podkop/section.js'
+hybrid-failover validate
+hybrid-failover apply
+/etc/init.d/hybrid-failover restart
 ```
 
-Жёсткое обновление страницы в браузере (Ctrl+Shift+R). Перезагрузка `uhttpd` обычно не нужна.
+## Amnezia `vpn://`
 
-Откат: восстановить оригинал из пакета:
+Ссылка **`vpn://…`** декодируется core в **`vless://…`** (`internal/amnezia`). Поддерживается типичный экспорт **amnezia-xray** с VLESS в `last_config`.
+
+## Установка
+
+Пакет **`luci-app-hybrid-failover`** (режим `HF_MODE=full` или вместе с core):
 
 ```sh
-opkg install --force-reinstall luci-app-podkop
+./scripts/build-packages.sh
+opkg install /tmp/luci-app-hybrid-failover_*_all.ipk
 ```
 
-## Патч
-
-**`section.js.patch`**: отличия от stock `section.js` на момент снятия копии. Применение с ПК:
-
-```sh
-scp luci/section.js.patch root@ROUTER:/tmp/
-ssh root@ROUTER 'cd / && patch -p0 -i /tmp/section.js.patch'
-```
-
-(На роутере нужен пакет **`patch`**.)
-
-## Согласованность с backend
-
-Поля совпадают с **`/usr/bin/podkop`** после патча **`patches/podkop-0.7.10-hybrid-urltest.patch`**. Без патча podkop UCI-опции в LuCI сохранятся, но **не повлияют** на sing-box.
-
-## Дашборд: VPN + failover (несколько строк, как у Proxy → URLTest)
-
-Стоковый **`main.js`** для `connection_type === 'vpn'` строит **одну** карточку и не разворачивает селектор/urltest из гибридного `podkop`. На дашборде не видно отдельно **интерфейс VPN**, **резервные URI** и строку **Fastest**, хотя sing-box уже отдаёт это в Clash API.
-
-В каталоге **`luci/fe-app/`**:
-
-| Файл | Назначение |
-|------|------------|
-| `getDashboardSections.ts` | Готовый модуль (как в [itdoginfo/podkop](https://github.com/itdoginfo/podkop) `main`, плюс ветка VPN+failover) |
-| `getDashboardSections.upstream.ts` | Снимок upstream на момент синхронизации (для сравнения) |
-| `getDashboardSections.vpn-failover.patch` | `diff -u` к upstream: можно наложить на свой клон |
-
-Логика: если **`failover_vpn_enabled === '1'`** и есть **`failover_proxy_links`**, дашборд использует те же коды, что и proxy urltest: селектор **`${section}-out`**, urltest **`${section}-urltest-out`**, имена для кандидатов: индекс **0**: **`interface`** (awg0 и т.д.), дальше: **`getProxyUrlName`** по списку failover.
-
-Сборка: в репозитории [itdoginfo/podkop](https://github.com/itdoginfo/podkop) подмените `fe-app-podkop/src/podkop/methods/custom/getDashboardSections.ts` или примените патч из `luci/fe-app/`, затем обычная сборка **fe-app-podkop** и установка обновлённого **luci-app-podkop** на роутер. Только правка **`section.js`** дашборд не меняет: нужен пересобранный **`main.js`**.
-
-### Быстро: только дашборд на уже установленном `luci-app-podkop` v0.7.10
-
-Патч **`patches/main-js-dashboard-vpn-failover.patch`**: вставка в `getDashboardSections` той же логики, что в `luci/fe-app/getDashboardSections.ts` (при **VPN + failover** показываются строки **Fastest**, **awg0**, резервные URI как у Proxy→URLTest).
-
-С хоста (на роутере нет `patch`: проще залить уже пропатченный файл):
-
-```sh
-# снять текущий main.js с роутера, применить патч локально, вернуть:
-curl -sS http://ROUTER/luci-static/resources/view/podkop/main.js -o /tmp/main.js
-patch -p0 /tmp/main.js < patches/main-js-dashboard-vpn-failover.patch
-base64 < /tmp/main.js | ssh root@ROUTER 'base64 -d > /www/luci-static/resources/view/podkop/main.js'
-```
-
-После обновления: жёсткое обновление вкладки Podkop в браузере.
-
-Если TypeScript при сборке ругается на отсутствие полей в типе секции, добавьте в upstream **`types.ts`** для секции, например: `failover_vpn_enabled?: string` и `failover_proxy_links?: string[]`.
+Или одной командой: [docs/INSTALL.md](../docs/INSTALL.md).
 
 ## Эксплуатационные заметки
 
-- Если в логах sing-box появляется `missing fakeip record`, проверьте `cache_path`:
-  - лучше использовать постоянный путь (`/etc/sing-box/cache.db`), а не `/tmp`.
-  - после смены пути перезапустите `/etc/init.d/podkop restart`.
-- Для проверки failover вживую можно смотреть Clash API:
-  - `http://ROUTER:9090/proxies/<section>-urltest-out` (`now`, `history`, `all`).
+- Если в логах sing-box появляется `missing fakeip record`, задайте `hybrid-failover.settings.cache_path='/etc/sing-box/cache.db'` и перезапустите core.
+- Clash API: `settings.clash_api_listen` (по умолчанию `127.0.0.1:9090`; для `/health` бота часто нужен LAN IP).
+- Failover вживую: `http://ROUTER:9090/proxies/<section>-urltest-out`.
+
+## Связанная документация
+
+- [docs/OVERVIEW.md](../docs/OVERVIEW.md): архитектура, URI, диагностика
+- [docs/UCI.md](../docs/UCI.md): все опции UCI
+- [bot/README.md](../bot/README.md): Telegram-бот
+
+## Legacy
+
+Устаревший patch-based LuCI (`legacy/section.js`) не входит в релиз. Для установок используйте **`luci-app-hybrid-failover`**.

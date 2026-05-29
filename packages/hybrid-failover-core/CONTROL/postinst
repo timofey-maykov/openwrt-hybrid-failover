@@ -1,0 +1,4 @@
+#!/bin/sh
+# hybrid-failover-core postinst
+[ -x /usr/sbin/hybrid-failover ] && /usr/sbin/hybrid-failover migrate 2>/dev/null || true
+exit 0

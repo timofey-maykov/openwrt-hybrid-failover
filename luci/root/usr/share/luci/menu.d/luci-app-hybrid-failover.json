@@ -1,0 +1,68 @@
+{
+	"admin/services/hybrid-failover": {
+		"title": "Hybrid Failover",
+		"order": 60,
+		"action": {
+			"type": "alias",
+			"path": "admin/services/hybrid-failover/routing"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/routing": {
+		"title": "Маршрутизация",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/routing"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/dashboard": {
+		"title": "Статус",
+		"order": 2,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/dashboard"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/diagnostics": {
+		"title": "Диагностика",
+		"order": 3,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/diagnostics"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/clients": {
+		"title": "Клиенты",
+		"order": 4,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/clients"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/bot": {
+		"title": "Telegram-бот",
+		"order": 5,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/bot"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	}
+}
