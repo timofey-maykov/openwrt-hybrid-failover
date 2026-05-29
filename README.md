@@ -2,7 +2,7 @@
 
 Автономный стек маршрутизации для OpenWrt: **VPN (AmneziaWG / bind_interface) + резервные proxy** через **urltest**, поддержка **`vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** (RU). Пакет **`hybrid-failover-core`**: без зависимости от `jq` и `python3-light`.
 
-Репозиторий: [github.com/timofey-maykov/openwrt-hybrid-failover](https://github.com/timofey-maykov/openwrt-hybrid-failover) (полный дистрибутив + LuCI) · Go core/bot и их `.ipk`/`.apk`: [openwrt-hybrid-failover-core](https://github.com/timofey-maykov/openwrt-hybrid-failover-core/releases)
+Релизы (`.ipk` / `.apk`): [github.com/timofey-maykov/openwrt-hybrid-failover/releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases)
 
 **Полное описание (архитектура, URI, UCI, установка, бот, диагностика):** [**docs/OVERVIEW.md**](docs/OVERVIEW.md)
 
