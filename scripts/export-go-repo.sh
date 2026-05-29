@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Export Go core + bot into a standalone git tree (for openwrt-hybrid-failover-core).
+# Export Go core + bot into a standalone git tree (опционально, вне GitHub).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -77,8 +77,7 @@ cd bot && go test ./...
 HF_BUILD_SET=core ./scripts/build-packages.sh
 ```
 
-Готовые пакеты: [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover-core/releases) (тег `v*`).  
-Полный дистрибутив с LuCI: [openwrt-hybrid-failover](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
+Готовые пакеты: [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) (тег `v*`).
 
 See [docs/OVERVIEW.md](docs/OVERVIEW.md) and [docs/UCI.md](docs/UCI.md).
 EOF
