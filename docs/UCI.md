@@ -18,7 +18,7 @@
 | `bootstrap_dns_server` | string | `77.88.8.8` | Bootstrap DNS для резолва DoH-хоста |
 | `dns_rewrite_ttl` | string | `60` | TTL rewrite для fakeip DNS-правил |
 | `cache_path` | string | `/etc/sing-box/cache.db` | Путь cache sing-box (не `/tmp/…`) |
-| `config_schema_version` | int | `1` | Версия схемы после `migrate` |
+| `config_schema_version` | int | `2` | Версия схемы после `migrate` |
 | `disable_quic` | `0` / `1` | `0` | Отключить QUIC в маршрутизации |
 | `dont_touch_dhcp` | `0` / `1` | `0` | Не менять dnsmasq (не перенаправлять DNS на `127.0.0.42`) |
 | `clash_api_listen` | string | `127.0.0.1:9090` | Адрес Clash API (LuCI/бот; часто LAN IP) |
@@ -34,14 +34,25 @@
 | `webhook_url` | string | *(пусто)* | HTTP webhook при событиях failover (watchdog) |
 | `failover_probe_interval` | duration | `30s` | Интервал фонового controller (не URLTest interval) |
 | `history_max_lines` | int | `500` | Ротация `/var/log/hybrid-failover/history.jsonl` |
-| `list subscription_urls` | list |: | URL подписок proxy; `hybrid-failover subscription-refresh` |
-| `list include_source_ips` | list |: | IP клиентов через Hybrid Failover (nft mark) |
-| `list exclude_source_ips` | list |: | IP клиентов, исключённых из Hybrid Failover |
-| `list routing_excluded_ips` | list |: | IP/подсети, исключённые из tproxy-маршрутизации |
+| `delay_history_points` | int | `50` | Точек задержки на канал в `/var/run/hybrid-failover/delay-history.json` |
+| `list subscription_urls` | list |: | URL подписок proxy; LuCI или `hybrid-failover subscription-refresh` |
+| `list include_source_ips` | list |: | *(legacy)* см. `client_rule` |
+| `list exclude_source_ips` | list |: | *(legacy)* см. `client_rule` |
+| `list routing_excluded_ips` | list |: | *(legacy)* см. `client_rule` mode `global_exclude` |
 
-Per-client правила применяются через nft (`inet hybrid_failover`). LuCI: **Hybrid Failover → Клиенты**.
+Per-client правила: секции **`config client_rule`**. Migrate v2 импортирует legacy lists. LuCI: **Hybrid Failover → Клиенты**.
 
-Community-списки: `hybrid-failover list-update` → `/tmp/hybrid-failover/rulesets/`, затем apply + reload sing-box при изменении hash. При `start` core скачивает списки, ставит cron по `update_interval`, перегенерирует sing-box.
+Community-списки: LuCI «Обновить community lists» или `hybrid-failover list-update` → `/tmp/hybrid-failover/rulesets/`, затем apply + reload sing-box при изменении hash. При `start` core скачивает списки, ставит cron по `update_interval`, перегенерирует sing-box.
+
+---
+
+## `config client_rule '<name>'`
+
+| Опция | Тип | Описание |
+|--------|-----|----------|
+| `ip` | string | IP или CIDR клиента LAN |
+| `mode` | string | `include`, `exclude`, `full_route`, `global_exclude` |
+| `section` | string | Секция маршрутизации (для `full_route`) |
 
 ---
 

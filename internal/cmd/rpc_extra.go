@@ -2,16 +2,20 @@ package cmd
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/failover"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
@@ -105,6 +109,13 @@ func runRPCSwitchProxy(args []string) int {
 	if section == "" || outbound == "" {
 		return rpcErr("usage: SwitchProxy <section> <outbound>")
 	}
+	pkg, err := uci.Load(paths.UCIConfig)
+	if err != nil {
+		return rpcErr(err.Error())
+	}
+	if err := failover.ValidateSelectorMember(pkg, section, outbound); err != nil {
+		return rpcErr(err.Error())
+	}
 	clashURL, _, _ := statusContext()
 	cli := clash.New(clashURL, 12*time.Second)
 	selector := singbox.OutboundTag(section)
@@ -112,6 +123,10 @@ func runRPCSwitchProxy(args []string) int {
 	defer cancel()
 	prev, _ := cli.ActiveOutbound(ctx, selector)
 	if err := cli.SwitchProxy(ctx, selector, outbound); err != nil {
+		emitJSON(map[string]any{"ok": false, "error": err.Error()})
+		return 1
+	}
+	if err := failover.NoteManualSwitch(section, outbound); err != nil {
 		emitJSON(map[string]any{"ok": false, "error": err.Error()})
 		return 1
 	}
@@ -245,4 +260,101 @@ func emitJSON(v any) {
 func rpcErr(msg string) int {
 	emitJSON(map[string]any{"ok": false, "error": msg})
 	return 1
+}
+
+func runRPCListClients() int {
+	pkg, err := uci.Load(paths.UCIConfig)
+	if err != nil {
+		return rpcErr(err.Error())
+	}
+	emitJSON(map[string]any{"ok": true, "rules": clientrules.ListRules(pkg)})
+	return 0
+}
+
+func runRPCDelayHistory() int {
+	data, err := delayhistory.ReadAll()
+	if err != nil {
+		return rpcErr(err.Error())
+	}
+	emitJSON(map[string]any{"ok": true, "channels": data})
+	return 0
+}
+
+func runRPCListUpdateRPC() int {
+	if code := runListUpdate(nil); code != 0 {
+		emitJSON(map[string]any{"ok": false, "error": "list-update failed"})
+		return code
+	}
+	emitJSON(map[string]any{"ok": true, "message": "list-update completed"})
+	return 0
+}
+
+func runRPCSubscriptionRefreshRPC() int {
+	if code := runSubscriptionRefresh(nil); code != 0 {
+		emitJSON(map[string]any{"ok": false, "error": "subscription-refresh failed"})
+		return code
+	}
+	emitJSON(map[string]any{"ok": true, "message": "subscription-refresh completed"})
+	return 0
+}
+
+func runRPCBackupDownload() int {
+	out := "/tmp/hybrid-failover-uci-backup.tar.gz"
+	cmd := exec.Command("tar", "-czf", out, "-C", "/etc/config", "hybrid-failover")
+	if out2, err := cmd.CombinedOutput(); err != nil {
+		emitJSON(map[string]any{"ok": false, "error": err.Error(), "output": string(out2)})
+		return 1
+	}
+	raw, err := os.ReadFile(out)
+	if err != nil {
+		return rpcErr(err.Error())
+	}
+	emitJSON(map[string]any{
+		"ok":       true,
+		"filename": "hybrid-failover-backup.tar.gz",
+		"data":     base64.StdEncoding.EncodeToString(raw),
+	})
+	return 0
+}
+
+func runRPCMetrics() int {
+	report := buildStatusReport(false)
+	var b strings.Builder
+	up := 0
+	if report.SingboxRunning && report.NFTOK && report.ClashOK {
+		up = 1
+	}
+	b.WriteString("# HELP hybrid_failover_up Routing stack healthy.\n")
+	b.WriteString("# TYPE hybrid_failover_up gauge\n")
+	b.WriteString(fmt.Sprintf("hybrid_failover_up %d\n", up))
+	for _, cs := range report.Controller {
+		if cs.Section == "" {
+			continue
+		}
+		b.WriteString("hybrid_failover_fail_streak{section=\"")
+		b.WriteString(escapeProm(cs.Section))
+		b.WriteString("\"} ")
+		b.WriteString(strconv.Itoa(cs.FailStreak))
+		b.WriteByte('\n')
+		b.WriteString("hybrid_failover_recover_streak{section=\"")
+		b.WriteString(escapeProm(cs.Section))
+		b.WriteString("\"} ")
+		b.WriteString(strconv.Itoa(cs.RecoverStreak))
+		b.WriteByte('\n')
+		if cs.PrimaryOK {
+			b.WriteString("hybrid_failover_probe_ok{section=\"")
+			b.WriteString(escapeProm(cs.Section))
+			b.WriteString("\"} 1\n")
+		} else {
+			b.WriteString("hybrid_failover_probe_ok{section=\"")
+			b.WriteString(escapeProm(cs.Section))
+			b.WriteString("\"} 0\n")
+		}
+	}
+	emitJSON(map[string]any{"ok": true, "prometheus": b.String()})
+	return 0
+}
+
+func escapeProm(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`)
 }

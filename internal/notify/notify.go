@@ -21,6 +21,8 @@ type Event struct {
 	From     string    `json:"from,omitempty"`
 	To       string    `json:"to"`
 	Reason   string    `json:"reason,omitempty"`
+	Policy   string    `json:"policy,omitempty"`
+	ProbeMs  int       `json:"probe_ms,omitempty"`
 }
 
 func RecordFailover(section, from, to, reason string) error {

@@ -38,6 +38,7 @@ func (r Runner) Run(ctx context.Context, name string, args ...string) (string, e
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-func (r Runner) RunCoreRPC(ctx context.Context, method string) (string, error) {
-	return r.Run(ctx, coreBinary, "rpc", method)
+func (r Runner) RunCoreRPC(ctx context.Context, method string, args ...string) (string, error) {
+	rpcArgs := append([]string{"rpc", method}, args...)
+	return r.Run(ctx, coreBinary, rpcArgs...)
 }

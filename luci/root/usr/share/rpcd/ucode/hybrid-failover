@@ -148,6 +148,28 @@ function method_apply() {
 	};
 }
 
+function method_dhcp_leases() {
+	return {
+		call: function() {
+			let fd = popen('(ubus call dhcp ipv4leases "{}" 2>/dev/null; echo __HF_EXIT:$?)', 'r');
+			let all = fd ? fd.read('all') : '';
+			if (fd)
+				fd.close();
+			let m = match(all, /__HF_EXIT:(\d+)\s*$/);
+			let code = m ? int(m[1]) : 1;
+			let output = trim(replace(all, /__HF_EXIT:\d+\s*$/, ''));
+			if (code != 0)
+				return { ok: false, output: output || 'dhcp ipv4leases unavailable' };
+			try {
+				return { ok: true, data: json(output) };
+			}
+			catch (err) {
+				return { ok: false, output: output };
+			}
+		}
+	};
+}
+
 	return {
 	'hybrid-failover': {
 		status: method_call('Status', null),
@@ -165,6 +187,13 @@ function method_apply() {
 		duplicate_section: method_rpc_args('DuplicateSection', ['from', 'to']),
 		apply: method_apply(),
 		reload: method_call(null, ['reload']),
+		list_update: method_call('ListUpdate', null),
+		subscription_refresh: method_call('SubscriptionRefresh', null),
+		list_clients: method_call('ListClients', null),
+		delay_history: method_call('DelayHistory', null),
+		backup_download: method_call('BackupDownload', null),
+		metrics: method_call('Metrics', null),
+		dhcp_leases: method_dhcp_leases(),
 		pending_validate: method_call('PendingValidate', null),
 		pending_capture: method_call('CapturePending', null),
 		pending_apply: method_call('PendingApply', null),

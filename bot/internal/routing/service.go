@@ -336,24 +336,30 @@ func (s Service) RemoveFailover(ctx context.Context, uri string) error {
 	return s.capturePending(ctx)
 }
 
-func (s Service) SwitchOutbound(ctx context.Context, outbound string) error {
-	endpoint := s.clashAPI + "/proxies/" + url.PathEscape(s.selectorTag())
-	values := url.Values{}
-	values.Set("name", outbound)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(values.Encode()))
+func (s Service) SwitchOutbound(ctx context.Context, section, outbound string) error {
+	if section == "" {
+		section = s.mainSection
+	}
+	_, err := s.runner.RunCoreRPC(ctx, "SwitchProxy", section, outbound)
+	return err
+}
+
+func (s Service) ListClients(ctx context.Context) (string, error) {
+	out, err := s.runner.RunCoreRPC(ctx, "ListClients")
 	if err != nil {
-		return err
+		return "", err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := s.httpCli.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("switch outbound failed: status %s", resp.Status)
-	}
-	return nil
+	return out, nil
+}
+
+func (s Service) ListUpdate(ctx context.Context) error {
+	_, err := s.runner.RunCoreRPC(ctx, "ListUpdate")
+	return err
+}
+
+func (s Service) SubscriptionRefresh(ctx context.Context) error {
+	_, err := s.runner.RunCoreRPC(ctx, "SubscriptionRefresh")
+	return err
 }
 
 func (s Service) CurrentProxy(ctx context.Context) (string, error) {

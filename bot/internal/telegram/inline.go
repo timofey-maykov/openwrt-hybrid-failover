@@ -1,6 +1,9 @@
 package telegram
 
-import tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+import (
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+)
 
 func mainPanelKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
@@ -36,6 +39,9 @@ func paramMenuKeyboard() tgbotapi.InlineKeyboardMarkup {
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Политика outage-only", "cmd:/set_policy outage-only"),
 			tgbotapi.NewInlineKeyboardButtonData("Политика prefer-primary", "cmd:/set_policy prefer-primary"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Политика fastest", "cmd:/set_policy fastest"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("URLTest 30с", "cmd:/set_urltest_interval 30"),
@@ -98,7 +104,12 @@ func serviceKeyboard() tgbotapi.InlineKeyboardMarkup {
 	)
 }
 
-func failoverKeyboard() tgbotapi.InlineKeyboardMarkup {
+func failoverKeyboard(section string) tgbotapi.InlineKeyboardMarkup {
+	if section == "" {
+		section = paths.DefaultMainSection
+	}
+	awgTag := section + "-awg-out"
+	peerTag := section + "-1-out"
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Список", "cmd:/failover_list"),
@@ -109,8 +120,8 @@ func failoverKeyboard() tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("Справка", "cmd:/failover_help"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Переключить AWG", "cmd:/switch glob-awg-out"),
-			tgbotapi.NewInlineKeyboardButtonData("Переключить #1", "cmd:/switch glob-1-out"),
+			tgbotapi.NewInlineKeyboardButtonData("Primary VPN", "cmd:/switch "+awgTag),
+			tgbotapi.NewInlineKeyboardButtonData("Backup #1", "cmd:/switch "+peerTag),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("Интервал: ввести", "input:urltest_interval"),

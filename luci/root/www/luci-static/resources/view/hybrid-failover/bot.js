@@ -40,12 +40,15 @@ return view.extend({
 		var tasks = [
 			['token', get('pdkb_token')],
 			['admin_ids', get('pdkb_admin_ids')],
+			['viewer_ids', get('pdkb_viewer_ids')],
 			['policy', get('pdkb_policy')],
 			['clash_api', get('pdkb_clash_api')],
 			['routing_init_script', get('pdkb_routing_init_script')],
 			['log_path', get('pdkb_log_path')],
 			['audit_path', get('pdkb_audit_path')],
-			['probe_timeout_seconds', get('pdkb_probe_timeout_seconds')]
+			['probe_timeout_seconds', get('pdkb_probe_timeout_seconds')],
+			['notify_failover_enabled', get('pdkb_notify_failover_enabled')],
+			['notify_failover_interval_seconds', get('pdkb_notify_interval')]
 		];
 		var self = this;
 		var chain = Promise.resolve();
@@ -95,9 +98,11 @@ return view.extend({
 			E('h3', 'Hybrid Failover Bot: JSON-конфиг (редактирование)'),
 			mkInput('Токен', 'pdkb_token', cfg.token || '', { 'placeholder': '123456789:ABC...' }),
 			mkInput('ID администраторов (через запятую)', 'pdkb_admin_ids', (cfg.admin_ids || []).join(', '), { 'placeholder': '123456789, 987654321' }),
+			mkInput('ID только чтение (viewer_ids)', 'pdkb_viewer_ids', (cfg.viewer_ids || []).join(', '), { 'placeholder': '111111111' }),
 			mkSelect('Политика failover', 'pdkb_policy', [
 				E('option', { 'value': 'outage-only', 'selected': cfg.policy === 'outage-only' }, 'outage-only (только при падении)'),
-				E('option', { 'value': 'prefer-primary', 'selected': cfg.policy === 'prefer-primary' }, 'prefer-primary (предпочитать основной)')
+				E('option', { 'value': 'prefer-primary', 'selected': cfg.policy === 'prefer-primary' }, 'prefer-primary (предпочитать основной)'),
+				E('option', { 'value': 'fastest', 'selected': cfg.policy === 'fastest' }, 'fastest (urltest passive)')
 			], cfg.policy),
 			mkInput('URL Clash API', 'pdkb_clash_api', cfg.clash_api || 'http://192.168.42.1:9090'),
 			mkInput('Скрипт init.d hybrid-failover', 'pdkb_routing_init_script',
@@ -105,6 +110,8 @@ return view.extend({
 			mkInput('Путь к логам', 'pdkb_log_path', cfg.log_path || '/var/log/hybrid-failover-bot.log'),
 			mkInput('Путь к audit-логу', 'pdkb_audit_path', cfg.audit_path || '/var/log/hybrid-failover-bot.audit.log'),
 			mkInput('Таймаут проверки, сек', 'pdkb_probe_timeout_seconds', String(cfg.probe_timeout_seconds || 5), { 'type': 'number', 'min': '1', 'style': 'max-width:200px;width:100%;' }),
+			mkInput('Алерты failover (true/false)', 'pdkb_notify_failover_enabled', cfg.notify_failover_enabled ? 'true' : 'false'),
+			mkInput('Интервал алертов, сек', 'pdkb_notify_interval', String(cfg.notify_failover_interval_seconds || 30), { 'type': 'number', 'min': '10' }),
 			E('div', { 'style': 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;' }, [
 				E('button', {
 					'class': 'btn cbi-button cbi-button-save',

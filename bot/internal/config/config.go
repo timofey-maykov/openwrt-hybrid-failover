@@ -70,7 +70,7 @@ func (c Config) Validate() error {
 		return errors.New("admin_ids is required")
 	}
 	switch c.Policy {
-	case "outage-only", "prefer-primary":
+	case "outage-only", "prefer-primary", "fastest":
 	default:
 		return fmt.Errorf("unsupported policy %q", c.Policy)
 	}

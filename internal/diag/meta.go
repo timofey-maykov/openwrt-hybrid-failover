@@ -64,6 +64,37 @@ func WritePrometheusTextfile(r Report, path string) error {
 		b.WriteString(itoa(ch.DelayMs))
 		b.WriteByte('\n')
 	}
+	for _, cs := range r.Controller {
+		if cs.Section == "" {
+			continue
+		}
+		b.WriteString("hybrid_failover_fail_streak{section=\"")
+		b.WriteString(escapeLabel(cs.Section))
+		b.WriteString("\"} ")
+		b.WriteString(itoa(cs.FailStreak))
+		b.WriteByte('\n')
+		b.WriteString("hybrid_failover_recover_streak{section=\"")
+		b.WriteString(escapeLabel(cs.Section))
+		b.WriteString("\"} ")
+		b.WriteString(itoa(cs.RecoverStreak))
+		b.WriteByte('\n')
+		probeVal := 0
+		if cs.PrimaryOK {
+			probeVal = 1
+		}
+		b.WriteString("hybrid_failover_probe_ok{section=\"")
+		b.WriteString(escapeLabel(cs.Section))
+		b.WriteString("\"} ")
+		b.WriteString(itoa(probeVal))
+		b.WriteByte('\n')
+		if cs.PrimaryDelay > 0 {
+			b.WriteString("hybrid_failover_primary_delay_ms{section=\"")
+			b.WriteString(escapeLabel(cs.Section))
+			b.WriteString("\"} ")
+			b.WriteString(itoa(cs.PrimaryDelay))
+			b.WriteByte('\n')
+		}
+	}
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 

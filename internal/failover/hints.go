@@ -12,7 +12,17 @@ type DryRunHint struct {
 func BuildDryRunHints(states []SectionRuntime) []DryRunHint {
 	var hints []DryRunHint
 	for _, st := range states {
-		if st.Policy == string(policy.Fastest) || st.Policy == "" {
+		if st.Policy == string(policy.Fastest) {
+			h := DryRunHint{Section: st.Section}
+			if st.Active != "" {
+				h.Suggestion = "fastest: urltest inside sing-box picks member; controller passive (active: " + st.Active + ")"
+			} else {
+				h.Suggestion = "fastest: urltest inside sing-box picks member; controller passive"
+			}
+			hints = append(hints, h)
+			continue
+		}
+		if st.Policy == "" {
 			continue
 		}
 		h := DryRunHint{Section: st.Section}

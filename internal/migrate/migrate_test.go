@@ -42,7 +42,7 @@ config section 'glob'
 		"failover_vpn_enabled=1",
 		"urltest_interrupt_exist_connections=0",
 		"cache_path=" + paths.SingboxCache,
-		"config_schema_version=1",
+		"config_schema_version=2",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in changes:\n%s", want, joined)
@@ -55,7 +55,7 @@ func TestPlanMigrationAlreadyAtSchema(t *testing.T) {
 	cfg := filepath.Join(dir, "hybrid-failover")
 	content := `
 config settings 'settings'
-	option config_schema_version '1'
+	option config_schema_version '2'
 	option cache_path '/etc/sing-box/cache.db'
 `
 	if err := os.WriteFile(cfg, []byte(content), 0o644); err != nil {
