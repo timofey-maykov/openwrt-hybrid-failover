@@ -1,56 +1,975 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: hybrid-failover 1.5.0\n"
+"Project-Id-Version: hybrid-failover 1.7.0\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip. Для VPN+резервы рекомендуется outage-only."
+msgstr "1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip. Для VPN+backupы рекомендуется outage-only."
+
+msgid "1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить» выполняет все шаги."
+msgstr "1) Сохраните форму LuCI  2) Validate  3) Apply. «Save and apply» выполняет все шаги."
+
+msgid "2. Проверить"
+msgstr "2. Validate"
+
+msgid "3. Применить"
+msgstr "3. Apply"
+
+msgid "Anime"
+msgstr "Anime"
+
+msgid "Block"
+msgstr "Block"
+
+msgid "Bootstrap DNS"
+msgstr "Bootstrap DNS"
+
+msgid "Clash API listen"
+msgstr "Clash API listen"
+
+msgid "Clash API secret (Bearer)"
+msgstr "Clash API secret (Bearer)"
+
+msgid "Clash API на WAN (0.0.0.0)"
+msgstr "Clash API на WAN (0.0.0.0)"
+
+msgid "Cloudflare"
+msgstr "Cloudflare"
+
+msgid "Cloudfront"
+msgstr "Cloudfront"
+
+msgid "Community lists"
+msgstr "Community lists"
+
+msgid "Connection URL"
+msgstr "Connection URL"
+
+msgid "Create backup"
+msgstr "Create backup"
+
+msgid "DHCP leases"
+msgstr "DHCP leases"
+
+msgid "DNS rewrite TTL (сек)"
+msgstr "DNS rewrite TTL (сек)"
+
+msgid "DNS-сервер"
+msgstr "DNS-сервер"
+
+msgid "DigitalOcean"
+msgstr "DigitalOcean"
+
+msgid "Disabled"
+msgstr "Disabled"
+
+msgid "Discord"
+msgstr "Discord"
+
+msgid "DoH"
+msgstr "DoH"
+
+msgid "DoT"
+msgstr "DoT"
+
+msgid "Domain resolver"
+msgstr "Domain resolver"
+
+msgid "Domain resolver DNS server"
+msgstr "Domain resolver DNS server"
+
+msgid "Domain resolver DNS type"
+msgstr "Domain resolver DNS type"
+
+msgid "Download backup"
+msgstr "Download backup"
+
+msgid "Duration: 30s, 1m, 5m и т.д."
+msgstr "Duration: 30s, 1m, 5m и т.д."
+
+msgid "Dynamic list"
+msgstr "Dynamic list"
+
+msgid "Effective rules (как видит core)"
+msgstr "Effective rules (как видит core)"
+
+msgid "Exclude: миновать Hybrid Failover"
+msgstr "Exclude: миновать Hybrid Failover"
+
+msgid "First-run"
+msgstr "First-run"
+
+msgid "Full route: весь трафик клиента через секцию"
+msgstr "Full route: весь трафик клиента через секцию"
+
+msgid "Fully routed IPs (nft tproxy)"
+msgstr "Fully routed IPs (nft tproxy)"
+
+msgid "Geoblock"
+msgstr "Geoblock"
+
+msgid "Global exclude: исключить из tproxy маршрутизации"
+msgstr "Global exclude: исключить из tproxy маршрутизации"
+
+msgid "Google AI"
+msgstr "Google AI"
+
+msgid "Google Play"
+msgstr "Google Play"
+
+msgid "HDRezka"
+msgstr "HDRezka"
+
+msgid "Hetzner"
+msgstr "Hetzner"
+
+msgid "Hodca"
+msgstr "Hodca"
+
+msgid "Hostname"
+msgstr "Hostname"
 
 msgid "Hybrid Failover"
 msgstr "Hybrid Failover"
 
-msgid "Маршрутизация"
-msgstr "Routing"
-
-msgid "Статус"
-msgstr "Status"
-
-msgid "Диагностика"
-msgstr "Diagnostics"
-
-msgid "Клиенты"
-msgstr "Clients"
-
-msgid "Telegram-бот"
-msgstr "Telegram bot"
-
-msgid "Hybrid Failover: мониторинг"
-msgstr "Hybrid Failover: monitoring"
-
-msgid "Обновить"
-msgstr "Refresh"
-
-msgid "Экспорт журнала"
-msgstr "Export history"
-
-msgid "Ручное переключение канала"
-msgstr "Manual channel switch"
-
-msgid "Проверить URI"
-msgstr "Check URI"
-
-msgid "Дублировать секцию…"
-msgstr "Duplicate section…"
-
-msgid "Создать бэкап"
-msgstr "Create backup"
-
-msgid "Восстановить из архива"
-msgstr "Restore from archive"
-
-msgid "Hybrid Failover: маршрутизация"
-msgstr "Hybrid Failover: routing"
+msgid "Hybrid Failover Bot: JSON-конфиг"
+msgstr "Hybrid Failover Bot: JSON config"
 
 msgid "Hybrid Failover: диагностика"
 msgstr "Hybrid Failover: diagnostics"
 
 msgid "Hybrid Failover: клиенты"
 msgstr "Hybrid Failover: clients"
+
+msgid "Hybrid Failover: маршрутизация"
+msgstr "Hybrid Failover: routing"
+
+msgid "Hybrid Failover: обзор"
+msgstr "Hybrid Failover: overview"
+
+msgid "ID администраторов (через запятую)"
+msgstr "ID администраторов (через запятую)"
+
+msgid "ID только чтение (viewer_ids)"
+msgstr "ID только чтение (viewer_ids)"
+
+msgid "IP"
+msgstr "IP"
+
+msgid "IP / CIDR клиента"
+msgstr "IP / CIDR клиента"
+
+msgid "IP подставлен в форму: "
+msgstr "IP подставлен в форму: "
+
+msgid "IP/подсети клиентов LAN: весь их трафик принудительно через sing-box (fully routed)."
+msgstr "IP/подсети клиентов LAN: весь их трафик принудительно через sing-box (fully routed)."
+
+msgid "Idle timeout"
+msgstr "Idle timeout"
+
+msgid "Include/exclude: nft mark. Full route: секция маршрутизации. Global exclude: direct без tproxy."
+msgstr "Include/exclude: nft mark. Full route: секция маршрутизации. Global exclude: direct без tproxy."
+
+msgid "Include: через Hybrid Failover (nft mark)"
+msgstr "Include: через Hybrid Failover (nft mark)"
+
+msgid "Interrupt existing connections"
+msgstr "Interrupt existing connections"
+
+msgid "Lease"
+msgstr "Lease"
+
+msgid "Live probe"
+msgstr "Live probe"
+
+msgid "Local domain lists"
+msgstr "Local domain lists"
+
+msgid "Local subnet lists"
+msgstr "Local subnet lists"
+
+msgid "MAC"
+msgstr "MAC"
+
+msgid "Meta"
+msgstr "Meta"
+
+msgid "Netflix"
+msgstr "Netflix"
+
+msgid "News"
+msgstr "News"
+
+msgid "OK"
+msgstr "OK"
+
+msgid "OVH"
+msgstr "OVH"
+
+msgid "Outbound"
+msgstr "Outbound"
+
+msgid "Outbound JSON"
+msgstr "Outbound JSON"
+
+msgid "Policy"
+msgstr "Policy"
+
+msgid "Porn"
+msgstr "Porn"
+
+msgid "Primary"
+msgstr "Primary"
+
+msgid "Primary probe"
+msgstr "Primary probe"
+
+msgid "Probe"
+msgstr "Probe"
+
+msgid "Probe URL"
+msgstr "Probe URL"
+
+msgid "Proxy"
+msgstr "Proxy"
+
+msgid "Proxy URL"
+msgstr "Proxy URL"
+
+msgid "Raw JSON"
+msgstr "Raw JSON"
+
+msgid "Read-only сводка list_clients. Изменения клиентов применяются сразу через reload, без pending."
+msgstr "Read-only сводка list_clients. Изменения клиентов применяются сразу через reload, без pending."
+
+msgid "Reload sing-box"
+msgstr "Reload sing-box"
+
+msgid "Remote domain lists"
+msgstr "Remote domain lists"
+
+msgid "Remote subnet lists"
+msgstr "Remote subnet lists"
+
+msgid "Restore"
+msgstr "Restore"
+
+msgid "Roblox"
+msgstr "Roblox"
+
+msgid "Russia inside"
+msgstr "Russia inside"
+
+msgid "Russia outside"
+msgstr "Russia outside"
+
+msgid "Selector"
+msgstr "Selector"
+
+msgid "Service list"
+msgstr "Service list"
+
+msgid "Subscription URLs"
+msgstr "Subscription URLs"
+
+msgid "Telegram"
+msgstr "Telegram"
+
+msgid "Telegram-бот Hybrid Failover"
+msgstr "Hybrid Failover Telegram bot"
+
+msgid "Text list"
+msgstr "Text list"
+
+msgid "TikTok"
+msgstr "TikTok"
+
+msgid "Tolerance"
+msgstr "Tolerance"
+
+msgid "Twitter"
+msgstr "Twitter"
+
+msgid "UDP"
+msgstr "UDP"
+
+msgid "UDP over TCP (SS/SOCKS)"
+msgstr "UDP over TCP (SS/SOCKS)"
+
+msgid "URL Clash API"
+msgstr "URL Clash API"
+
+msgid "URLTest"
+msgstr "URLTest"
+
+msgid "URLTest URI"
+msgstr "URLTest URI"
+
+msgid "URLTest idle timeout"
+msgstr "URLTest idle timeout"
+
+msgid "URLTest interval"
+msgstr "URLTest interval"
+
+msgid "URLTest probe URL"
+msgstr "URLTest probe URL"
+
+msgid "URLTest tolerance (ms)"
+msgstr "URLTest tolerance (ms)"
+
+msgid "Ukraine inside"
+msgstr "Ukraine inside"
+
+msgid "User domain list type"
+msgstr "User domain list type"
+
+msgid "User domains"
+msgstr "User domains"
+
+msgid "User domains (text)"
+msgstr "User domains (text)"
+
+msgid "VPN"
+msgstr "VPN"
+
+msgid "VPN + резервные proxy"
+msgstr "VPN + backup proxies"
+
+msgid "VPN пока probe OK; при сбоях — резервы"
+msgstr "VPN пока probe OK; при сбоях — backupы"
+
+msgid "VPN-интерфейс"
+msgstr "VPN interface"
+
+msgid "Validate"
+msgstr "Validate"
+
+msgid "Webhook URL (failover)"
+msgstr "Webhook URL (failover)"
+
+msgid "YouTube"
+msgstr "YouTube"
+
+msgid "check-fakeip"
+msgstr "check-fakeip"
+
+msgid "check-nft"
+msgstr "check-nft"
+
+msgid "fail"
+msgstr "fail"
+
+msgid "fastest (urltest passive)"
+msgstr "fastest (urltest passive)"
+
+msgid "fastest: sing-box urltest выбирает канал; controller только наблюдает. Для VPN→backup при падении используйте outage-only."
+msgstr "fastest: sing-box urltest выбирает канал; controller только наблюдает. Для VPN→backup при падении используйте outage-only."
+
+msgid "fastest: urltest в sing-box (controller passive)"
+msgstr "fastest: urltest в sing-box (controller passive)"
+
+msgid "global-check"
+msgstr "global-check"
+
+msgid "init.d hybrid-failover-bot:"
+msgstr "init.d hybrid-failover-bot:"
+
+msgid "list-update"
+msgstr "list-update"
+
+msgid "outage-only (только при падении)"
+msgstr "outage-only (только при падении)"
+
+msgid "outage-only: только при падении VPN"
+msgstr "outage-only: только при падении VPN"
+
+msgid "prefer-primary (предпочитать основной)"
+msgstr "prefer-primary (предпочитать основной)"
+
+msgid "prefer-primary: вернуться на VPN раньше"
+msgstr "prefer-primary: вернуться на VPN раньше"
+
+msgid "recover"
+msgstr "recover"
+
+msgid "running"
+msgstr "running"
+
+msgid "sing-box, nft или Clash API недоступны."
+msgstr "sing-box, nft или Clash API недоступны."
+
+msgid "stopped"
+msgstr "stopped"
+
+msgid "subscription-refresh"
+msgstr "subscription-refresh"
+
+msgid "validate failed"
+msgstr "validate failed"
+
+msgid "Активный"
+msgstr "Active"
+
+msgid "Активный outbound"
+msgstr "Active outbound"
+
+msgid "Активный канал"
+msgstr "Active channel"
+
+msgid "Алерты failover (true/false)"
+msgstr "Алерты failover (true/false)"
+
+msgid "Бэкап UCI"
+msgstr "UCI backup"
+
+msgid "Бэкап создан на роутере"
+msgstr "Бэкап создан на роутере"
+
+msgid "Введите URI"
+msgstr "Enter URI"
+
+msgid "Вверх"
+msgstr "Вверх"
+
+msgid "Весь трафик клиента направляется через выбранную секцию маршрутизации."
+msgstr "Весь трафик клиента направляется через выбранную секцию маршрутизации."
+
+msgid "Включить Hybrid Failover"
+msgstr "Enable Hybrid Failover"
+
+msgid "Включить Yacd (Clash UI)"
+msgstr "Enable Yacd (Clash UI)"
+
+msgid "Включить секцию"
+msgstr "Enable section"
+
+msgid "Включить сервис"
+msgstr "Enable service"
+
+msgid "Вниз"
+msgstr "Вниз"
+
+msgid "Восстановить"
+msgstr "Restore"
+
+msgid "Восстановить UCI из "
+msgstr "Восстановить UCI из "
+
+msgid "Время"
+msgstr "Time"
+
+msgid "Все критичные компоненты работают."
+msgstr "Все критичные компоненты работают."
+
+msgid "Выбор самого быстрого канала (urltest)"
+msgstr "Выбор самого быстрого канала (urltest)"
+
+msgid "Выбрать из DHCP…"
+msgstr "Pick from DHCP…"
+
+msgid "Глобально не направлять эти IP через sing-box (не путать с вкладкой «Клиенты»)."
+msgstr "Глобально не направлять эти IP через sing-box (не путать с вкладкой «Клиенты»)."
+
+msgid "Глобальные настройки"
+msgstr "Global settings"
+
+msgid "Готово"
+msgstr "Done"
+
+msgid "Графики задержек сброшены"
+msgstr "Графики задержек сброшены"
+
+msgid "Данные из кэша Clash. Нажмите «Live probe» для актуальной проверки."
+msgstr "Данные из cacheа Clash. Нажмите «Live probe» для актуальной проверки."
+
+msgid "Действия с конфигом"
+msgstr "Config actions"
+
+msgid "Диагностика"
+msgstr "Diagnostics"
+
+msgid "Добавить"
+msgstr "Add"
+
+msgid "Добавить правило"
+msgstr "Add rule"
+
+msgid "Дублирование"
+msgstr "Duplication"
+
+msgid "Дублировать секцию"
+msgstr "Duplicate section"
+
+msgid "Дублировать секцию…"
+msgstr "Duplicate section…"
+
+msgid "Единые правила per-client (client_rule). Legacy list-опции читаются, пока нет client_rule секций."
+msgstr "Единые правила per-client (client_rule). Legacy list-опции читаются, пока нет client_rule секций."
+
+msgid "Задержка"
+msgstr "Latency"
+
+msgid "Задержка primary"
+msgstr "Latency primary"
+
+msgid "Имя новой секции"
+msgstr "New section name"
+
+msgid "Индекс в списке failover_proxy_links:"
+msgstr "Индекс в списке failover_proxy_links:"
+
+msgid "Интервал probe контроллера"
+msgstr "Controller probe interval"
+
+msgid "Интервал алертов, сек"
+msgstr "Интервал алертов, сек"
+
+msgid "Интервал обновления списков"
+msgstr "List update interval"
+
+msgid "Исключение из tproxy без per-section правила."
+msgstr "Исключение из tproxy без per-section правила."
+
+msgid "Исключить IP из маршрутизации"
+msgstr "Exclude IPs from routing"
+
+msgid "История переключений"
+msgstr "Switch history"
+
+msgid "Источник"
+msgstr "Source"
+
+msgid "Исходная секция"
+msgstr "Source section"
+
+msgid "Исходящий сетевой интерфейс"
+msgstr "Output network interface"
+
+msgid "Как часто фоновый controller проверяет primary VPN (не URLTest interval)."
+msgstr "Как часто фоновый controller проверяет primary VPN (не URLTest interval)."
+
+msgid "Канал"
+msgstr "Channel"
+
+msgid "Каналы и задержки"
+msgstr "Channels and latency"
+
+msgid "Каналы не найдены. Включите VPN+failover в секции маршрутизации."
+msgstr "Channelы не найдены. Включите VPN+failover в секции маршрутизации."
+
+msgid "Клиент не попадает под Hybrid Failover (direct)."
+msgstr "Клиент не попадает под Hybrid Failover (direct)."
+
+msgid "Клиенты"
+msgstr "Clients"
+
+msgid "Контроллер"
+msgstr "Controller"
+
+msgid "Контроллер failover"
+msgstr "Controller failover"
+
+msgid "Макс. строк в журнале failover"
+msgstr "Max failover history lines"
+
+msgid "Маршрут"
+msgstr "Route"
+
+msgid "Маршрутизация"
+msgstr "Routing"
+
+msgid "Маршрутизация активна"
+msgstr "Routeизация активна"
+
+msgid "Маршрутизация неактивна"
+msgstr "Routeизация неактивна"
+
+msgid "На канале с"
+msgstr "На канале с"
+
+msgid "Нажмите «Проверить» после сохранения формы."
+msgstr "Нажмите «Validate» после сохранения формы."
+
+msgid "Настройка VPN + failover, URLTest и подписок. Сохраните UCI, затем «Проверить» и «Применить»."
+msgstr "Настройка VPN + failover, URLTest и подписок. Сохраните UCI, затем «Validate» и «Apply»."
+
+msgid "Настройка бота, pending-конфиг и безопасное применение изменений."
+msgstr "Настройка бота, pending-конфиг и безопасное применение изменений."
+
+msgid "Настройки"
+msgstr "Settings"
+
+msgid "Не включайте WAN access без необходимости: API будет доступен извне."
+msgstr "Не включайте WAN access без необходимости: API будет доступен извне."
+
+msgid "Не изменять dnsmasq/DHCP"
+msgstr "Do not touch dnsmasq/DHCP"
+
+msgid "Не удалось получить статус с роутера."
+msgstr "Не удалось получить статус с роутера."
+
+msgid "Нет effective rules (client_rule пуст или core не запущен)."
+msgstr "Нет effective rules (client_rule пуст или core не запущен)."
+
+msgid "Нет leases или ubus dhcp недоступен"
+msgstr "Нет leases или ubus dhcp unavailable"
+
+msgid "Нет данных"
+msgstr "No data"
+
+msgid "Обзор"
+msgstr "Overview"
+
+msgid "Обновить"
+msgstr "Refresh"
+
+msgid "Обновить community lists"
+msgstr "Update community lists"
+
+msgid "Обновить подписки"
+msgstr "Update subscriptions"
+
+msgid "Обновлено"
+msgstr "Updated"
+
+msgid "Описание"
+msgstr "Description"
+
+msgid "Описание режима"
+msgstr "Mode description"
+
+msgid "Основная секция маршрутизации"
+msgstr "Main routing section"
+
+msgid "Откат pending"
+msgstr "Pending rollback"
+
+msgid "Откатить"
+msgstr "Rollback"
+
+msgid "Откатить pending"
+msgstr "Rollback pending"
+
+msgid "Отключить QUIC в маршрутизации"
+msgstr "Отключить QUIC в маршрутизации"
+
+msgid "Отключён"
+msgstr "Отключён"
+
+msgid "Открыть Clash UI"
+msgstr "Open Clash UI"
+
+msgid "Открыть обзор failover"
+msgstr "Open failover overview"
+
+msgid "Отмена"
+msgstr "Cancel"
+
+msgid "Ошибка"
+msgstr "Error"
+
+msgid "Ошибка probe"
+msgstr "Ошибка probe"
+
+msgid "Ошибка создания бэкапа"
+msgstr "Ошибка создания бэкапа"
+
+msgid "Ошибка сохранения: "
+msgstr "Ошибка сохранения: "
+
+msgid "Ошибка: "
+msgstr "Ошибка: "
+
+msgid "Перезапуск"
+msgstr "Restart"
+
+msgid "Перезапустить бота"
+msgstr "Restart bot"
+
+msgid "Переключено"
+msgstr "Переключено"
+
+msgid "Переключить"
+msgstr "Switch"
+
+msgid "Переключить selector "
+msgstr "Переключить selector "
+
+msgid "Переключить канал"
+msgstr "Switch channel"
+
+msgid "Переход"
+msgstr "Transition"
+
+msgid "По одному в списке"
+msgstr "По одному в списке"
+
+msgid "Подробнее на вкладке «Обзор»."
+msgstr "Подробнее на вкладке «Обзор»."
+
+msgid "Подсети и IP через VPN"
+msgstr "Подсети и IP через VPN"
+
+msgid "Подсети и IP через VPN (текст)"
+msgstr "Подсети и IP через VPN (текст)"
+
+msgid "Подтверждение"
+msgstr "Confirm"
+
+msgid "Показать"
+msgstr "Show"
+
+msgid "Политика"
+msgstr "Policy"
+
+msgid "Политика failover"
+msgstr "Policy failover"
+
+msgid "Порог восстановления (recover)"
+msgstr "Recovery threshold"
+
+msgid "Порог сбоев primary (fail)"
+msgstr "Primary fail threshold"
+
+msgid "Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются."
+msgstr "Порядок в списке = приоритет backupов. vpn:// и awg2:// поддерживаются."
+
+msgid "Порядок резервов"
+msgstr "Backup order"
+
+msgid "Последнее переключение"
+msgstr "Последнее переключение"
+
+msgid "Последний probe"
+msgstr "Последний probe"
+
+msgid "Правила клиентов"
+msgstr "Client rules"
+
+msgid "Превью URI"
+msgstr "URI preview"
+
+msgid "Предпочитать VPN; быстрый возврат"
+msgstr "Предпочитать VPN; быстрый возврат"
+
+msgid "При policy fastest ручное переключение недоступно"
+msgstr "При policy fastest ручное переключение недоступно"
+
+msgid "Применение"
+msgstr "Apply"
+
+msgid "Применение конфигурации"
+msgstr "Apply configuration"
+
+msgid "Применить"
+msgstr "Apply"
+
+msgid "Причина"
+msgstr "Reason"
+
+msgid "Проверить URI"
+msgstr "Check URI"
+
+msgid "Проверить pending"
+msgstr "Validate pending"
+
+msgid "Проверка"
+msgstr "Validation"
+
+msgid "Проверки конфигурации и сетевого стека. Результаты — чеклист и raw JSON ниже."
+msgstr "Проверки конфигурации и сетевого стека. Resultы — чеклист и raw JSON ниже."
+
+msgid "Путь cache sing-box"
+msgstr "sing-box cache path"
+
+msgid "Путь к audit-логу"
+msgstr "Path to audit-логу"
+
+msgid "Путь к бинарнику"
+msgstr "Path to бинарнику"
+
+msgid "Путь к конфигу JSON"
+msgstr "Path to конфигу JSON"
+
+msgid "Путь к лог-файлу"
+msgstr "Path to лог-файлу"
+
+msgid "Путь к логам"
+msgstr "Path to логам"
+
+msgid "Размер буфера задержек в /var/run/hybrid-failover/delay-history.json для графиков в обзоре."
+msgstr "Размер буфера задержек в /var/run/hybrid-failover/delay-history.json для графиков в обзоре."
+
+msgid "Режим"
+msgstr "Mode"
+
+msgid "Резервные URI"
+msgstr "Backup URIs"
+
+msgid "Результат"
+msgstr "Result"
+
+msgid "Роль"
+msgstr "Role"
+
+msgid "Ручное переключение канала"
+msgstr "Manual channel switch"
+
+msgid "Сбросить графики"
+msgstr "Reset charts"
+
+msgid "Сводка состояния, каналы failover, контроллер политики и журнал переключений. Обновление каждые 5 с."
+msgstr "Сводка состояния, каналы failover, контроллер политики и журнал переключений. Обновление каждые 5 с."
+
+msgid "Секции маршрутизации"
+msgstr "Routing sections"
+
+msgid "Секция"
+msgstr "Section"
+
+msgid "Секция proxy для загрузки списков"
+msgstr "Секция proxy для загрузки списков"
+
+msgid "Секция маршрутизации"
+msgstr "Секция маршрутизации"
+
+msgid "Сервис"
+msgstr "Service"
+
+msgid "Сервис работает, но есть предупреждения."
+msgstr "Service running, но есть предупреждения."
+
+msgid "Скачать бэкап"
+msgstr "Download backup"
+
+msgid "Скачивать community-списки через proxy"
+msgstr "Скачивать community-списки через proxy"
+
+msgid "Скрипт init.d hybrid-failover"
+msgstr "Скрипт init.d hybrid-failover"
+
+msgid "Сначала успешная проверка"
+msgstr "Successful validation required first"
+
+msgid "Событий failover пока не было."
+msgstr "Событий failover пока не было."
+
+msgid "Создать backup на роутере"
+msgstr "Create backup on router"
+
+msgid "Сохранено в pending-конфиг. Нажмите «Проверить» или «Применить»."
+msgstr "Сохранено в pending-конфиг. Нажмите «Validate» или «Apply»."
+
+msgid "Сохранено. Применяется reload sing-box…"
+msgstr "Сохранено. Применяется reload sing-box…"
+
+msgid "Сохранить в pending"
+msgstr "Save to pending"
+
+msgid "Сохранить и применить"
+msgstr "Save and apply"
+
+msgid "Список подсетей / IP (тип)"
+msgstr "Список подсетей / IP (тип)"
+
+msgid "Статус"
+msgstr "Status"
+
+msgid "Статус сервиса"
+msgstr "Service status"
+
+msgid "Счётчики"
+msgstr "Счётчики"
+
+msgid "Таймаут проверки, сек"
+msgstr "Таймаут проверки, сек"
+
+msgid "Текстовый список"
+msgstr "Текстовый список"
+
+msgid "Тип"
+msgstr "Type"
+
+msgid "Тип DNS"
+msgstr "Type DNS"
+
+msgid "Тип proxy-конфига"
+msgstr "Type proxy-конфига"
+
+msgid "Тип подключения"
+msgstr "Type подключения"
+
+msgid "Токен"
+msgstr "Token"
+
+msgid "Точек delay-history на канал"
+msgstr "Delay-history points per channel"
+
+msgid "Трафик клиента проходит через sing-box tproxy и nft mark."
+msgstr "Трафик клиента проходит через sing-box tproxy и nft mark."
+
+msgid "Тренд"
+msgstr "Trend"
+
+msgid "Частичная деградация"
+msgstr "Частичная деградация"
+
+msgid "Экспорт журнала"
+msgstr "Export history"
+
+msgid "активен"
+msgstr "active"
+
+msgid "д назад"
+msgstr "d ago"
+
+msgid "кэш"
+msgstr "cache"
+
+msgid "мин назад"
+msgstr "min ago"
+
+msgid "н/д"
+msgstr "n/a"
+
+msgid "не удалось получить статус"
+msgstr "failed to fetch status"
+
+msgid "недоступен"
+msgstr "unavailable"
+
+msgid "неизвестная ошибка"
+msgstr "неизвестная error"
+
+msgid "неизвестно"
+msgstr "unknown"
+
+msgid "остановлен"
+msgstr "stopped"
+
+msgid "ошибка"
+msgstr "error"
+
+msgid "пропущено"
+msgstr "skipped"
+
+msgid "пусто = авто"
+msgstr "empty = auto"
+
+msgid "работает"
+msgstr "running"
+
+msgid "резерв"
+msgstr "backup"
+
+msgid "с назад"
+msgstr "s ago"
+
+msgid "следующее через"
+msgstr "next in"
+
+msgid "ч назад"
+msgstr "h ago"
+

@@ -1,0 +1,13 @@
+dist/
+.cache/
+bot/hybrid-failover-bot
+packages/hybrid-failover-bot/binaries/
+*.ipk
+*.apk
+dist/.tools/
+.DS_Store
+work/
+upstream-main/
+upstream-main-patched/
+.cursor/
+bot/hybrid-failover-bot-local

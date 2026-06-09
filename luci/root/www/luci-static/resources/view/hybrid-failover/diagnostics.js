@@ -2,6 +2,7 @@
 'require view';
 'require rpc';
 'require ui';
+'require hybrid-failover.hf-ui as hfui';
 
 function rpcCall(method, params) {
 	var decl = { object: 'hybrid-failover', method: method };
@@ -33,12 +34,18 @@ return view.extend({
 	handleSave: null,
 	handleReset: null,
 
-	_resultEl: null,
+	_checklistEl: null,
+	_rawEl: null,
+	_rawWrap: null,
 
 	setResult: function(title, res) {
-		if (!this._resultEl)
-			return;
-		this._resultEl.textContent = title + '\n' + formatResult(res);
+		var items = hfui.parseChecklist(res);
+		if (this._checklistEl) {
+			hfui.emptyNode(this._checklistEl);
+			this._checklistEl.appendChild(hfui.renderChecklist(items));
+		}
+		if (this._rawEl)
+			this._rawEl.textContent = title + '\n' + formatResult(res);
 	},
 
 	handleRpc: function(fn, title) {
@@ -56,23 +63,41 @@ return view.extend({
 
 	render: function() {
 		var self = this;
-		this._resultEl = E('pre', {
+		this._checklistEl = E('div', {});
+		this._rawEl = E('pre', {
 			'style': 'white-space:pre-wrap;font-size:12px;max-height:320px;overflow:auto;margin:0;padding:12px;background:var(--cbi-section-background-color,rgba(127,127,127,.06));border-radius:8px;'
 		}, '-');
+		this._rawWrap = E('details', { 'style': 'margin-top:12px;' }, [
+			E('summary', { 'style': 'cursor:pointer;font-weight:600;margin-bottom:8px;' }, _('Raw JSON')),
+			this._rawEl
+		]);
 
-		return E('div', { 'class': 'cbi-section' }, [
+		var root = E('div', { 'class': 'cbi-section hf-mon' }, [
 			E('h2', {}, _('Hybrid Failover: диагностика')),
-			E('p', { 'class': 'hint' }, _('Проверки конфигурации и сетевого стека. Результаты сохраняются в панели ниже.')),
+			E('p', { 'class': 'hint' }, _('Проверки конфигурации и сетевого стека. Результаты — чеклист и raw JSON ниже.')),
 			E('h3', {}, _('First-run')),
 			E('p', { 'class': 'hint' }, _('1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip. Для VPN+резервы рекомендуется outage-only.')),
-			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;' }, [
+			E('div', { 'class': 'hf-mon-toolbar' }, [
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callValidate, 'validate'); }) }, _('Validate')),
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callCheckNft, 'nft'); }) }, _('check-nft')),
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callCheckFakeip, 'fakeip'); }) }, _('check-fakeip')),
 				E('button', { 'class': 'btn cbi-button cbi-button-save', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callGlobalCheck, 'global-check'); }) }, _('global-check'))
 			]),
+			E('h3', { 'style': 'margin-top:20px;' }, _('Результат')),
+			E('div', { 'class': 'hf-mon-panel', 'style': 'margin-bottom:16px;' }, this._checklistEl),
+			this._rawWrap,
 			E('h3', { 'style': 'margin-top:20px;' }, _('Бэкап UCI')),
-			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;' }, [
+			E('div', { 'class': 'hf-mon-toolbar' }, [
+				E('button', {
+					'class': 'btn cbi-button cbi-button-action',
+					'click': ui.createHandlerFn(self, function() {
+						return callBackupUCI().then(function(res) {
+							self.setResult(_('Create backup'), res);
+							var ok = res && res.ok !== false;
+							ui.addNotification(null, E('p', {}, ok ? _('Бэкап создан на роутере') : _('Ошибка создания бэкапа')), ok ? 'info' : 'danger');
+						});
+					})
+				}, _('Создать backup на роутере')),
 				E('button', {
 					'class': 'btn cbi-button cbi-button-neutral',
 					'click': ui.createHandlerFn(self, function() {
@@ -106,9 +131,9 @@ return view.extend({
 					})
 				}, _('Восстановить'))
 			]),
-			E('input', { 'id': 'hf-backup-path', 'class': 'cbi-input-text', 'style': 'width:100%;max-width:480px;margin-bottom:16px;', 'value': '/tmp/hybrid-failover-uci-backup.tar.gz' }),
-			E('h3', {}, _('Результат')),
-			this._resultEl
+			E('input', { 'id': 'hf-backup-path', 'class': 'cbi-input-text', 'style': 'width:100%;max-width:480px;margin-top:8px;', 'value': '/tmp/hybrid-failover-uci-backup.tar.gz' })
 		]);
+		hfui.injectStyles(root);
+		return root;
 	}
 });

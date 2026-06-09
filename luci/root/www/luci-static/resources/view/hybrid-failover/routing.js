@@ -4,6 +4,7 @@
 'require uci';
 'require rpc';
 'require ui';
+'require hybrid-failover.hf-ui as hfui';
 
 var callValidate = rpc.declare({
 	object: 'hybrid-failover',
@@ -106,15 +107,7 @@ var COMMUNITY_LISTS = {
 };
 
 function notifyRpcResult(title, res) {
-	var text = (res && res.output) ? res.output :
-		(res && res.ok === false) ? _('Ошибка') :
-		(res && res.data) ? JSON.stringify(res.data, null, 2) :
-		_('Готово');
-
-	ui.addNotification(null, E('div', [
-		E('strong', {}, title),
-		E('pre', { 'style': 'white-space:pre-wrap;margin:8px 0 0;' }, text)
-	]), res && res.ok === false ? 'danger' : 'info');
+	hfui.notifyRpcResult(title, res);
 }
 
 return view.extend({
@@ -226,6 +219,10 @@ return view.extend({
 		o = st.option(form.Value, 'history_max_lines', _('Макс. строк в журнале failover'));
 		o.placeholder = '500';
 
+		o = st.option(form.Value, 'delay_history_points', _('Точек delay-history на канал'));
+		o.placeholder = '50';
+		o.description = _('Размер буфера задержек в /var/run/hybrid-failover/delay-history.json для графиков в обзоре.');
+
 		o = st.option(form.DynamicList, 'subscription_urls', _('Subscription URLs'));
 
 		s = m.section(form.TypedSection, 'section', _('Секции маршрутизации'));
@@ -252,7 +249,8 @@ return view.extend({
 		o.value('prefer-primary', _('prefer-primary: вернуться на VPN раньше'));
 		o.value('fastest', _('fastest: urltest в sing-box (controller passive)'));
 		o.default = 'outage-only';
-		o.description = _('fastest: sing-box urltest выбирает канал; controller только наблюдает. Для VPN→backup при падении используйте outage-only.');
+		o.description = _('fastest: sing-box urltest выбирает канал; controller только наблюдает. Для VPN→backup при падении используйте outage-only.') +
+			' ' + _('Подробнее на вкладке «Обзор».');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
 		o = s.option(form.DynamicList, 'failover_proxy_links', _('Резервные URI'));
@@ -276,10 +274,6 @@ return view.extend({
 				'style': 'width:100%;margin-bottom:6px;',
 				'placeholder': 'vless://… или vpn://…'
 			});
-			var out = E('pre', {
-				'id': 'hf-uri-preview-out-' + section_id,
-				'style': 'white-space:pre-wrap;font-size:12px;margin:0;'
-			}, '-');
 			var btn = E('button', {
 				'class': 'btn cbi-button cbi-button-action',
 				'click': ui.createHandlerFn(self, function() {
@@ -290,20 +284,19 @@ return view.extend({
 					}
 					return callDecodeURI(uri).then(function(res) {
 						var d = res.data || res;
-						if (d.summary)
-							out.textContent = d.summary;
-						else if (d.error)
-							out.textContent = d.error;
-						else
-							out.textContent = JSON.stringify(d, null, 2);
+						var text = d.summary || d.error || JSON.stringify(d, null, 2);
+						hfui.showModal(_('Превью URI'), [
+							E('pre', { 'style': 'white-space:pre-wrap;font-size:12px;margin:0;max-height:280px;overflow:auto;' }, text)
+						]);
 					}).catch(function(err) {
-						out.textContent = String(err.message || err);
+						hfui.showModal(_('Превью URI'), [
+							E('p', {}, String(err.message || err))
+						]);
 					});
 				})
 			}, _('Проверить URI'));
 			wrap.appendChild(input);
 			wrap.appendChild(btn);
-			wrap.appendChild(out);
 			return wrap;
 		};
 
@@ -457,23 +450,65 @@ return view.extend({
 
 		this.map = m;
 
+		self._validateOk = false;
+		self._stepResultEl = null;
+		self._applyBtnEl = null;
+
+		function setStepResult(text, ok) {
+			if (!self._stepResultEl)
+				return;
+			self._stepResultEl.textContent = text || '';
+			self._stepResultEl.style.borderColor = ok ? 'rgba(60,186,84,.5)' : 'rgba(231,76,60,.5)';
+			if (self._applyBtnEl)
+				self._applyBtnEl.disabled = !ok;
+		}
+
+		function runValidateStep() {
+			return callValidate().then(function(res) {
+				var ok = res && res.ok !== false;
+				self._validateOk = ok;
+				var text = (res && res.output) ? res.output :
+					(res && res.data) ? JSON.stringify(res.data, null, 2) : _('OK');
+				setStepResult(text, ok);
+				if (!ok)
+					notifyRpcResult(_('Проверка'), res);
+				return ok;
+			});
+		}
+
 		function renderActionsPanel() {
-			return E('div', { 'class': 'cbi-section' }, [
+			var stepResult = E('div', { 'class': 'hf-step-result' }, _('Нажмите «Проверить» после сохранения формы.'));
+			self._stepResultEl = stepResult;
+			var applyBtn = E('button', {
+				'class': 'btn cbi-button cbi-button-save',
+				'disabled': true,
+				'click': ui.createHandlerFn(self, function() {
+					if (!self._validateOk) {
+						ui.addNotification(null, E('p', {}, _('Сначала успешная проверка')), 'warning');
+						return Promise.resolve();
+					}
+					return callPendingApply().then(function(res) {
+						notifyRpcResult(_('Применение'), res);
+						return res;
+					});
+				})
+			}, _('3. Применить'));
+			self._applyBtnEl = applyBtn;
+
+			var panel = E('div', { 'class': 'cbi-section hf-mon' }, [
 				E('h3', {}, _('Применение конфигурации')),
-				E('p', { 'class': 'hint' }, _('Сначала сохраните форму, затем проверьте и примените изменения через core.')),
-				E('div', { 'style': 'display:flex;gap:8px;flex-wrap:wrap;' }, [
+				E('p', { 'class': 'hint' }, _('1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить» выполняет все шаги.')),
+				E('p', { 'class': 'hint' }, [
+					E('a', { 'href': L.url('admin/services/hybrid-failover/dashboard') }, _('Открыть обзор failover'))
+				]),
+				E('div', { 'class': 'hf-mon-stepper' }, [
 					E('button', {
 						'class': 'btn cbi-button cbi-button-action',
 						'click': ui.createHandlerFn(self, function() {
-							return self.handleRpc(callValidate, _('Проверка'));
+							return runValidateStep();
 						})
-					}, _('Проверить')),
-					E('button', {
-						'class': 'btn cbi-button cbi-button-save',
-						'click': ui.createHandlerFn(self, function() {
-							return self.handleRpc(callPendingApply, _('Применение pending'));
-						})
-					}, _('Применить')),
+					}, _('2. Проверить')),
+					applyBtn,
 					E('button', {
 						'class': 'btn cbi-button cbi-button-apply',
 						'click': ui.createHandlerFn(self, function() {
@@ -481,43 +516,58 @@ return view.extend({
 						})
 					}, _('Сохранить и применить')),
 					E('button', {
-						'class': 'btn cbi-button cbi-button-action',
-						'click': ui.createHandlerFn(self, function() {
-							return self.handleRpc(callListUpdate, _('list-update'));
-						})
-					}, _('Обновить community lists')),
-					E('button', {
-						'class': 'btn cbi-button cbi-button-action',
-						'click': ui.createHandlerFn(self, function() {
-							return self.handleRpc(callSubscriptionRefresh, _('subscription-refresh'));
-						})
-					}, _('Обновить подписки')),
-					E('button', {
 						'class': 'btn cbi-button cbi-button-negative',
 						'click': ui.createHandlerFn(self, function() {
-							return self.handleRpc(callPendingRollback, _('Откат pending'));
-						})
-					}, _('Откатить pending')),
-					E('button', {
-						'class': 'btn cbi-button cbi-button-neutral',
-						'click': ui.createHandlerFn(self, function() {
-							var from = prompt(_('Исходная секция (например glob)'), 'glob');
-							if (!from)
-								return Promise.resolve();
-							var to = prompt(_('Имя новой секции'));
-							if (!to)
-								return Promise.resolve();
-							return callDuplicateSection(from, to).then(function(res) {
-								notifyRpcResult(_('Дублирование'), res);
-								if (res && res.ok !== false)
-									location.reload();
-							}).catch(function(err) {
-								ui.addNotification(null, E('p', {}, String(err.message || err)), 'danger');
+							self._validateOk = false;
+							setStepResult('', false);
+							return callPendingRollback().then(function(res) {
+								notifyRpcResult(_('Откат pending'), res);
 							});
 						})
-					}, _('Дублировать секцию…'))
+					}, _('Откатить pending')),
+					stepResult,
+					E('div', { 'style': 'flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;' }, [
+						E('button', {
+							'class': 'btn cbi-button cbi-button-action',
+							'click': ui.createHandlerFn(self, function() {
+								return self.handleRpc(callListUpdate, _('list-update'));
+							})
+						}, _('Обновить community lists')),
+						E('button', {
+							'class': 'btn cbi-button cbi-button-action',
+							'click': ui.createHandlerFn(self, function() {
+								return self.handleRpc(callSubscriptionRefresh, _('subscription-refresh'));
+							})
+						}, _('Обновить подписки')),
+						E('button', {
+							'class': 'btn cbi-button cbi-button-neutral',
+							'click': ui.createHandlerFn(self, function() {
+								var fromInput = E('input', { 'class': 'cbi-input-text', 'value': 'glob', 'style': 'width:100%;margin-bottom:8px;' });
+								var toInput = E('input', { 'class': 'cbi-input-text', 'style': 'width:100%;' });
+								hfui.showModal(_('Дублировать секцию'), [
+									E('label', {}, _('Исходная секция')),
+									fromInput,
+									E('label', { 'style': 'margin-top:8px;display:block;' }, _('Имя новой секции')),
+									toInput
+								], function() {
+									var from = fromInput.value.trim();
+									var to = toInput.value.trim();
+									if (!from || !to)
+										return;
+									callDuplicateSection(from, to).then(function(res) {
+										notifyRpcResult(_('Дублирование'), res);
+										if (res && res.ok !== false)
+											location.reload();
+									});
+								});
+								return Promise.resolve();
+							})
+						}, _('Дублировать секцию…'))
+					])
 				])
 			]);
+			hfui.injectStyles(panel);
+			return panel;
 		}
 
 		return m.render().then(function(node) {
@@ -541,7 +591,19 @@ return view.extend({
 	handleSaveApplyChain: function() {
 		var self = this;
 		return this.handleSaveApply().then(function() {
-			return callValidate().then(function() {
+			return callValidate().then(function(vres) {
+				var ok = vres && vres.ok !== false;
+				self._validateOk = ok;
+				if (self._stepResultEl) {
+					var text = (vres && vres.output) ? vres.output :
+						(vres && vres.data) ? JSON.stringify(vres.data, null, 2) : _('OK');
+					self._stepResultEl.textContent = text;
+					self._stepResultEl.style.borderColor = ok ? 'rgba(60,186,84,.5)' : 'rgba(231,76,60,.5)';
+				}
+				if (!ok) {
+					notifyRpcResult(_('Проверка'), vres);
+					return Promise.reject(new Error(_('validate failed')));
+				}
 				return callPendingApply();
 			}).then(function(res) {
 				notifyRpcResult(_('Сохранить и применить'), res);

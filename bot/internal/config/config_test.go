@@ -70,3 +70,29 @@ func TestValidateAcceptsFastestPolicy(t *testing.T) {
 		t.Fatalf("fastest policy: %v", err)
 	}
 }
+
+func TestLoadMigratesLegacyPodkopFields(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "bot.json")
+	data := `{
+		"token": "file-token",
+		"admin_ids": [1001],
+		"log_path": "/var/log/podkop-telegram-bot.log",
+		"audit_path": "/var/log/podkop-telegram-bot.audit.log",
+		"podkop_init_script": "/etc/init.d/podkop",
+		"policy": "outage-only"
+	}`
+	if err := os.WriteFile(cfgPath, []byte(data), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.RoutingInitScript != "/etc/init.d/hybrid-failover" {
+		t.Fatalf("routing_init_script: got %q", cfg.RoutingInitScript)
+	}
+	if cfg.LogPath != "/var/log/hybrid-failover-bot.log" {
+		t.Fatalf("log_path: got %q", cfg.LogPath)
+	}
+}

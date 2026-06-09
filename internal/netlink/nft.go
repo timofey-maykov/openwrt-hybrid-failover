@@ -7,15 +7,17 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
 const (
-	NFTTable        = "hybrid_failover"
-	FWMark          = "0x105"
-	RouteTable      = "hybrid_failover"
-	ifaceSetName    = "hf_ifaces"
-	localv4SetName  = "hf_localv4"
+	NFTTable           = "hybrid_failover"
+	FWMark             = "0x105"
+	RouteTable         = "hybrid_failover"
+	ifaceSetName       = "hf_ifaces"
+	localv4SetName     = "hf_localv4"
+	proxySubnetsSetName = "hf_proxy_subnets"
 )
 
 // Setup applies nft tproxy rules for br-lan + fakeip traffic only (legacy alias).
@@ -66,6 +68,28 @@ func ApplyFromUCI(pkg *uci.Package) error {
 
 	steps = append(steps,
 		mangleMarkRule("iifname @"+ifaceSetName+" ip daddr "+singbox.FakeIPInet4Range),
+	)
+	if pkg != nil {
+		if cidrs := subnets.NormalizeForNFT(singbox.CollectProxySubnets(pkg)); len(cidrs) > 0 {
+			steps = append(steps,
+				"nft add set inet "+NFTTable+" "+proxySubnetsSetName+" '{ type ipv4_addr; flags interval; }'",
+			)
+			const chunkSize = 40
+			for i := 0; i < len(cidrs); i += chunkSize {
+				end := i + chunkSize
+				if end > len(cidrs) {
+					end = len(cidrs)
+				}
+				steps = append(steps,
+					"nft add element inet "+NFTTable+" "+proxySubnetsSetName+" '{ "+strings.Join(cidrs[i:end], ", ")+" }'",
+				)
+			}
+			steps = append(steps,
+				mangleMarkRule("iifname @"+ifaceSetName+" ip daddr @"+proxySubnetsSetName),
+			)
+		}
+	}
+	steps = append(steps,
 		"nft add rule inet "+NFTTable+" mangle_output ip daddr @"+localv4SetName+" return",
 		"nft add rule inet "+NFTTable+" mangle_output ip daddr "+singbox.FakeIPInet4Range+" meta l4proto { tcp, udp } meta mark set "+FWMark,
 		"nft add rule inet "+NFTTable+" proxy meta mark "+FWMark+" meta l4proto tcp tproxy ip to 127.0.0.1:1602 accept",

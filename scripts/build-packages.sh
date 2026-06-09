@@ -174,12 +174,15 @@ build_luci_unified_pkg() {
 
 	local luci_root="$ROOT_DIR/luci/root"
 	mkdir -p "$pkg_root/www/luci-static/resources/view/hybrid-failover"
+	mkdir -p "$pkg_root/www/luci-static/resources/hybrid-failover"
 	mkdir -p "$pkg_root/usr/share/luci/menu.d"
 	mkdir -p "$pkg_root/usr/share/rpcd/acl.d"
 	mkdir -p "$pkg_root/usr/share/rpcd/ucode"
 
 	cp "$luci_root/www/luci-static/resources/view/hybrid-failover/"*.js \
 		"$pkg_root/www/luci-static/resources/view/hybrid-failover/" 2>/dev/null || true
+	cp "$luci_root/www/luci-static/resources/hybrid-failover/"*.js \
+		"$pkg_root/www/luci-static/resources/hybrid-failover/" 2>/dev/null || true
 	cp "$luci_root/usr/share/luci/menu.d/luci-app-hybrid-failover.json" \
 		"$pkg_root/usr/share/luci/menu.d/"
 	cp "$luci_root/usr/share/rpcd/acl.d/luci-app-hybrid-failover.json" \
