@@ -23,8 +23,15 @@ config client_rule 'full'
 	if len(rules) != 2 {
 		t.Fatalf("rules: %+v", rules)
 	}
-	if rules[0].Mode != ModeInclude {
-		t.Fatalf("mode: %s", rules[0].Mode)
+	byName := make(map[string]Rule, len(rules))
+	for _, r := range rules {
+		byName[r.Name] = r
+	}
+	if byName["phone"].Mode != ModeInclude {
+		t.Fatalf("phone mode: %s", byName["phone"].Mode)
+	}
+	if byName["full"].Mode != ModeFullRoute {
+		t.Fatalf("full mode: %s", byName["full"].Mode)
 	}
 }
 
