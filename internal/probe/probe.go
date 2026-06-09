@@ -90,6 +90,18 @@ func viaInterface(ctx context.Context, iface, testURL string) (int, error) {
 	return int(sec * 1000), nil
 }
 
+// IfaceLinkUp reports whether a network interface has carrier (LOWER_UP).
+func IfaceLinkUp(name string) bool {
+	if strings.TrimSpace(name) == "" {
+		return false
+	}
+	out, err := exec.Command("ip", "link", "show", "dev", name).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), "LOWER_UP")
+}
+
 // BindIfaceForChannel resolves Linux interface for a Direct-style outbound tag.
 func BindIfaceForChannel(section string, sec *uci.Section, tag string) string {
 	if sec == nil || section == "" {

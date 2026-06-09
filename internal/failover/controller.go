@@ -398,6 +398,11 @@ func probeOutbound(ctx context.Context, cli *clash.Client, sec SectionConfig, ta
 		bind = probe.BindIfaceForChannel(sec.Section, sec.Sec, tag)
 	}
 	delay, ok, _ = probe.Outbound(ctx, cli, tag, testURL, "direct", bind)
+	// Split-tunnel VPN primaries: HTTP probes via bind_interface often fail while the
+	// tunnel is healthy; for outage-only, link up is enough to consider primary OK.
+	if !ok && tag == sec.PrimaryTag && bind != "" && probe.IfaceLinkUp(bind) {
+		return delay, true
+	}
 	return delay, ok
 }
 

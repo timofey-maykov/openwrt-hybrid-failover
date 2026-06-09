@@ -75,10 +75,15 @@ func (b *Builder) configureVPN(section string, sec *uci.Section) error {
 	if iface == "" {
 		return fmt.Errorf("interface is not set")
 	}
-	domainResolverTag := b.queueSectionDomainResolver(section, sec, OutboundTag(section))
-
 	failover := sec.GetBool("failover_vpn_enabled", false)
 	links := sec.GetList("failover_proxy_links")
+	// Section DNS for VPN direct outbounds must detour via the bind-interface outbound,
+	// not the selector (glob-out), otherwise delay probes loop through the selector.
+	domainResolverDetour := OutboundTag(section)
+	if failover && len(links) > 0 {
+		domainResolverDetour = AWGTag(section)
+	}
+	domainResolverTag := b.queueSectionDomainResolver(section, sec, domainResolverDetour)
 	if !failover || len(links) == 0 {
 		tag := OutboundTag(section)
 		b.cfg.AddOutbound(vpnDirectOutbound(tag, iface, domainResolverTag))
