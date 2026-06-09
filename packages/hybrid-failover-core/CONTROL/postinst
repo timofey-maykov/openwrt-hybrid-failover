@@ -1,4 +1,6 @@
 #!/bin/sh
 # hybrid-failover-core postinst
+mkdir -p /etc/hybrid-failover/pending
+chmod 755 /etc/hybrid-failover /etc/hybrid-failover/pending
 [ -x /usr/sbin/hybrid-failover ] && /usr/sbin/hybrid-failover migrate 2>/dev/null || true
 exit 0

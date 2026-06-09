@@ -49,6 +49,20 @@ func TestValidateURLTestPair(t *testing.T) {
 	}
 }
 
+func TestValidateNoPending(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if err := store.Validate(); err != nil {
+		t.Fatalf("missing pending should validate ok: %v", err)
+	}
+}
+
+func TestRollbackNoPending(t *testing.T) {
+	store := NewStore(t.TempDir())
+	if err := store.Rollback(); err != nil {
+		t.Fatalf("rollback without pending: %v", err)
+	}
+}
+
 func TestValidateOK(t *testing.T) {
 	dir := t.TempDir()
 	store := NewStore(dir)

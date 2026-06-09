@@ -92,6 +92,9 @@ func (s *Store) Load() (*Snapshot, error) {
 func (s *Store) Validate() error {
 	snap, err := s.Load()
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	for key, val := range snap.Changes {
@@ -132,7 +135,11 @@ func (s *Store) Validate() error {
 }
 
 func (s *Store) Rollback() error {
-	return os.Remove(s.path("pending"))
+	err := os.Remove(s.path("pending"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // CaptureFromUCIChanges runs `uci changes` for hybrid-failover and merges into the pending store.
@@ -230,6 +237,9 @@ func parseQuotedUCIValue(raw string) (string, error) {
 func (s *Store) ApplyViaUCI() error {
 	snap, err := s.Load()
 	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("no pending changes")
+		}
 		return err
 	}
 	if err := s.Validate(); err != nil {
