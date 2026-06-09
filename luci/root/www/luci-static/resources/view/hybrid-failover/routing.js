@@ -466,10 +466,14 @@ return view.extend({
 		self._applyBtnEl = null;
 
 		function setStepResult(text, ok) {
+			if (!self._stepResultEl || !self._stepResultEl.isConnected)
+				self._stepResultEl = document.querySelector('.hf-routing-stepper .hf-step-result');
 			if (!self._stepResultEl)
 				return;
 			self._stepResultEl.textContent = text || '';
 			self._stepResultEl.style.borderColor = ok ? 'rgba(60,186,84,.5)' : 'rgba(231,76,60,.5)';
+			if (!self._applyBtnEl || !self._applyBtnEl.isConnected)
+				self._applyBtnEl = document.querySelector('.hf-routing-stepper .hf-routing-apply-btn');
 			if (self._applyBtnEl)
 				self._applyBtnEl.disabled = !ok;
 		}
@@ -498,7 +502,7 @@ return view.extend({
 			var stepResult = E('div', { 'class': 'hf-step-result' }, _('Нажмите «Проверить» после сохранения формы.'));
 			self._stepResultEl = stepResult;
 			var applyBtn = E('button', {
-				'class': 'btn cbi-button cbi-button-save',
+				'class': 'btn cbi-button cbi-button-save hf-routing-apply-btn',
 				'disabled': true,
 				'click': ui.createHandlerFn(self, function() {
 					if (!self._validateOk) {
@@ -515,13 +519,13 @@ return view.extend({
 			}, _('3. Применить'));
 			self._applyBtnEl = applyBtn;
 
-			var panel = E('div', { 'class': 'cbi-section hf-mon' }, [
+			var panel = E('div', { 'class': 'cbi-section-node hf-mon' }, [
 				E('h3', {}, _('Применение конфигурации')),
 				E('p', { 'class': 'hint' }, _('1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить» выполняет все шаги. «Проверить» сохраняет форму и проверяет sing-box конфиг.')),
 				E('p', { 'class': 'hint' }, [
 					E('a', { 'href': L.url('admin/services/hybrid-failover/dashboard') }, _('Открыть обзор failover'))
 				]),
-				E('div', { 'class': 'hf-mon-stepper' }, [
+				E('div', { 'class': 'hf-mon-stepper hf-routing-stepper' }, [
 					E('button', {
 						'class': 'btn cbi-button cbi-button-action',
 						'click': ui.createHandlerFn(self, function() {
@@ -590,12 +594,16 @@ return view.extend({
 			return panel;
 		}
 
-		return m.render().then(function(node) {
-			var panel = renderActionsPanel();
-			if (node && node.appendChild)
-				node.appendChild(panel);
-			return node;
-		});
+		var applySec = m.section(form.TypedSection, 'hf_routing_apply', _('Применение конфигурации'));
+		applySec.anonymous = true;
+		applySec.render = function() {
+			return renderActionsPanel();
+		};
+
+		self.setStepResult = setStepResult;
+		self.runValidateStep = runValidateStep;
+
+		return m.render();
 	},
 
 	handleSaveApply: function() {
@@ -615,10 +623,8 @@ return view.extend({
 			return callValidateConfig().then(function(vres) {
 				var ok = vres && vres.ok !== false;
 				self._validateOk = ok;
-				if (self._stepResultEl) {
-					self._stepResultEl.textContent = formatStepOutput(vres);
-					self._stepResultEl.style.borderColor = ok ? 'rgba(60,186,84,.5)' : 'rgba(231,76,60,.5)';
-				}
+				if (self.setStepResult)
+					self.setStepResult(formatStepOutput(vres), ok);
 				if (!ok) {
 					notifyRpcResult(_('Проверка'), vres);
 					return Promise.reject(new Error(_('validate failed')));
@@ -626,8 +632,8 @@ return view.extend({
 				return callApplyConfig();
 			}).then(function(res) {
 				notifyRpcResult(_('Сохранить и применить'), res);
-				if (self._stepResultEl && res && res.ok !== false)
-					self._stepResultEl.textContent = formatStepOutput(res);
+				if (res && res.ok !== false && self.setStepResult)
+					self.setStepResult(formatStepOutput(res), true);
 				return res;
 			});
 		});
