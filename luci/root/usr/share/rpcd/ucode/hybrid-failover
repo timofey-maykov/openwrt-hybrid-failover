@@ -68,9 +68,13 @@ function method_call(rpc_name, cli_args) {
 
 function method_switch_proxy() {
 	return {
+		args: {
+			section: '',
+			outbound: '',
+		},
 		call: function(req) {
-			let section = req.section ?? '';
-			let outbound = req.outbound ?? '';
+			let section = req.args.section ?? '';
+			let outbound = req.args.outbound ?? '';
 			let res = run_cli(['rpc', 'SwitchProxy', section, outbound]);
 			let parsed = parse_json_output(res);
 			if (parsed.data != null)
@@ -83,13 +87,19 @@ function method_switch_proxy() {
 }
 
 function method_rpc_args(method, keys) {
+	let arg_policy = {};
+	for (let i = 0; i < length(keys); i++)
+		arg_policy[keys[i]] = '';
+
 	return {
+		args: arg_policy,
 		call: function(req) {
 			let args = ['rpc', method];
 			for (let i = 0; i < length(keys); i++) {
 				let k = keys[i];
-				if (req[k] != null && req[k] != '')
-					push(args, req[k]);
+				let v = req.args[k] ?? '';
+				if (v != null && v != '')
+					push(args, v);
 			}
 			let res = run_cli(args);
 			let parsed = parse_json_output(res);
@@ -104,8 +114,11 @@ function method_rpc_args(method, keys) {
 
 function method_decode_uri() {
 	return {
+		args: {
+			uri: '',
+		},
 		call: function(req) {
-			let uri = req.uri ?? '';
+			let uri = req.args.uri ?? '';
 			let res = run_cli(['rpc', 'DecodeURI', uri]);
 			let parsed = parse_json_output(res);
 			if (parsed.data != null)
