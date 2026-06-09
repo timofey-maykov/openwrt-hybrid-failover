@@ -128,14 +128,16 @@ func (c *Client) SwitchProxy(ctx context.Context, selectorTag, outbound string) 
 	if selectorTag == "" || outbound == "" {
 		return fmt.Errorf("selector and outbound are required")
 	}
-	values := url.Values{}
-	values.Set("name", outbound)
-	endpoint := c.BaseURL + "/proxies/" + url.PathEscape(selectorTag)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(values.Encode()))
+	body, err := json.Marshal(map[string]string{"name": outbound})
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	endpoint := c.BaseURL + "/proxies/" + url.PathEscape(selectorTag)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(string(body)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	r, err := c.HTTP.Do(req)
 	if err != nil {
 		return err
