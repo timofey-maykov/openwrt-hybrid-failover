@@ -7,15 +7,29 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
-const targetSchema = 1
+const targetSchema = 2
 
 // MigrationChange is a uci CLI command without the "uci" prefix.
 type MigrationChange struct {
 	Cmd string
+}
+
+func currentSchema(pkg *uci.Package) int {
+	if pkg == nil {
+		return 0
+	}
+	settings := pkg.Section("settings")
+	if settings == nil {
+		return 0
+	}
+	schema := 0
+	fmt.Sscanf(settings.Get("config_schema_version", "0"), "%d", &schema)
+	return schema
 }
 
 // PlanMigration returns uci set/delete commands needed to reach targetSchema.
@@ -23,16 +37,24 @@ func PlanMigration(pkg *uci.Package) []MigrationChange {
 	if pkg == nil {
 		return nil
 	}
-	settings := pkg.Section("settings")
-	schema := 0
-	if settings != nil {
-		fmt.Sscanf(settings.Get("config_schema_version", "0"), "%d", &schema)
-	}
+	schema := currentSchema(pkg)
 	if schema >= targetSchema {
 		return nil
 	}
 
 	pkgName := paths.UCIPackage
+	var changes []MigrationChange
+	if schema < 1 {
+		changes = append(changes, planSchemaV1(pkg, pkgName)...)
+	}
+	if schema < 2 {
+		changes = append(changes, planSchemaV2ClientRules(pkg, pkgName)...)
+	}
+	changes = append(changes, MigrationChange{fmt.Sprintf("set %s.settings.config_schema_version=%d", pkgName, targetSchema)})
+	return changes
+}
+
+func planSchemaV1(pkg *uci.Package, pkgName string) []MigrationChange {
 	var changes []MigrationChange
 	for _, name := range pkg.SectionNames("section") {
 		sec := pkg.Section(name)
@@ -51,10 +73,31 @@ func PlanMigration(pkg *uci.Package) []MigrationChange {
 			changes = append(changes, MigrationChange{fmt.Sprintf("set %s.%s.urltest_interrupt_exist_connections=0", pkgName, name)})
 		}
 	}
+	settings := pkg.Section("settings")
 	if settings == nil || settings.Get("cache_path", "") == "" {
 		changes = append(changes, MigrationChange{fmt.Sprintf("set %s.settings.cache_path=%s", pkgName, paths.SingboxCache)})
 	}
-	changes = append(changes, MigrationChange{fmt.Sprintf("set %s.settings.config_schema_version=%d", pkgName, targetSchema)})
+	return changes
+}
+
+func planSchemaV2ClientRules(pkg *uci.Package, pkgName string) []MigrationChange {
+	if len(pkg.SectionNames("client_rule")) > 0 {
+		return nil
+	}
+	legacy := clientrules.LegacyRulesFromPackage(pkg)
+	if len(legacy) == 0 {
+		return nil
+	}
+	var changes []MigrationChange
+	for i, r := range legacy {
+		name := fmt.Sprintf("migrated_%d", i)
+		changes = append(changes, MigrationChange{fmt.Sprintf("set %s.%s=client_rule", pkgName, name)})
+		changes = append(changes, MigrationChange{fmt.Sprintf("set %s.%s.ip=%s", pkgName, name, r.IP)})
+		changes = append(changes, MigrationChange{fmt.Sprintf("set %s.%s.mode=%s", pkgName, name, r.Mode)})
+		if r.Section != "" {
+			changes = append(changes, MigrationChange{fmt.Sprintf("set %s.%s.section=%s", pkgName, name, r.Section)})
+		}
+	}
 	return changes
 }
 

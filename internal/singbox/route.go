@@ -3,6 +3,7 @@ package singbox
 import (
 	"fmt"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -140,12 +141,8 @@ func (b *Builder) configureRoute() {
 }
 
 func (b *Builder) configureFullyRoutedIPs(rr *routeRules) {
-	for _, name := range b.pkg.SectionNames("section") {
-		sec := b.pkg.Section(name)
-		if sec == nil {
-			continue
-		}
-		ips := sec.GetList("fully_routed_ips")
+	bySection := clientrules.FullyRoutedBySection(clientrules.ListRules(b.pkg))
+	for name, ips := range bySection {
 		if len(ips) == 0 {
 			continue
 		}
@@ -183,11 +180,7 @@ func (b *Builder) configureBlockRejectRule(rr *routeRules) {
 }
 
 func (b *Builder) configureRoutingExcludedIPs(rr *routeRules) {
-	settings := b.pkg.Section("settings")
-	if settings == nil {
-		return
-	}
-	ips := settings.GetList("routing_excluded_ips")
+	ips := clientrules.GlobalExcludeIPs(clientrules.ListRules(b.pkg))
 	if len(ips) == 0 {
 		return
 	}

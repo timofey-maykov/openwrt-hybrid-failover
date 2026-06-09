@@ -119,8 +119,11 @@ run_failover() {
 		case "$CLASH" in *://*) ;; *) CLASH="http://${CLASH}";; esac
 		MAIN=$(uci -q get hybrid-failover.settings.main_section)
 		[ -z "$MAIN" ] && MAIN=glob
-		TAG="${MAIN}-out"
-		wget -qO- "${CLASH}/proxies/${TAG}" 2>/dev/null | head -c 200 || echo "clash poll: unavailable"
+		if command -v ubus >/dev/null 2>&1; then
+			ubus call hybrid-failover switch_proxy "{\"section\":\"${MAIN}\",\"outbound\":\"${MAIN}-urltest-out\"}" 2>/dev/null | head -c 200 || true
+			echo
+		fi
+		hybrid-failover rpc SwitchProxy "${MAIN}" "${MAIN}-urltest-out" 2>/dev/null | head -c 200 || true
 		echo
 		echo "failover history before: ${before} lines"
 		echo "failover: manual urltest switch verification: manual urltest switch on lab"

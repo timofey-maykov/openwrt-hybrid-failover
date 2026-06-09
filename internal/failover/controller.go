@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/probe"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -112,7 +113,9 @@ func (c *Controller) Run(ctx context.Context) {
 	if c.states == nil {
 		c.states = make(map[string]*sectionState)
 	}
-	ticker := time.NewTicker(c.Interval)
+	c.hydrateStatesOnStart()
+	interval := c.Interval
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	c.pollOnce()
 	for {
@@ -121,6 +124,10 @@ func (c *Controller) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			c.pollOnce()
+			if c.Interval != interval {
+				interval = c.Interval
+				ticker.Reset(interval)
+			}
 		}
 	}
 }
@@ -130,6 +137,8 @@ func (c *Controller) pollOnce() {
 	if err != nil {
 		return
 	}
+	c.reloadSettings(pkg)
+	c.syncStatesFromDisk()
 	c.sections = loadManagedSections(pkg)
 	if len(c.sections) == 0 {
 		return
@@ -176,6 +185,7 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 	rt.FailStreak = st.failStreak
 	rt.RecoverStreak = st.recoverStreak
 	rt.LastProbeAt = now
+	_ = delayhistory.Record(sec.PrimaryTag, primaryDelay, primaryOK)
 	rt.LastSwitchAt = st.lastSwitchAt
 	rt.ActiveSince = st.activeSince
 	if rt.LastSwitchAt.IsZero() && !st.lastSwitchAt.IsZero() {
@@ -261,6 +271,7 @@ func (c *Controller) switchTo(ctx context.Context, cli *clash.Client, sec Sectio
 		From:    prev,
 		To:      target,
 		Reason:  reason,
+		Policy:  string(sec.Policy),
 	}
 	_ = notify.SendWebhook(c.Webhook, ev)
 	return nil

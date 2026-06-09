@@ -363,7 +363,17 @@ function buildControllerTable(controllers) {
 
 function buildFailoverPanels(data) {
 	var fo = data && data.failover;
-	var ctrl = data && data.controller && data.controller[0];
+	var ctrl = null;
+	if (data && data.controller && fo) {
+		for (var ci = 0; ci < data.controller.length; ci++) {
+			if (data.controller[ci].section === fo.section) {
+				ctrl = data.controller[ci];
+				break;
+			}
+		}
+	}
+	if (!ctrl && data && data.controller && data.controller.length)
+		ctrl = data.controller[0];
 	var routeRows = [
 		[_('Секция'), fo ? fo.section : '-'],
 		[_('Политика'), fo ? fo.policy : '-'],

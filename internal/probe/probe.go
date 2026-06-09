@@ -27,9 +27,12 @@ func Outbound(ctx context.Context, cli *clash.Client, tag, testURL, proxyType, b
 		return delay, true, ""
 	}
 	if err != nil {
-		detail = err.Error()
+		detail = classifyProbeError(err.Error())
 	}
 	if bindIface == "" || !isDirectType(proxyType) {
+		if detail == "" {
+			detail = "no delay data from Clash API"
+		}
 		return 0, false, detail
 	}
 	d, err2 := viaInterface(ctx, bindIface, testURL)
@@ -40,9 +43,25 @@ func Outbound(ctx context.Context, cli *clash.Client, tag, testURL, proxyType, b
 		if detail != "" {
 			detail += "; "
 		}
-		detail += err2.Error()
+		detail += classifyProbeError(err2.Error())
 	}
 	return 0, false, detail
+}
+
+func classifyProbeError(msg string) string {
+	msg = strings.ToLower(msg)
+	switch {
+	case strings.Contains(msg, "timeout"), strings.Contains(msg, "deadline"):
+		return "timeout"
+	case strings.Contains(msg, "dns"), strings.Contains(msg, "resolve"), strings.Contains(msg, "lookup"):
+		return "DNS failure"
+	case strings.Contains(msg, "connection refused"), strings.Contains(msg, "connect"):
+		return "connection failed"
+	case strings.Contains(msg, "invalid"), strings.Contains(msg, "400"):
+		return "probe rejected"
+	default:
+		return strings.TrimSpace(msg)
+	}
 }
 
 func isDirectType(proxyType string) bool {
@@ -79,20 +98,46 @@ func BindIfaceForChannel(section string, sec *uci.Section, tag string) string {
 	if tag == singbox.AWGTag(section) {
 		return sec.Get("interface", "")
 	}
+	if sec.Get("connection_type", "") == "vpn" {
+		return bindIfaceForFailoverLink(section, sec, tag)
+	}
+	if sec.Get("connection_type", "") == "proxy" {
+		return bindIfaceForProxyLink(section, sec, tag)
+	}
+	return ""
+}
+
+func bindIfaceForFailoverLink(section string, sec *uci.Section, tag string) string {
 	links := sec.GetList("failover_proxy_links")
 	for i, link := range links {
 		if singbox.PeerTag(section, i+1) != tag {
 			continue
 		}
-		link = strings.TrimSpace(link)
-		if strings.HasPrefix(link, "awg2://") {
-			return amnezia.AWG2InterfaceName(fmt.Sprintf("%s-%d", section, i+1))
+		return bindIfaceForURI(section, i+1, link)
+	}
+	return ""
+}
+
+func bindIfaceForProxyLink(section string, sec *uci.Section, tag string) string {
+	links := sec.GetList("urltest_proxy_links")
+	for i, link := range links {
+		if singbox.PeerTag(section, i+1) != tag {
+			continue
 		}
-		if strings.HasPrefix(link, "vpn://") {
-			decoded, err := amnezia.DecodeVPNURI(link)
-			if err == nil && strings.HasPrefix(decoded, "awg2://") {
-				return amnezia.AWG2InterfaceName(fmt.Sprintf("%s-%d", section, i+1))
-			}
+		return bindIfaceForURI(section, i+1, link)
+	}
+	return ""
+}
+
+func bindIfaceForURI(section string, idx int, link string) string {
+	link = strings.TrimSpace(link)
+	if strings.HasPrefix(link, "awg2://") {
+		return amnezia.AWG2InterfaceName(fmt.Sprintf("%s-%d", section, idx))
+	}
+	if strings.HasPrefix(link, "vpn://") {
+		decoded, err := amnezia.DecodeVPNURI(link)
+		if err == nil && strings.HasPrefix(decoded, "awg2://") {
+			return amnezia.AWG2InterfaceName(fmt.Sprintf("%s-%d", section, idx))
 		}
 	}
 	return ""

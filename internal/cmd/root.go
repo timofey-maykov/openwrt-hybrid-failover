@@ -288,6 +288,18 @@ func runRPC(args []string) int {
 		return runRPCRestoreUCI(rest)
 	case "DuplicateSection", "duplicate_section":
 		return runRPCDuplicateSection(rest)
+	case "ListClients", "list_clients":
+		return runRPCListClients()
+	case "DelayHistory", "delay_history":
+		return runRPCDelayHistory()
+	case "ListUpdate", "list_update":
+		return runRPCListUpdateRPC()
+	case "SubscriptionRefresh", "subscription_refresh":
+		return runRPCSubscriptionRefreshRPC()
+	case "BackupDownload", "backup_download":
+		return runRPCBackupDownload()
+	case "Metrics", "metrics":
+		return runRPCMetrics()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown rpc method %q\n", method)
 		return 2

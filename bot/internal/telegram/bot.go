@@ -180,7 +180,7 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	if cb.Data == "input_cancel" {
 		b.clearInput(userID)
 		b.answerCallback(cb.ID, "")
-		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr())
+		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr(h.routing.MainSection()))
 		return
 	}
 	if inputKind, ok := callbackToInput(cb.Data); ok {
@@ -248,7 +248,7 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
 		keyboard = serviceKeyboard()
 	case "failover":
 		text = "Раздел: Фейловер"
-		keyboard = failoverKeyboard()
+		keyboard = failoverKeyboard(h.routing.MainSection())
 	case "config":
 		text = "Раздел: Конфиг"
 		keyboard = configKeyboard()
@@ -308,7 +308,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 		k := uciKeyboard()
 		return &k
 	case strings.HasPrefix(cmd, "/failover_"), strings.HasPrefix(cmd, "/switch"):
-		k := failoverKeyboard()
+		k := failoverKeyboard(h.routing.MainSection())
 		return &k
 	case strings.HasPrefix(cmd, "/config_"):
 		k := configKeyboard()
@@ -456,7 +456,7 @@ func inputToCommand(kind, value string) (string, error) {
 	}
 }
 
-func failoverKeyboardPtr() *tgbotapi.InlineKeyboardMarkup {
-	k := failoverKeyboard()
+func failoverKeyboardPtr(section string) *tgbotapi.InlineKeyboardMarkup {
+	k := failoverKeyboard(section)
 	return &k
 }

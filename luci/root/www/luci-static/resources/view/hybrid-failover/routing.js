@@ -37,6 +37,16 @@ var callDuplicateSection = rpc.declare({
 	params: [ 'from', 'to' ]
 });
 
+var callListUpdate = rpc.declare({
+	object: 'hybrid-failover',
+	method: 'list_update'
+});
+
+var callSubscriptionRefresh = rpc.declare({
+	object: 'hybrid-failover',
+	method: 'subscription_refresh'
+});
+
 var _validateTimer = null;
 
 function scheduleValidate(self) {
@@ -240,8 +250,9 @@ return view.extend({
 		o = s.option(form.ListValue, 'failover_policy', _('Политика failover'));
 		o.value('outage-only', _('outage-only: только при падении VPN'));
 		o.value('prefer-primary', _('prefer-primary: вернуться на VPN раньше'));
-		o.value('fastest', _('fastest: всегда самый быстрый канал (urltest)'));
+		o.value('fastest', _('fastest: urltest в sing-box (controller passive)'));
 		o.default = 'outage-only';
+		o.description = _('fastest: sing-box urltest выбирает канал; controller только наблюдает. Для VPN→backup при падении используйте outage-only.');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
 		o = s.option(form.DynamicList, 'failover_proxy_links', _('Резервные URI'));
@@ -350,12 +361,10 @@ return view.extend({
 		o.depends('connection_type', 'proxy');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
-		o = s.option(form.ListValue, 'urltest_check_interval', _('URLTest interval'));
-		o.value('30s', '30s');
-		o.value('1m', '1m');
-		o.value('3m', '3m');
-		o.value('5m', '5m');
-		o.default = '3m';
+		o = s.option(form.Value, 'urltest_check_interval', _('URLTest interval'));
+		o.placeholder = '30s';
+		o.description = _('Duration: 30s, 1m, 5m и т.д.');
+		o.default = '30s';
 		o.depends('proxy_config_type', 'urltest');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
@@ -466,6 +475,24 @@ return view.extend({
 						})
 					}, _('Применить')),
 					E('button', {
+						'class': 'btn cbi-button cbi-button-apply',
+						'click': ui.createHandlerFn(self, function() {
+							return self.handleSaveApplyChain();
+						})
+					}, _('Сохранить и применить')),
+					E('button', {
+						'class': 'btn cbi-button cbi-button-action',
+						'click': ui.createHandlerFn(self, function() {
+							return self.handleRpc(callListUpdate, _('list-update'));
+						})
+					}, _('Обновить community lists')),
+					E('button', {
+						'class': 'btn cbi-button cbi-button-action',
+						'click': ui.createHandlerFn(self, function() {
+							return self.handleRpc(callSubscriptionRefresh, _('subscription-refresh'));
+						})
+					}, _('Обновить подписки')),
+					E('button', {
 						'class': 'btn cbi-button cbi-button-negative',
 						'click': ui.createHandlerFn(self, function() {
 							return self.handleRpc(callPendingRollback, _('Откат pending'));
@@ -508,6 +535,18 @@ return view.extend({
 			scheduleValidate(self);
 			var cap = callPendingCapture();
 			return (cap && typeof cap.then === 'function') ? cap : Promise.resolve();
+		});
+	},
+
+	handleSaveApplyChain: function() {
+		var self = this;
+		return this.handleSaveApply().then(function() {
+			return callValidate().then(function() {
+				return callPendingApply();
+			}).then(function(res) {
+				notifyRpcResult(_('Сохранить и применить'), res);
+				return res;
+			});
 		});
 	},
 

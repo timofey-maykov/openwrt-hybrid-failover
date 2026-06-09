@@ -234,7 +234,11 @@ func channelFromProxy(name string, p clash.ProxyInfo, display, selectorNow, acti
 		Probed:    probed,
 	}
 	if !ch.Available && delay == 0 {
-		ch.Detail = "нет данных о задержке (нажмите «Проверить каналы»)"
+		if probed && ch.Detail != "" {
+			// keep probe detail (timeout, DNS failure, etc.)
+		} else {
+			ch.Detail = "no delay data (run channel probe)"
+		}
 	}
 	return ch
 }

@@ -141,11 +141,11 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return "QUIC обновлен (pending). Проверьте /param_preview и примените /param_apply", nil
 	case "/set_policy":
 		if len(fields) < 2 {
-			return "", fmt.Errorf("использование: /set_policy outage-only|prefer-primary")
+			return "", fmt.Errorf("использование: /set_policy outage-only|prefer-primary|fastest")
 		}
 		policy := strings.TrimSpace(fields[1])
-		if policy != "outage-only" && policy != "prefer-primary" {
-			return "", fmt.Errorf("допустимо только outage-only или prefer-primary")
+		if policy != "outage-only" && policy != "prefer-primary" && policy != "fastest" {
+			return "", fmt.Errorf("допустимо: outage-only, prefer-primary, fastest")
 		}
 		if err := h.routing.SetRouterParam(ctx, h.routing.MainSectionKey("failover_policy"), policy); err != nil {
 			return "", err
@@ -348,12 +348,32 @@ func (h CommandHandler) Handle(ctx context.Context, _ int64, text string) (strin
 		return "Изменения применены (hybrid-failover)", nil
 	case "/switch":
 		if len(fields) < 2 {
-			return "", fmt.Errorf("использование: /switch <outbound>")
+			return "", fmt.Errorf("использование: /switch <outbound> или /switch <section> <outbound>")
 		}
-		if err := h.routing.SwitchOutbound(ctx, fields[1]); err != nil {
+		section, outbound := "", fields[1]
+		if len(fields) >= 3 {
+			section, outbound = fields[1], fields[2]
+		}
+		if err := h.routing.SwitchOutbound(ctx, section, outbound); err != nil {
 			return "", err
 		}
 		return "Переключение выполнено", nil
+	case "/list_update":
+		if err := h.routing.ListUpdate(ctx); err != nil {
+			return "", err
+		}
+		return "Community lists обновлены", nil
+	case "/subscription_refresh":
+		if err := h.routing.SubscriptionRefresh(ctx); err != nil {
+			return "", err
+		}
+		return "Подписки обновлены", nil
+	case "/clients":
+		out, err := h.routing.ListClients(ctx)
+		if err != nil {
+			return "", err
+		}
+		return out, nil
 	case "/config_show":
 		cfg, err := h.store.LoadPending()
 		if err != nil {

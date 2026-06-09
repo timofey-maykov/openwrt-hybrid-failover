@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -54,22 +55,12 @@ func ApplyFromUCI(pkg *uci.Package) error {
 	}
 
 	if pkg != nil {
-		if settings := pkg.Section("settings"); settings != nil {
-			for _, ip := range settings.GetList("exclude_source_ips") {
-				steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
-			}
-			for _, ip := range settings.GetList("include_source_ips") {
-				steps = append(steps, mangleMarkRule("ip saddr "+quoteIP(ip)))
-			}
+		rules := clientrules.ListRules(pkg)
+		for _, ip := range clientrules.ExcludeIPs(rules) {
+			steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
 		}
-		for _, name := range pkg.SectionNames("section") {
-			sec := pkg.Section(name)
-			if sec == nil {
-				continue
-			}
-			for _, ip := range sec.GetList("fully_routed_ips") {
-				steps = append(steps, mangleMarkRule("ip saddr "+quoteIP(ip)))
-			}
+		for _, ip := range clientrules.IncludeIPs(rules) {
+			steps = append(steps, mangleMarkRule("ip saddr "+quoteIP(ip)))
 		}
 	}
 
