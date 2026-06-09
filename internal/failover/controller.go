@@ -179,9 +179,12 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 	}
 
 	now := time.Now().UTC()
-	primaryDelay, primaryOK := probeOutbound(ctx, cli, sec, sec.PrimaryTag, sec.TestURL)
+	primaryDelay, primaryOK, probeDetail := probeOutbound(ctx, cli, sec, sec.PrimaryTag, sec.TestURL)
 	rt.PrimaryOK = primaryOK
 	rt.PrimaryDelay = primaryDelay
+	if !primaryOK && probeDetail != "" {
+		rt.LastError = probeDetail
+	}
 	rt.FailStreak = st.failStreak
 	rt.RecoverStreak = st.recoverStreak
 	rt.LastProbeAt = now
@@ -392,18 +395,16 @@ func parseControllerInterval(raw string) time.Duration {
 	return d
 }
 
-func probeOutbound(ctx context.Context, cli *clash.Client, sec SectionConfig, tag, testURL string) (delay int, ok bool) {
+func probeOutbound(ctx context.Context, cli *clash.Client, sec SectionConfig, tag, testURL string) (delay int, ok bool, detail string) {
 	bind := sec.PrimaryIface
 	if sec.Sec != nil && tag != sec.PrimaryTag {
 		bind = probe.BindIfaceForChannel(sec.Section, sec.Sec, tag)
 	}
-	delay, ok, _ = probe.Outbound(ctx, cli, tag, testURL, "direct", bind)
-	// Split-tunnel VPN primaries: HTTP probes via bind_interface often fail while the
-	// tunnel is healthy; for outage-only, link up is enough to consider primary OK.
-	if !ok && tag == sec.PrimaryTag && bind != "" && probe.IfaceLinkUp(bind) {
-		return delay, true
+	if tag == sec.PrimaryTag && bind != "" {
+		return probe.PrimaryVPN(ctx, cli, tag, testURL, bind)
 	}
-	return delay, ok
+	delay, ok, detail = probe.Outbound(ctx, cli, tag, testURL, "direct", bind)
+	return delay, ok, detail
 }
 
 func isBackupTag(active string, sec SectionConfig) bool {

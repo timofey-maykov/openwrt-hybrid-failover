@@ -132,7 +132,14 @@ func ProbeChannels(r Report, clashURL, mainSection string, sec *uci.Section) Rep
 		ch := &r.Channels[i]
 		iface := probe.BindIfaceForChannel(mainSection, sec, ch.Name)
 		pctx, pcancel := context.WithTimeout(ctx, probe.ChannelTimeout)
-		delay, ok, detail := probe.Outbound(pctx, cli, ch.Name, testURL, ch.Type, iface)
+		var delay int
+		var ok bool
+		var detail string
+		if ch.Name == singbox.AWGTag(mainSection) && iface != "" {
+			delay, ok, detail = probe.PrimaryVPN(pctx, cli, ch.Name, testURL, iface)
+		} else {
+			delay, ok, detail = probe.Outbound(pctx, cli, ch.Name, testURL, ch.Type, iface)
+		}
 		pcancel()
 		ch.Probed = true
 		ch.DelayMs = delay
@@ -229,7 +236,7 @@ func channelFromProxy(name string, p clash.ProxyInfo, display, selectorNow, acti
 		Display:   display,
 		Type:      p.Type,
 		DelayMs:   delay,
-		Available: delay > 0 || p.Type == "direct",
+		Available: delay > 0,
 		Selected:  selected,
 		Probed:    probed,
 	}

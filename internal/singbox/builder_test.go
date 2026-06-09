@@ -165,13 +165,16 @@ func TestBuilderStructuralFixtures(t *testing.T) {
 				for _, srv := range servers {
 					if srv["tag"] == "vpndr-domain-resolver" {
 						foundResolver = true
-						if srv["detour"] != "vpndr-out" {
-							t.Fatalf("domain resolver detour = %v, want vpndr-out", srv["detour"])
+						if srv["detour"] != "vpndr-iface-out" {
+							t.Fatalf("domain resolver detour = %v, want vpndr-iface-out", srv["detour"])
 						}
 					}
 				}
 				if !foundResolver {
 					t.Fatal("missing vpndr-domain-resolver DNS server")
+				}
+				if !hasOutboundTag(cfg.Outbounds, "vpndr-iface-out") {
+					t.Fatal("missing vpndr-iface-out bind outbound for DNS detour")
 				}
 			},
 		},
