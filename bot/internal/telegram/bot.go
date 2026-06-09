@@ -180,7 +180,7 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	if cb.Data == "input_cancel" {
 		b.clearInput(userID)
 		b.answerCallback(cb.ID, "")
-		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr(h.routing.MainSection()))
+		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr(b.mainSection()))
 		return
 	}
 	if inputKind, ok := callbackToInput(cb.Data); ok {
@@ -215,13 +215,13 @@ func (b Bot) runCommandFromCallback(ctx context.Context, callbackID string, chat
 		b.log.Error("callback command failed", "user_id", userID, "cmd", cmd, "err", err)
 		_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "error", Details: err.Error()})
 		b.answerCallback(callbackID, "Ошибка")
-		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboardForCmd(cmd))
+		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboardForCmd(cmd, b.mainSection()))
 		return
 	}
 
 	_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "ok"})
 	b.answerCallback(callbackID, "")
-	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd))
+	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd, b.mainSection()))
 }
 
 func (b Bot) answerCallback(callbackID, text string) {
@@ -248,7 +248,7 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
 		keyboard = serviceKeyboard()
 	case "failover":
 		text = "Раздел: Фейловер"
-		keyboard = failoverKeyboard(h.routing.MainSection())
+		keyboard = failoverKeyboard(b.mainSection())
 	case "config":
 		text = "Раздел: Конфиг"
 		keyboard = configKeyboard()
@@ -299,7 +299,14 @@ func (b Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, k
 	_, _ = b.api.Send(msg)
 }
 
-func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
+func (b Bot) mainSection() string {
+	if ch, ok := b.h.(CommandHandler); ok {
+		return ch.routing.MainSection()
+	}
+	return paths.DefaultMainSection
+}
+
+func keyboardForCmd(cmd, section string) *tgbotapi.InlineKeyboardMarkup {
 	switch {
 	case strings.HasPrefix(cmd, "/set_"), strings.HasPrefix(cmd, "/param_"), cmd == "/params":
 		k := paramMenuKeyboard()
@@ -308,7 +315,7 @@ func keyboardForCmd(cmd string) *tgbotapi.InlineKeyboardMarkup {
 		k := uciKeyboard()
 		return &k
 	case strings.HasPrefix(cmd, "/failover_"), strings.HasPrefix(cmd, "/switch"):
-		k := failoverKeyboard(h.routing.MainSection())
+		k := failoverKeyboard(section)
 		return &k
 	case strings.HasPrefix(cmd, "/config_"):
 		k := configKeyboard()

@@ -53,9 +53,20 @@ func TestValidateRejectsUnknownPolicy(t *testing.T) {
 	cfg := Config{
 		Token:    "x",
 		AdminIDs: []int64{1001},
-		Policy:   "fastest",
+		Policy:   "invalid-policy",
 	}
 	if err := cfg.Validate(); err == nil {
 		t.Fatal("expected error for unknown policy")
+	}
+}
+
+func TestValidateAcceptsFastestPolicy(t *testing.T) {
+	cfg := Config{
+		Token:    "x",
+		AdminIDs: []int64{1001},
+		Policy:   "fastest",
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("fastest policy: %v", err)
 	}
 }
