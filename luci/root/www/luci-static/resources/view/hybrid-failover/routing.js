@@ -6,19 +6,14 @@
 'require ui';
 'require hybrid-failover.hf-ui as hfui';
 
-var callValidate = rpc.declare({
+var callValidateConfig = rpc.declare({
 	object: 'hybrid-failover',
-	method: 'pending_validate'
+	method: 'validate'
 });
 
-var callPendingApply = rpc.declare({
+var callApplyConfig = rpc.declare({
 	object: 'hybrid-failover',
-	method: 'pending_apply'
-});
-
-var callPendingCapture = rpc.declare({
-	object: 'hybrid-failover',
-	method: 'pending_capture'
+	method: 'apply'
 });
 
 var callPendingRollback = rpc.declare({
@@ -50,11 +45,27 @@ var callSubscriptionRefresh = rpc.declare({
 
 var _validateTimer = null;
 
+function formatStepOutput(res) {
+	if (!res || res.ok === false)
+		return (res && (res.output || res.error)) ? String(res.output || res.error) : _('Ошибка');
+	if (res.output)
+		return String(res.output);
+	if (res.data != null && typeof res.data === 'object' && !Array.isArray(res.data))
+		return JSON.stringify(res.data, null, 2);
+	if (res.data != null)
+		return JSON.stringify(res.data, null, 2);
+	return _('OK');
+}
+
 function scheduleValidate(self) {
 	if (_validateTimer)
 		clearTimeout(_validateTimer);
 	_validateTimer = setTimeout(function() {
-		callValidate().then(function(res) {
+		if (!self || !self.map)
+			return;
+		self.map.save(false).then(function() {
+			return callValidateConfig();
+		}).then(function(res) {
 			if (res && res.ok === false)
 				notifyRpcResult(_('Проверка'), res);
 		}).catch(function(err) {
@@ -464,15 +475,22 @@ return view.extend({
 		}
 
 		function runValidateStep() {
-			return callValidate().then(function(res) {
+			if (!self.map) {
+				setStepResult(_('Форма не готова'), false);
+				return Promise.resolve(false);
+			}
+			return self.map.save(false).then(function() {
+				return callValidateConfig();
+			}).then(function(res) {
 				var ok = res && res.ok !== false;
 				self._validateOk = ok;
-				var text = (res && res.output) ? res.output :
-					(res && res.data) ? JSON.stringify(res.data, null, 2) : _('OK');
-				setStepResult(text, ok);
+				setStepResult(formatStepOutput(res), ok);
 				if (!ok)
 					notifyRpcResult(_('Проверка'), res);
 				return ok;
+			}).catch(function(err) {
+				self._validateOk = false;
+				setStepResult(String(err.message || err), false);
 			});
 		}
 
@@ -487,8 +505,10 @@ return view.extend({
 						ui.addNotification(null, E('p', {}, _('Сначала успешная проверка')), 'warning');
 						return Promise.resolve();
 					}
-					return callPendingApply().then(function(res) {
+					return callApplyConfig().then(function(res) {
 						notifyRpcResult(_('Применение'), res);
+						if (res && res.ok !== false)
+							setStepResult(formatStepOutput(res), true);
 						return res;
 					});
 				})
@@ -497,7 +517,7 @@ return view.extend({
 
 			var panel = E('div', { 'class': 'cbi-section hf-mon' }, [
 				E('h3', {}, _('Применение конфигурации')),
-				E('p', { 'class': 'hint' }, _('1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить» выполняет все шаги.')),
+				E('p', { 'class': 'hint' }, _('1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить» выполняет все шаги. «Проверить» сохраняет форму и проверяет sing-box конфиг.')),
 				E('p', { 'class': 'hint' }, [
 					E('a', { 'href': L.url('admin/services/hybrid-failover/dashboard') }, _('Открыть обзор failover'))
 				]),
@@ -583,30 +603,31 @@ return view.extend({
 		var self = this;
 		return map.save(true).then(function() {
 			scheduleValidate(self);
-			var cap = callPendingCapture();
-			return (cap && typeof cap.then === 'function') ? cap : Promise.resolve();
 		});
 	},
 
 	handleSaveApplyChain: function() {
 		var self = this;
-		return this.handleSaveApply().then(function() {
-			return callValidate().then(function(vres) {
+		var map = this.map;
+		if (!map)
+			return Promise.resolve();
+		return map.save(false).then(function() {
+			return callValidateConfig().then(function(vres) {
 				var ok = vres && vres.ok !== false;
 				self._validateOk = ok;
 				if (self._stepResultEl) {
-					var text = (vres && vres.output) ? vres.output :
-						(vres && vres.data) ? JSON.stringify(vres.data, null, 2) : _('OK');
-					self._stepResultEl.textContent = text;
+					self._stepResultEl.textContent = formatStepOutput(vres);
 					self._stepResultEl.style.borderColor = ok ? 'rgba(60,186,84,.5)' : 'rgba(231,76,60,.5)';
 				}
 				if (!ok) {
 					notifyRpcResult(_('Проверка'), vres);
 					return Promise.reject(new Error(_('validate failed')));
 				}
-				return callPendingApply();
+				return callApplyConfig();
 			}).then(function(res) {
 				notifyRpcResult(_('Сохранить и применить'), res);
+				if (self._stepResultEl && res && res.ok !== false)
+					self._stepResultEl.textContent = formatStepOutput(res);
 				return res;
 			});
 		});
@@ -617,8 +638,6 @@ return view.extend({
 		var self = this;
 		return map.save(false).then(function() {
 			scheduleValidate(self);
-			var cap = callPendingCapture();
-			return (cap && typeof cap.then === 'function') ? cap : Promise.resolve();
 		});
 	}
 });

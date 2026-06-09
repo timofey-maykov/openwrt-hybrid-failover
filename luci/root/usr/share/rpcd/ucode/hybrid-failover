@@ -55,11 +55,11 @@ function method_call(rpc_name, cli_args) {
 			if (parsed.data != null)
 				return { ok: parsed.ok, data: parsed.data };
 
-			if (parsed.ok && parsed.data == null)
-				return { ok: true, data: [] };
-
 			if (parsed.output != null)
 				return { ok: parsed.ok, output: parsed.output };
+
+			if (parsed.ok && parsed.data == null && !length(res.output))
+				return { ok: true, data: [] };
 
 			return { ok: res.ok, code: res.code, output: res.output };
 		}
