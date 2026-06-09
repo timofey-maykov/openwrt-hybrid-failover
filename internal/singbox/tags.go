@@ -14,6 +14,11 @@ func AWGTag(section string) string {
 	return section + "-awg-out"
 }
 
+// IfaceBindTag is a bind-interface direct outbound without domain_resolver (DNS detour only).
+func IfaceBindTag(section string) string {
+	return section + "-iface-out"
+}
+
 func PeerTag(section string, index int) string {
 	return OutboundTag(section + "-" + itoa(index))
 }
