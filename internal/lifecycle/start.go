@@ -45,6 +45,9 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		pkg = pkg2
 	}
 
+	updater := lists.NewUpdater(false)
+	_ = updater.UpdateOnce()
+
 	applyOpts := Options{
 		UCIPath:     opts.UCIPath,
 		ConfigPath:  opts.ConfigPath,
@@ -70,13 +73,10 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		_ = dnsmasq.Configure()
 	}
 
-	updater := lists.NewUpdater(false)
-	if err := updater.UpdateOnce(); err == nil {
-		if res2, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
-			return StartResult{}, err
-		} else if res2.Changed {
-			res = res2
-		}
+	if res2, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
+		return StartResult{}, err
+	} else if res2.Changed {
+		res = res2
 	}
 
 	_ = lists.InstallCron(opts.UCIPath)

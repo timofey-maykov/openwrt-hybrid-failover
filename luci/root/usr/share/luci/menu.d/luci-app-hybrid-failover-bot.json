@@ -1,10 +1,13 @@
 {
-  "admin/services/hybrid-failover-bot": {
-    "title": "Telegram-бот Hybrid Failover",
-    "order": 95,
-    "action": {
-      "type": "view",
-      "path": "hybrid-failover/bot"
-    }
-  }
+	"admin/services/hybrid-failover-bot": {
+		"title": "Telegram-бот Hybrid Failover",
+		"order": 95,
+		"action": {
+			"type": "alias",
+			"path": "admin/services/hybrid-failover/bot"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	}
 }

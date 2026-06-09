@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -34,6 +35,7 @@ func (b *Builder) configureRoutingForSectionLists(section string, sec *uci.Secti
 
 	for _, tag := range sec.GetList("community_lists") {
 		b.addCommunityRuleset(section, tag, routeRuleTag, rr)
+		b.addCommunitySubnetRuleset(section, tag, routeRuleTag, rr)
 	}
 
 	if sec.Get("user_domain_list_type", "disabled") != "disabled" {
@@ -74,6 +76,31 @@ func (b *Builder) addCommunityRuleset(section, service, routeRuleTag string, rr 
 	b.patchFakeIPDNSRule("rule_set", tag)
 }
 
+func (b *Builder) addCommunitySubnetRuleset(section, service, routeRuleTag string, rr *routeRules) {
+	url, ok := SubnetListURLs[service]
+	if !ok {
+		return
+	}
+	lstPath := filepath.Join(RulesetDir, service+".lst")
+	_ = subnets.EnsureFile(url, lstPath)
+	cidrs, err := subnets.ParseFile(lstPath)
+	if err != nil || len(cidrs) == 0 {
+		return
+	}
+	tag := RulesetTag(section, service, "community-subnets")
+	path := filepath.Join(RulesetDir, tag+".json")
+	if err := writeSubnetRuleset(path, cidrs); err != nil {
+		return
+	}
+	b.cfg.AddRuleSet(map[string]any{
+		"type":   "local",
+		"tag":    tag,
+		"format": "source",
+		"path":   path,
+	})
+	rr.patch(routeRuleTag, "rule_set", tag)
+}
+
 func (b *Builder) addLocalRuleset(section, name, typ, listPath, routeRuleTag string, rr *routeRules) {
 	tag := RulesetTag(section, name, typ)
 	path := listPath
@@ -96,6 +123,24 @@ func (b *Builder) addLocalRuleset(section, name, typ, listPath, routeRuleTag str
 func (b *Builder) addRemoteListRuleset(section, rawURL, typ, routeRuleTag string, rr *routeRules) {
 	ext := fileExtension(rawURL)
 	switch ext {
+	case "lst":
+		tag := RulesetTag(section, "remote", typ)
+		lstPath := filepath.Join(RulesetDir, tag+".lst")
+		jsonPath := filepath.Join(RulesetDir, tag+".json")
+		_ = subnets.EnsureFile(rawURL, lstPath)
+		cidrs, err := subnets.ParseFile(lstPath)
+		if err != nil || len(cidrs) == 0 {
+			b.ensureSourceRuleset(jsonPath)
+		} else if err := writeSubnetRuleset(jsonPath, cidrs); err != nil {
+			return
+		}
+		b.cfg.AddRuleSet(map[string]any{
+			"type":   "local",
+			"tag":    tag,
+			"format": "source",
+			"path":   jsonPath,
+		})
+		rr.patch(routeRuleTag, "rule_set", tag)
 	case "json", "srs":
 		tag := RulesetTag(section, fileBaseName(rawURL), "remote-"+typ)
 		rs := map[string]any{

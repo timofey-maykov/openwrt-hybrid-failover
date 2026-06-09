@@ -61,12 +61,13 @@ func Parse(text string) (*Package, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "option ") {
-			parts := strings.Fields(line)
-			if len(parts) < 3 {
+			key, val, cont := parseOptionStart(line)
+			if key == "" {
 				continue
 			}
-			key := parts[1]
-			val := strings.Trim(strings.Join(parts[2:], " "), "'\"")
+			if cont {
+				val = readMultilineOption(sc, val)
+			}
 			cur.Options[key] = val
 			continue
 		}
@@ -142,6 +143,61 @@ func (p *Package) HasOutboundSection() bool {
 }
 
 // Exec runs uci on the router; for tests use Load/Parse instead.
+func parseOptionStart(line string) (key, value string, multiline bool) {
+	rest := strings.TrimPrefix(line, "option ")
+	idx := strings.IndexByte(rest, ' ')
+	if idx < 0 {
+		return "", "", false
+	}
+	key = rest[:idx]
+	value = strings.TrimSpace(rest[idx+1:])
+	if len(value) == 0 {
+		return key, "", false
+	}
+	quote := value[0]
+	if quote != '\'' && quote != '"' {
+		return key, strings.Trim(value, "'\""), false
+	}
+	if len(value) >= 2 && value[len(value)-1] == quote {
+		return key, strings.Trim(value, "'\""), false
+	}
+	return key, value[1:], true
+}
+
+func readMultilineOption(sc *bufio.Scanner, first string) string {
+	var b strings.Builder
+	b.WriteString(first)
+	for sc.Scan() {
+		line := sc.Text()
+		trimmed := strings.TrimSpace(line)
+		if strings.HasSuffix(trimmed, "'") {
+			line = strings.TrimSuffix(trimmed, "'")
+			if line != "" {
+				if b.Len() > 0 {
+					b.WriteByte('\n')
+				}
+				b.WriteString(line)
+			}
+			break
+		}
+		if strings.HasSuffix(trimmed, `"`) {
+			line = strings.TrimSuffix(trimmed, `"`)
+			if line != "" {
+				if b.Len() > 0 {
+					b.WriteByte('\n')
+				}
+				b.WriteString(line)
+			}
+			break
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(line)
+	}
+	return b.String()
+}
+
 func Exec(args ...string) (string, error) {
 	cmd := exec.Command("uci", args...)
 	out, err := cmd.CombinedOutput()

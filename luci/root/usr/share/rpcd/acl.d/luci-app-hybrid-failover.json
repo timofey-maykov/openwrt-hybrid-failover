@@ -15,7 +15,8 @@
 					"check_nft", "check_fakeip", "global_check", "decode_uri",
 					"pending_validate", "backup_uci", "duplicate_section",
 					"list_clients", "delay_history", "metrics", "backup_download", "dhcp_leases"
-				]
+				],
+				"service": [ "list" ]
 			}
 		},
 		"write": {
@@ -24,14 +25,16 @@
 				"/etc/config/hybrid-failover": [ "write" ],
 				"/etc/config/hybrid-failover-bot": [ "write" ],
 				"/etc/hybrid-failover/pending": [ "write" ],
-				"/etc/hybrid-failover-bot.json": [ "write" ]
+				"/etc/hybrid-failover-bot.json": [ "write" ],
+				"/usr/bin/hybrid-failover-bot": [ "exec" ]
 			},
 			"ubus": {
 				"hybrid-failover": [
 					"apply", "reload", "pending_capture", "pending_apply",
 					"pending_rollback", "switch_proxy", "restore_uci",
 					"list_update", "subscription_refresh"
-				]
+				],
+				"service": [ "restart" ]
 			}
 		}
 	}

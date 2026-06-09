@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: hybrid-failover 1.5.0\n"
+"Project-Id-Version: hybrid-failover 1.7.0\n"
 "Language: ru\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 
@@ -12,8 +12,11 @@ msgstr "Hybrid Failover"
 msgid "Маршрутизация"
 msgstr "Маршрутизация"
 
-msgid "Статус"
-msgstr "Статус"
+msgid "Обзор"
+msgstr "Обзор"
+
+msgid "Telegram"
+msgstr "Telegram"
 
 msgid "Диагностика"
 msgstr "Диагностика"

@@ -4,7 +4,18 @@
 		"order": 60,
 		"action": {
 			"type": "alias",
-			"path": "admin/services/hybrid-failover/routing"
+			"path": "admin/services/hybrid-failover/dashboard"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
+	},
+	"admin/services/hybrid-failover/dashboard": {
+		"title": "Обзор",
+		"order": 1,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/dashboard"
 		},
 		"depends": {
 			"acl": [ "luci-app-hybrid-failover" ]
@@ -12,21 +23,10 @@
 	},
 	"admin/services/hybrid-failover/routing": {
 		"title": "Маршрутизация",
-		"order": 1,
-		"action": {
-			"type": "view",
-			"path": "hybrid-failover/routing"
-		},
-		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
-		}
-	},
-	"admin/services/hybrid-failover/dashboard": {
-		"title": "Статус",
 		"order": 2,
 		"action": {
 			"type": "view",
-			"path": "hybrid-failover/dashboard"
+			"path": "hybrid-failover/routing"
 		},
 		"depends": {
 			"acl": [ "luci-app-hybrid-failover" ]
@@ -55,7 +55,7 @@
 		}
 	},
 	"admin/services/hybrid-failover/bot": {
-		"title": "Telegram-бот",
+		"title": "Telegram",
 		"order": 5,
 		"action": {
 			"type": "view",
