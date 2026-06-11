@@ -27,6 +27,7 @@ jobs:
       - name: Build .ipk and .apk packages
         env:
           HF_PKG_FORMAT: both
+          GOTOOLCHAIN: local
         run: |
           chmod +x scripts/build-packages.sh scripts/lib/*.sh
           ./scripts/build-packages.sh

@@ -23,6 +23,8 @@ jobs:
           sudo install -m 755 "/tmp/sing-box-${VER}-linux-amd64/sing-box" /usr/local/bin/sing-box
           sing-box version
       - name: Test core
+        env:
+          GOTOOLCHAIN: local
         run: GOFLAGS=-mod=mod go test ./...
       - name: Sing-box config check
         run: HF_SINGBOX_CHECK=1 GOFLAGS=-mod=mod go test -run TestBuilderSingboxCheckOptional ./internal/singbox/...
