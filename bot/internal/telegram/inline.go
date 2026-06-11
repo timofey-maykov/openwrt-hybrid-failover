@@ -2,8 +2,38 @@ package telegram
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
+
+func routersPanelKeyboard(mgr *routers.Manager, userID int64) tgbotapi.InlineKeyboardMarkup {
+	rows := [][]tgbotapi.InlineKeyboardButton{}
+	for _, r := range mgr.List() {
+		label := r.Name
+		if mgr.SelectedID(userID) == r.ID {
+			label = "▶ " + label
+		}
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData(label, "cmd:/use "+r.ID),
+		))
+	}
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Сервис", "nav:service"),
+		tgbotapi.NewInlineKeyboardButtonData("Фейловер", "nav:failover"),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Параметры", "nav:params"),
+		tgbotapi.NewInlineKeyboardButtonData("Конфиг", "nav:config"),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("UCI (hybrid-failover)", "nav:uci"),
+	))
+	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+		tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 80"),
+		tgbotapi.NewInlineKeyboardButtonData("Статус", "cmd:/status"),
+	))
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
 
 func mainPanelKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(

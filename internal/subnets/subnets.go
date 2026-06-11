@@ -3,13 +3,9 @@ package subnets
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"net"
-	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 )
 
 // ParseList reads one CIDR per line from a .lst file body.
@@ -42,31 +38,22 @@ func ParseFile(path string) ([]string, error) {
 	return ParseList(data), nil
 }
 
-// EnsureFile downloads url into dest when dest is missing or empty.
+// EnsureFile downloads url into dest when dest is missing, empty, or outdated vs remote.
 func EnsureFile(url, dest string) error {
+	changed, err := RefreshFileIfChanged(url, dest, nil)
+	if err != nil {
+		if cidrs, err2 := ParseFile(dest); err2 == nil && len(cidrs) > 0 {
+			return nil
+		}
+		return err
+	}
+	if changed {
+		return nil
+	}
 	if cidrs, err := ParseFile(dest); err == nil && len(cidrs) > 0 {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return err
-	}
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch %s: %s", url, resp.Status)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if len(ParseList(body)) == 0 {
-		return fmt.Errorf("fetch %s: no subnet entries", url)
-	}
-	return os.WriteFile(dest, body, 0o644)
+	return fmt.Errorf("fetch %s: no local subnet entries", url)
 }
 
 // SplitItems splits comma/newline/space separated CIDRs.

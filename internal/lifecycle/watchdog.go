@@ -4,6 +4,8 @@ import (
 	"context"
 	"os/exec"
 	"time"
+
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 )
 
 type Watchdog struct {
@@ -40,6 +42,7 @@ func (w *Watchdog) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			_ = netlink.EnsureIPRules()
 			if err := w.Probe(); err != nil {
 				_ = w.Restart()
 				time.Sleep(backoff)

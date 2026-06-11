@@ -10,8 +10,26 @@
   "uci_package": "hybrid-failover",
   "main_section": "glob",
   "policy": "outage-only",
-  "probe_timeout_seconds": 5,
+  "probe_timeout_seconds": 15,
   "notify_failover_enabled": false,
   "notify_failover_interval_seconds": 30,
-  "viewer_ids": []
+  "viewer_ids": [],
+  "routers": [
+    {
+      "id": "local",
+      "name": "Этот роутер",
+      "local": true,
+      "main_section": "main"
+    },
+    {
+      "id": "office",
+      "name": "Mi Router 3G",
+      "host": "192.168.11.1",
+      "port": 22,
+      "user": "root",
+      "identity_file": "/etc/hybrid-failover-bot/id_router_office",
+      "main_section": "main",
+      "clash_api": "http://192.168.11.1:9090"
+    }
+  ]
 }

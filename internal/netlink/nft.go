@@ -94,10 +94,8 @@ func ApplyFromUCI(pkg *uci.Package) error {
 		"nft add rule inet "+NFTTable+" mangle_output ip daddr "+singbox.FakeIPInet4Range+" meta l4proto { tcp, udp } meta mark set "+FWMark,
 		"nft add rule inet "+NFTTable+" proxy meta mark "+FWMark+" meta l4proto tcp tproxy ip to 127.0.0.1:1602 accept",
 		"nft add rule inet "+NFTTable+" proxy meta mark "+FWMark+" meta l4proto udp tproxy ip to 127.0.0.1:1602 accept",
-		"grep -q '105 "+RouteTable+"' /etc/iproute2/rt_tables 2>/dev/null || echo '105 "+RouteTable+"' >> /etc/iproute2/rt_tables",
-		"ip rule add fwmark "+FWMark+" lookup "+RouteTable+" priority 105 2>/dev/null || true",
-		"ip route add local default dev lo table "+RouteTable+" 2>/dev/null || true",
 	)
+	steps = append(steps, ensureIPRulesSteps()...)
 
 	for _, line := range steps {
 		out, err := exec.Command("sh", "-c", line).CombinedOutput()
@@ -140,6 +138,34 @@ func Teardown() error {
 	return nil
 }
 
+func ensureIPRulesSteps() []string {
+	return []string{
+		"grep -q '105 " + RouteTable + "' /etc/iproute2/rt_tables 2>/dev/null || echo '105 " + RouteTable + "' >> /etc/iproute2/rt_tables",
+		"ip rule add fwmark " + FWMark + " lookup " + RouteTable + " priority 105 2>/dev/null || true",
+		"ip route add local default dev lo table " + RouteTable + " 2>/dev/null || true",
+	}
+}
+
+// EnsureIPRules restores fwmark policy routing required for tproxy (idempotent).
+func EnsureIPRules() error {
+	for _, line := range ensureIPRulesSteps() {
+		out, err := exec.Command("sh", "-c", line).CombinedOutput()
+		if err != nil && !strings.Contains(string(out), "File exists") && !strings.Contains(string(out), "No such file") {
+			return fmt.Errorf("%s: %w: %s", line, err, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
+}
+
+func ipRulesOK() bool {
+	out, err := exec.Command("ip", "rule", "list").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	body := string(out)
+	return strings.Contains(body, "fwmark "+FWMark) && strings.Contains(body, "lookup "+RouteTable)
+}
+
 func Check() error {
 	out, err := exec.Command("nft", "list", "table", "inet", NFTTable).CombinedOutput()
 	if err != nil {
@@ -151,6 +177,14 @@ func Check() error {
 	}
 	if !strings.Contains(body, ifaceSetName) {
 		return fmt.Errorf("nft interface set missing")
+	}
+	if !ipRulesOK() {
+		if err := EnsureIPRules(); err != nil {
+			return fmt.Errorf("tproxy ip rules missing: %w", err)
+		}
+		if !ipRulesOK() {
+			return fmt.Errorf("tproxy ip rules missing")
+		}
 	}
 	return nil
 }

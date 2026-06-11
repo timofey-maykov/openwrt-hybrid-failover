@@ -1,39 +1,50 @@
 package lists
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
 type Updater struct {
 	RulesetDir string
+	UCIPath    string
 	ViaProxy   bool
 	HTTP       *http.Client
 	mu         sync.Mutex
 	running    bool
 }
 
+type UpdateResult struct {
+	Changed bool
+}
+
 func NewUpdater(viaProxy bool) *Updater {
 	return &Updater{
 		RulesetDir: singbox.RulesetDir,
+		UCIPath:    paths.UCIConfig,
 		ViaProxy:   viaProxy,
 		HTTP:       &http.Client{Timeout: 60 * time.Second},
 	}
 }
 
-func (u *Updater) UpdateOnce() error {
+func (u *Updater) UpdateOnce() (UpdateResult, error) {
 	u.mu.Lock()
 	if u.running {
 		u.mu.Unlock()
-		return fmt.Errorf("list update already running")
+		return UpdateResult{}, fmt.Errorf("list update already running")
 	}
 	u.running = true
 	u.mu.Unlock()
@@ -43,42 +54,149 @@ func (u *Updater) UpdateOnce() error {
 		u.mu.Unlock()
 	}()
 
+	services := u.configuredServices()
+	if len(services) == 0 {
+		return UpdateResult{}, nil
+	}
+
 	if err := os.MkdirAll(u.RulesetDir, 0o755); err != nil {
-		return err
+		return UpdateResult{}, err
 	}
-	for _, svc := range singbox.CommunityServices {
-		if err := u.fetchCommunityDomains(svc); err != nil {
-			return err
+
+	var result UpdateResult
+	for _, svc := range services {
+		changed, err := u.fetchCommunityDomains(svc)
+		if err != nil {
+			return result, err
 		}
+		result.Changed = result.Changed || changed
 		if subnetURL, ok := singbox.SubnetListURLs[svc]; ok {
-			if err := u.fetchURL(subnetURL, svc+".lst"); err != nil {
-				return err
+			changed, err := u.fetchSubnetList(subnetURL, svc+".lst")
+			if err != nil {
+				return result, err
 			}
+			result.Changed = result.Changed || changed
 		}
 	}
-	return nil
+	return result, nil
 }
 
-func (u *Updater) fetchCommunityDomains(service string) error {
+func (u *Updater) configuredServices() []string {
+	pkg, err := uci.Load(u.UCIPath)
+	if err != nil {
+		return singbox.CommunityServices
+	}
+	seen := make(map[string]struct{})
+	var out []string
+	for _, name := range pkg.SectionNames("section") {
+		sec := pkg.Section(name)
+		if sec == nil || !singbox.SectionHasEnabledLists(sec) {
+			continue
+		}
+		for _, svc := range sec.GetList("community_lists") {
+			svc = strings.TrimSpace(svc)
+			if svc == "" {
+				continue
+			}
+			if _, ok := seen[svc]; ok {
+				continue
+			}
+			seen[svc] = struct{}{}
+			out = append(out, svc)
+		}
+	}
+	return out
+}
+
+func (u *Updater) fetchCommunityDomains(service string) (bool, error) {
 	url := singbox.CommunityServiceDomainURL(service)
-	return u.fetchURL(url, service+".txt")
+	return u.fetchTextURL(url, service+".txt")
 }
 
-func (u *Updater) fetchURL(url, filename string) error {
+func (u *Updater) fetchSubnetList(url, filename string) (bool, error) {
 	resp, err := u.HTTP.Get(url)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch %s: %s", url, resp.Status)
+		return false, fmt.Errorf("fetch %s: %s", url, resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return false, err
 	}
 	dest := filepath.Join(u.RulesetDir, filename)
-	return os.WriteFile(dest, body, 0o644)
+	changed, err := subnets.WriteListBodyIfChanged(dest, body)
+	if err != nil {
+		return false, fmt.Errorf("fetch %s: %w", url, err)
+	}
+	return changed, nil
+}
+
+func (u *Updater) fetchTextURL(url, filename string) (bool, error) {
+	resp, err := u.HTTP.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("fetch %s: %s", url, resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+	dest := filepath.Join(u.RulesetDir, filename)
+	changed, err := writeTextBodyIfChanged(dest, body)
+	if err != nil {
+		return false, fmt.Errorf("fetch %s: %w", url, err)
+	}
+	return changed, nil
+}
+
+func normalizeTextLines(data []byte) []string {
+	sc := bufio.NewScanner(strings.NewReader(string(data)))
+	seen := make(map[string]struct{})
+	var out []string
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if _, ok := seen[line]; ok {
+			continue
+		}
+		seen[line] = struct{}{}
+		out = append(out, line)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func textLinesEqual(a, b []byte) bool {
+	na := normalizeTextLines(a)
+	nb := normalizeTextLines(b)
+	if len(na) != len(nb) {
+		return false
+	}
+	for i := range na {
+		if na[i] != nb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func writeTextBodyIfChanged(dest string, body []byte) (bool, error) {
+	if len(normalizeTextLines(body)) == 0 {
+		return false, fmt.Errorf("no entries in remote body")
+	}
+	local, err := os.ReadFile(dest)
+	if err == nil && textLinesEqual(local, body) {
+		return false, nil
+	}
+	return true, os.WriteFile(dest, body, 0o644)
 }
 
 func WritePID() error {
