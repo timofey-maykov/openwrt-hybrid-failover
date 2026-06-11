@@ -13,8 +13,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/historywatch"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/telegram"
 )
@@ -33,10 +32,12 @@ func Run(ctx context.Context, configPath string) error {
 		}
 	}
 	logger := slog.New(slog.NewJSONHandler(logOut, nil))
-	runner := routerexec.New(time.Duration(cfg.ProbeTimeoutSeconds) * time.Second)
-	routingSvc := routing.NewService(runner, cfg.ClashAPI, cfg.RoutingInitScript, cfg.UCIPackage, cfg.MainSection, time.Duration(cfg.ProbeTimeoutSeconds)*time.Second)
+	mgr, err := routers.NewManager(cfg)
+	if err != nil {
+		return fmt.Errorf("routers: %w", err)
+	}
 	store := botconfig.NewStore(configPath)
-	handler := telegram.NewCommandHandler(routingSvc, store)
+	handler := telegram.NewCommandHandler(mgr, store)
 	auth := security.NewAuthorizer(cfg.AdminIDs, cfg.ViewerIDs)
 	auditLogger := audit.New(cfg.AuditPath)
 

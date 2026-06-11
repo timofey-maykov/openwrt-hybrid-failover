@@ -19,7 +19,7 @@ import (
 )
 
 type Service struct {
-	runner       routerexec.Runner
+	runner       routerexec.Exec
 	clashAPI     string
 	initScript   string
 	uciPackage   string
@@ -34,7 +34,7 @@ type ChannelHealth struct {
 	Detail    string
 }
 
-func NewService(runner routerexec.Runner, clashAPI, initScript, uciPackage, mainSection string, timeout time.Duration) Service {
+func NewService(runner routerexec.Exec, clashAPI, initScript, uciPackage, mainSection string, timeout time.Duration) Service {
 	if uciPackage == "" {
 		uciPackage = paths.UCIPackage
 	}

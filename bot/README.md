@@ -43,9 +43,46 @@ CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
 
 UCI: `hybrid-failover-bot.main.enabled`, `binary`, `config_path`.
 
+### Несколько роутеров
+
+Один Telegram-бот может управлять **несколькими** OpenWrt с Hybrid Failover. Пользователь работает **только в Telegram** (команды и кнопки); SSH вручную не нужен.
+
+Бот ставится **на одном** хосте (роутер, NAS, VPS), откуда есть сеть до всех роутеров. В `/etc/hybrid-failover-bot.json`:
+
+```json
+"routers": [
+  {
+    "id": "home",
+    "name": "Дом",
+    "local": true,
+    "main_section": "glob"
+  },
+  {
+    "id": "office",
+    "name": "Офис",
+    "host": "192.168.11.1",
+    "user": "root",
+    "identity_file": "/etc/hybrid-failover-bot/id_office",
+    "main_section": "main",
+    "clash_api": "http://192.168.11.1:9090"
+  }
+]
+```
+
+- **`local: true`** — этот роутер (где запущен бот); команды через локальный `hybrid-failover`.
+- **Удалённый роутер** — бот выполняет те же команды по **SSH** (ключ в `identity_file`, без пароля в чате).
+- **`/routers`** — список; **`/use office`** — выбрать активный; **`/router`** — текущий.
+- Ответы помечаются `[Офис]` при нескольких роутерах.
+- В `/panel` появляются кнопки выбора роутера.
+
+На удалённом роутере: `opkg install openssh-sftp-server`, в `authorized_keys` — публичный ключ от `identity_file`.
+
+Если секция `routers` **не задана**, поведение как раньше — один локальный роутер.
+
 ## Команды (основные)
 
 - `/panel`, `/help`
+- `/routers`, `/use <id>`, `/router` — выбор роутера (multi)
 - `/status`, `/routing_restart`
 - `/health`, `/channels`, `/history`, `/failover_list`, `/failover_add`, `/failover_apply`
 - UCI: `/uci_get`, `/uci_set`, `/param_apply`, `/param_rollback`

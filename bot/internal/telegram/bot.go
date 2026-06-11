@@ -126,7 +126,7 @@ func (b Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text
 		return
 	}
 	if actionName == "/panel" {
-		b.replyWithMainPanel(chatID, resp)
+		b.replyWithMainPanel(chatID, userID, resp)
 		return
 	}
 	b.reply(chatID, resp)
@@ -144,9 +144,12 @@ func (b Bot) replyWithParamMenu(chatID int64, text string) {
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) replyWithMainPanel(chatID int64, text string) {
+func (b Bot) replyWithMainPanel(chatID int64, userID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	keyboard := mainPanelKeyboard()
+	if ch, ok := b.h.(CommandHandler); ok && ch.mgr != nil && ch.mgr.Multi() {
+		keyboard = routersPanelKeyboard(ch.mgr, userID)
+	}
 	msg.ReplyMarkup = keyboard
 	_, _ = b.api.Send(msg)
 }
@@ -164,7 +167,7 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 
 	if nav, ok := callbackToNav(cb.Data); ok {
 		b.answerCallback(cb.ID, "")
-		b.editNavPanel(chatID, cb.Message.MessageID, nav)
+		b.editNavPanel(chatID, cb.Message.MessageID, nav, userID)
 		return
 	}
 	if confirmCmd, ok := callbackToConfirm(cb.Data); ok {
@@ -180,7 +183,7 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	if cb.Data == "input_cancel" {
 		b.clearInput(userID)
 		b.answerCallback(cb.ID, "")
-		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr(b.mainSection()))
+		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, "Ввод отменен.", failoverKeyboardPtr(b.mainSection(userID)))
 		return
 	}
 	if inputKind, ok := callbackToInput(cb.Data); ok {
@@ -215,13 +218,13 @@ func (b Bot) runCommandFromCallback(ctx context.Context, callbackID string, chat
 		b.log.Error("callback command failed", "user_id", userID, "cmd", cmd, "err", err)
 		_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "error", Details: err.Error()})
 		b.answerCallback(callbackID, "Ошибка")
-		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboardForCmd(cmd, b.mainSection()))
+		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboardForCmd(cmd, b.mainSection(userID)))
 		return
 	}
 
 	_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "ok"})
 	b.answerCallback(callbackID, "")
-	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd, b.mainSection()))
+	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd, b.mainSection(userID)))
 }
 
 func (b Bot) answerCallback(callbackID, text string) {
@@ -229,16 +232,16 @@ func (b Bot) answerCallback(callbackID, text string) {
 	_, _ = b.api.Request(c)
 }
 
-func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
+func (b Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64) {
 	text := "Раздел: " + nav
 	keyboard := mainPanelKeyboard()
 	switch nav {
 	case "main":
-		text = mainPanelText()
+		text = b.panelIntro()
 		keyboard = mainPanelKeyboard()
 	case "params":
 		if ch, ok := b.h.(CommandHandler); ok {
-			text = ch.paramMenuText()
+			text = ch.paramMenuText(userID)
 		} else {
 			text = paramMenuText()
 		}
@@ -248,19 +251,19 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string) {
 		keyboard = serviceKeyboard()
 	case "failover":
 		text = "Раздел: Фейловер"
-		keyboard = failoverKeyboard(b.mainSection())
+		keyboard = failoverKeyboard(b.mainSection(userID))
 	case "config":
 		text = "Раздел: Конфиг"
 		keyboard = configKeyboard()
 	case "uci":
 		if ch, ok := b.h.(CommandHandler); ok {
-			text = ch.uciMenuText()
+			text = ch.uciMenuText(userID)
 		} else {
 			text = uciMenuText()
 		}
 		keyboard = uciKeyboard()
 	default:
-		text = mainPanelText()
+		text = b.panelIntro()
 		keyboard = mainPanelKeyboard()
 	}
 	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
@@ -299,11 +302,18 @@ func (b Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, k
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) mainSection() string {
+func (b Bot) mainSection(userID int64) string {
 	if ch, ok := b.h.(CommandHandler); ok {
-		return ch.routing.MainSection()
+		return ch.MainSectionFor(userID)
 	}
 	return paths.DefaultMainSection
+}
+
+func (b Bot) panelIntro() string {
+	if ch, ok := b.h.(CommandHandler); ok {
+		return mainPanelText(ch.mgr)
+	}
+	return mainPanelText(nil)
 }
 
 func keyboardForCmd(cmd, section string) *tgbotapi.InlineKeyboardMarkup {

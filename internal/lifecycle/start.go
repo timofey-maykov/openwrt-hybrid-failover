@@ -46,7 +46,9 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 	}
 
 	updater := lists.NewUpdater(false)
-	_ = updater.UpdateOnce()
+	if _, err := updater.UpdateOnce(); err != nil {
+		return StartResult{}, fmt.Errorf("list update: %w", err)
+	}
 
 	applyOpts := Options{
 		UCIPath:     opts.UCIPath,

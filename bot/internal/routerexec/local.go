@@ -9,17 +9,17 @@ import (
 	"time"
 )
 
-type Runner struct {
+type Local struct {
 	timeout time.Duration
 }
 
-func New(timeout time.Duration) Runner {
-	return Runner{timeout: timeout}
+func NewLocal(timeout time.Duration) Local {
+	return Local{timeout: timeout}
 }
 
 const coreBinary = "/usr/sbin/hybrid-failover"
 
-func (r Runner) Run(ctx context.Context, name string, args ...string) (string, error) {
+func (r Local) Run(ctx context.Context, name string, args ...string) (string, error) {
 	timeout := r.timeout
 	if timeout <= 0 {
 		timeout = 10 * time.Second
@@ -38,7 +38,7 @@ func (r Runner) Run(ctx context.Context, name string, args ...string) (string, e
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-func (r Runner) RunCoreRPC(ctx context.Context, method string, args ...string) (string, error) {
+func (r Local) RunCoreRPC(ctx context.Context, method string, args ...string) (string, error) {
 	rpcArgs := append([]string{"rpc", method}, args...)
 	return r.Run(ctx, coreBinary, rpcArgs...)
 }

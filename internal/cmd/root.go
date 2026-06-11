@@ -157,6 +157,12 @@ func runApply(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	if !*dryRun {
+		if err := lifecycle.RefreshPerClient(*uciPath); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	}
 	fmt.Printf("apply: hash=%s changed=%v\n", res.ConfigHash, res.Changed)
 	return 0
 }
@@ -384,12 +390,21 @@ func runGlobalCheck(args []string) int {
 func runListUpdate(args []string) int {
 	_ = args
 	u := lists.NewUpdater(false)
-	if err := u.UpdateOnce(); err != nil {
+	update, err := u.UpdateOnce()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	if !update.Changed {
+		fmt.Println("list-update: ok changed=false")
+		return 0
+	}
 	res, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{})
 	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := lifecycle.RefreshPerClient(""); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
