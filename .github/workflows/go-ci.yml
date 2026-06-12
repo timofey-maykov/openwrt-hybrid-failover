@@ -31,6 +31,8 @@ jobs:
       - name: Regression smoke
         run: chmod +x ./scripts/verify-smoke.sh && ./scripts/verify-smoke.sh
       - name: Test bot
+        env:
+          GOTOOLCHAIN: local
         run: |
           cd bot
           go mod tidy
