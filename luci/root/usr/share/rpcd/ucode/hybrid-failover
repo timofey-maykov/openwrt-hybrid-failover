@@ -134,16 +134,7 @@ function method_apply() {
 	return {
 		call: function() {
 			let res = run_cli(['apply']);
-			if (!res.ok)
-				return { ok: false, code: res.code, output: res.output };
-
-			let needs_reload = match(res.output, /changed=true/);
-			if (!needs_reload)
-				return { ok: true, output: res.output };
-
-			let reload = run_cli(['reload']);
-			let output = trim(res.output + '\n' + reload.output);
-			return { ok: reload.ok, code: reload.code, output: output };
+			return { ok: res.ok, code: res.code, output: res.output };
 		}
 	};
 }

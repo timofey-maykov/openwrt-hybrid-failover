@@ -143,37 +143,94 @@ func parseSocks(u *url.URL, tag, scheme string, udpOverTCP bool) (ProxyOutbound,
 }
 
 func parseHysteria2(u *url.URL, tag string) (ProxyOutbound, error) {
+	host := u.Hostname()
+	if host == "" {
+		return ProxyOutbound{}, fmt.Errorf("hysteria2: missing host")
+	}
 	port := u.Port()
 	if port == "" {
 		port = "443"
 	}
-	p, _ := strconv.Atoi(port)
+	p, err := strconv.Atoi(port)
+	if err != nil || p <= 0 {
+		return ProxyOutbound{}, fmt.Errorf("hysteria2: invalid port %q", port)
+	}
+	password := hysteria2Password(u)
+	if password == "" {
+		return ProxyOutbound{}, fmt.Errorf("hysteria2: missing password")
+	}
+
+	q := u.Query()
 	ob := map[string]any{
 		"type":        "hysteria2",
 		"tag":         tag,
-		"server":      u.Hostname(),
+		"server":      host,
 		"server_port": p,
-		"password":    u.User.Username(),
+		"password":    password,
+		"tls":         hysteria2TLS(host, q),
 	}
-	q := u.Query()
-	if obfs := q.Get("obfs"); obfs != "" {
+	if obfsType := firstNonEmpty(q.Get("obfs"), q.Get("obfs-type")); obfsType != "" {
+		obfsPass := firstNonEmpty(q.Get("obfs-password"), q.Get("obfsPassword"))
 		ob["obfs"] = map[string]any{
-			"type":     obfs,
-			"password": q.Get("obfs-password"),
+			"type":     obfsType,
+			"password": obfsPass,
 		}
 	}
-	if up := q.Get("upmbps"); up != "" {
-		if n, err := strconv.Atoi(up); err == nil {
-			ob["up_mbps"] = n
+	for _, pair := range []struct{ uriKey, field string }{
+		{"upmbps", "up_mbps"},
+		{"downmbps", "down_mbps"},
+		{"up", "up_mbps"},
+		{"down", "down_mbps"},
+	} {
+		if v := q.Get(pair.uriKey); v != "" {
+			if n, err := strconv.Atoi(v); err == nil && n > 0 {
+				ob[pair.field] = n
+			}
 		}
 	}
-	if down := q.Get("downmbps"); down != "" {
-		if n, err := strconv.Atoi(down); err == nil {
-			ob["down_mbps"] = n
-		}
-	}
-	addTLSAndTransport(ob, q)
 	return ProxyOutbound{Type: "hysteria2", Tag: tag, Fields: ob}, nil
+}
+
+func hysteria2Password(u *url.URL) string {
+	if u.User == nil {
+		return ""
+	}
+	user := u.User.Username()
+	if pass, ok := u.User.Password(); ok && pass != "" {
+		// Official Hysteria userpass auth: sing-box expects "user:pass" as password.
+		return user + ":" + pass
+	}
+	return user
+}
+
+func hysteria2TLS(host string, q url.Values) map[string]any {
+	tls := map[string]any{
+		"enabled": true,
+	}
+	if sni := firstNonEmpty(q.Get("sni"), q.Get("peer")); sni != "" {
+		tls["server_name"] = sni
+	} else {
+		tls["server_name"] = host
+	}
+	if truthy(q.Get("insecure")) || truthy(q.Get("allowInsecure")) || truthy(q.Get("allow_insecure")) {
+		tls["insecure"] = true
+	}
+	if pin := q.Get("pinSHA256"); pin != "" {
+		tls["certificate_public_key_sha256"] = []string{pin}
+	}
+	if alpn := q.Get("alpn"); alpn != "" {
+		tls["alpn"] = strings.Split(alpn, ",")
+	}
+	return tls
+}
+
+func truthy(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func addTLSAndTransport(ob map[string]any, q url.Values) {

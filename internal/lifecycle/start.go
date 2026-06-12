@@ -38,13 +38,6 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		return StartResult{}, fmt.Errorf("load uci: %w", err)
 	}
 
-	if err := SetupAWG2FromUCI(pkg); err != nil {
-		return StartResult{}, err
-	}
-	if pkg2, err := uci.Load(opts.UCIPath); err == nil {
-		pkg = pkg2
-	}
-
 	updater := lists.NewUpdater(false)
 	if _, err := updater.UpdateOnce(); err != nil {
 		return StartResult{}, fmt.Errorf("list update: %w", err)

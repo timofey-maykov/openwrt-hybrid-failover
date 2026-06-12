@@ -15,10 +15,12 @@ type awg2Link struct {
 }
 
 // SetupAWG2FromUCI scans routing sections for awg2:// (and vpn://→awg2) links and brings up interfaces.
-func SetupAWG2FromUCI(pkg *uci.Package) error {
+// The second return value is true when at least one interface was created or reconfigured.
+func SetupAWG2FromUCI(pkg *uci.Package) (bool, error) {
 	if pkg == nil {
-		return nil
+		return false, nil
 	}
+	var changed bool
 	for _, name := range pkg.SectionNames("section") {
 		sec := pkg.Section(name)
 		if sec == nil {
@@ -27,17 +29,19 @@ func SetupAWG2FromUCI(pkg *uci.Package) error {
 		for _, item := range awg2LinksForSection(name, sec) {
 			link, err := decodeProxyLink(item.raw)
 			if err != nil {
-				return fmt.Errorf("section %q peer %q: %w", name, item.peerSection, err)
+				return changed, fmt.Errorf("section %q peer %q: %w", name, item.peerSection, err)
 			}
 			if !strings.HasPrefix(link, "awg2://") {
 				continue
 			}
-			if _, err := setupAWG2Interface(item.peerSection, link, item.updateUCI); err != nil {
-				return fmt.Errorf("section %q peer %q: %w", name, item.peerSection, err)
+			_, synced, err := setupAWG2Interface(item.peerSection, link, item.updateUCI)
+			if err != nil {
+				return changed, fmt.Errorf("section %q peer %q: %w", name, item.peerSection, err)
 			}
+			changed = changed || synced
 		}
 	}
-	return nil
+	return changed, nil
 }
 
 func awg2LinksForSection(section string, sec *uci.Section) []awg2Link {

@@ -152,7 +152,13 @@ func runApply(args []string) int {
 	dryRun := fs.Bool("dry-run", false, "")
 	uciPath := fs.String("uci", paths.UCIConfig, "")
 	_ = fs.Parse(args)
-	res, err := lifecycle.Apply(lifecycle.Options{UCIPath: *uciPath, DryRun: *dryRun})
+	var res lifecycle.Result
+	var err error
+	if *dryRun {
+		res, err = lifecycle.Apply(lifecycle.Options{UCIPath: *uciPath, DryRun: true})
+	} else {
+		res, err = lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{UCIPath: *uciPath})
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

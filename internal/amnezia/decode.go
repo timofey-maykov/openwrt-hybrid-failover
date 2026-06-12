@@ -58,7 +58,7 @@ func extractProxyURI(doc map[string]any) (string, error) {
 		if !ok {
 			continue
 		}
-		if containerName, _ := cm["container"].(string); containerName == "amnezia-awg2" {
+		if containerName, _ := cm["container"].(string); containerName == "amnezia-awg2" || containerName == "amnezia-awg" {
 			awg, _ := cm["awg"].(map[string]any)
 			if uri, err := awg2ContainerToURI(awg); err == nil && uri != "" {
 				return uri, nil

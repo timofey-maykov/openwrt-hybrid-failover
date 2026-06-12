@@ -145,8 +145,8 @@ RPC: `CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback`. LuC
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
 | `socks4://`, `socks4a://`, `socks5://` | да | `enable_udp_over_tcp` при необходимости |
-| `hysteria2://`, `hy2://` | да | obfs, up/down mbps в query |
-| `vpn://` | да | Экспорт **Amnezia** → декод в `vless://` (Go) |
+| `hysteria2://`, `hy2://` | да | TLS (`sni`, `insecure`), obfs, `up`/`down` mbps |
+| `vpn://` | да | Экспорт **Amnezia** → `vless://` (xray) или `awg2://` (awg / awg2) |
 | `awg2://` | да (служебный URI) | Не протокол; см. [ниже](#amnezia-awg2-awg2) |
 | `http://`, `https://` | нет | Ошибка «Unsupported proxy scheme» |
 
@@ -162,7 +162,7 @@ RPC: `CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback`. LuC
 2. конфиг применяется через `awg setconf`;
 3. в sing-box добавляется direct outbound на этот интерфейс.
 
-Строка `awg2://…` чаще всего появляется при конвертации `vpn://`, если в контейнере Amnezia указан `amnezia-awg2`.
+Строка `awg2://…` появляется при конвертации `vpn://`, если в контейнере Amnezia указан `amnezia-awg2` или `amnezia-awg`.
 
 ### Telegram-бот: валидация URI
 

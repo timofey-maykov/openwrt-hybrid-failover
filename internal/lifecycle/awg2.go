@@ -15,43 +15,86 @@ func awg2InterfaceName(section string) string {
 	return amnezia.AWG2InterfaceName(section)
 }
 
-func setupAWG2Interface(section, rawURI string, updateUCI bool) (string, error) {
+func setupAWG2Interface(section, rawURI string, updateUCI bool) (string, bool, error) {
 	params, err := amnezia.ParseAWG2URI(rawURI)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-		ifname := amnezia.AWG2InterfaceName(section)
+	ifname := amnezia.AWG2InterfaceName(section)
+
+	if awg2InterfaceReady(ifname, params) {
+		ensureAWG2NetworkUCI(ifname)
+		if updateUCI {
+			uciSetSectionInterface(section, ifname)
+		}
+		return ifname, false, nil
+	}
 
 	_ = exec.Command("ip", "link", "del", "dev", ifname).Run()
 	if out, err := exec.Command("ip", "link", "add", "dev", ifname, "type", "amneziawg").CombinedOutput(); err != nil {
-		return "", fmt.Errorf("create amneziawg: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", false, fmt.Errorf("create amneziawg: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	if params.MTU != "" {
 		_ = exec.Command("ip", "link", "set", "mtu", params.MTU, "dev", ifname).Run()
 	}
 	_ = exec.Command("ip", "address", "flush", "dev", ifname).Run()
 	if out, err := exec.Command("ip", "address", "add", params.Address, "dev", ifname).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("address add: %w: %s", err, string(out))
+		return "", false, fmt.Errorf("address add: %w: %s", err, string(out))
 	}
 
 	cfgFile, err := writeAWG2Config(params)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	defer os.Remove(cfgFile)
 
 	if out, err := exec.Command("awg", "setconf", ifname, cfgFile).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("awg setconf: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", false, fmt.Errorf("awg setconf: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	if out, err := exec.Command("ip", "link", "set", "up", "dev", ifname).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("link up: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", false, fmt.Errorf("link up: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
 	ensureAWG2NetworkUCI(ifname)
 	if updateUCI {
 		uciSetSectionInterface(section, ifname)
 	}
-	return ifname, nil
+	return ifname, true, nil
+}
+
+func awg2InterfaceReady(ifname string, params amnezia.AWG2Params) bool {
+	if out, err := exec.Command("ip", "link", "show", "dev", ifname).CombinedOutput(); err != nil {
+		return false
+	} else if !strings.Contains(string(out), "UP") {
+		return false
+	}
+	show, err := exec.Command("awg", "show", ifname).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	endpoint, publicKey, ok := parseAWGShowPeer(string(show))
+	if !ok {
+		return false
+	}
+	wantEndpoint := fmt.Sprintf("%s:%s", params.Host, params.Port)
+	return endpoint == wantEndpoint && publicKey == params.PublicKey
+}
+
+func parseAWGShowPeer(text string) (endpoint, publicKey string, ok bool) {
+	inPeer := false
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "peer:") {
+			inPeer = true
+			publicKey = strings.TrimSpace(strings.TrimPrefix(line, "peer:"))
+			continue
+		}
+		if inPeer && strings.HasPrefix(line, "endpoint:") {
+			endpoint = strings.TrimSpace(strings.TrimPrefix(line, "endpoint:"))
+			return endpoint, publicKey, endpoint != "" && publicKey != ""
+		}
+	}
+	return "", "", false
 }
 
 func writeAWG2Config(p amnezia.AWG2Params) (string, error) {

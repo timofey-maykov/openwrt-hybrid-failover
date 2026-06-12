@@ -47,6 +47,20 @@ func Apply(opts Options) (Result, error) {
 		return Result{}, fmt.Errorf("no outbound section in UCI")
 	}
 
+	awg2Synced := false
+	if !opts.DryRun {
+		var err error
+		awg2Synced, err = SetupAWG2FromUCI(pkg)
+		if err != nil {
+			return Result{}, err
+		}
+		if awg2Synced {
+			if pkg2, err := uci.Load(opts.UCIPath); err == nil {
+				pkg = pkg2
+			}
+		}
+	}
+
 	builder := singbox.NewBuilder(pkg)
 	cfg, err := builder.Build()
 	if err != nil {
@@ -60,7 +74,7 @@ func Apply(opts Options) (Result, error) {
 	hashStr := hex.EncodeToString(hash[:])
 
 	oldHash, _ := os.ReadFile(opts.ConfigPath + ".sha256")
-	changed := string(oldHash) != hashStr+"\n"
+	changed := string(oldHash) != hashStr+"\n" || awg2Synced
 
 	if opts.DryRun {
 		return Result{ConfigHash: hashStr, Changed: changed}, nil
