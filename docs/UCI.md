@@ -40,7 +40,7 @@
 | `list exclude_source_ips` | list |: | *(legacy)* см. `client_rule` |
 | `list routing_excluded_ips` | list |: | *(legacy)* см. `client_rule` mode `global_exclude` |
 
-Per-client правила: секции **`config client_rule`**. Migrate v2 импортирует legacy lists. LuCI: **Hybrid Failover → Клиенты**.
+Per-client правила: секции **`config client_rule`**. Migrate v2 импортирует legacy lists. LuCI: **Hybrid Failover → Клиенты** ([LUCI.md](LUCI.md)).
 
 Community-списки: LuCI «Обновить community lists» или `hybrid-failover list-update` → `/tmp/hybrid-failover/rulesets/`, затем apply + reload sing-box при изменении hash. При `start` core скачивает списки, ставит cron по `update_interval`, перегенерирует sing-box.
 
@@ -48,11 +48,41 @@ Community-списки: LuCI «Обновить community lists» или `hybrid
 
 ## `config client_rule '<name>'`
 
+Per-client правила: **какой IP LAN** и **как** обрабатывается (mark, direct, full route).
+
+LuCI: **Hybrid Failover → Клиенты**. Пошагово: [LUCI.md](LUCI.md#клиенты-per-client-правила).
+
 | Опция | Тип | Описание |
 |--------|-----|----------|
-| `ip` | string | IP или CIDR клиента LAN |
-| `mode` | string | `include`, `exclude`, `full_route`, `global_exclude` |
-| `section` | string | Секция маршрутизации (для `full_route`) |
+| `ip` | string | IP или CIDR клиента (напр. `192.168.11.236`) |
+| `mode` | string | См. таблицу режимов ниже |
+| `section` | string | Имя секции маршрутизации; **только** для `full_route` (напр. `main`) |
+
+### Режимы `mode`
+
+| Значение | Смысл | Когда выбирать |
+|----------|--------|----------------|
+| `include` | Трафик клиента через Hybrid Failover (nft mark + tproxy) | Устройство должно идти через VPN/proxy роутера |
+| `exclude` | Клиент минует HF, direct | Исключить одно устройство из прокси (банк, локальные сервисы) |
+| `full_route` | Весь трафик клиента через секцию `section` | Жёстко привязать клиента к конкретной секции |
+| `global_exclude` | Исключение из tproxy без per-section правила | Direct для клиента на уровне маршрутизации sing-box |
+
+После изменения `client_rule`: LuCI **Save** вызывает reload; CLI: `hybrid-failover reload`.
+
+Проверка: `hybrid-failover rpc ListClients` или **Клиенты → Обновить** (Effective rules).
+
+### Legacy lists (устаревший формат)
+
+Пока **нет** секций `client_rule`, core читает:
+
+| UCI | Эквивалент mode |
+|-----|-----------------|
+| `settings.include_source_ips` | `include` |
+| `settings.exclude_source_ips` | `exclude` |
+| `settings.routing_excluded_ips` | `global_exclude` |
+| `section.*.fully_routed_ips` | `full_route` для этой секции |
+
+`hybrid-failover migrate` (schema v2) импортирует их в `client_rule`. Новые правила добавляйте только через `client_rule` или LuCI **Клиенты**.
 
 ---
 

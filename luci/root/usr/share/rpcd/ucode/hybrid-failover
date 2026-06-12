@@ -1,6 +1,6 @@
 'use strict';
 
-import { popen, access } from 'fs';
+import { popen, access, readfile } from 'fs';
 
 const BIN = '/usr/sbin/hybrid-failover';
 
@@ -148,24 +148,141 @@ function method_apply() {
 	};
 }
 
+function run_ubus(object, method, args) {
+	let cmd = sprintf('ubus call %s %s %s 2>/dev/null; echo __HF_EXIT:$?',
+		shellquote(object), shellquote(method), args ?? "'{}'");
+	let fd = popen(`(${cmd})`, 'r');
+	let all = fd ? fd.read('all') : '';
+	if (fd)
+		fd.close();
+	let m = match(all, /__HF_EXIT:(\d+)\s*$/);
+	let code = m ? int(m[1]) : 1;
+	let output = trim(replace(all, /__HF_EXIT:\d+\s*$/, ''));
+	return { ok: code == 0, output: output };
+}
+
+function format_mac(mac) {
+	if (!mac)
+		return '';
+	if (match(mac, /^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/))
+		return lc(mac);
+	let s = lc(replace(mac, /[^0-9a-fA-F]/g, ''));
+	if (length(s) != 12)
+		return mac;
+	return sprintf('%s:%s:%s:%s:%s:%s',
+		substr(s, 0, 2), substr(s, 2, 2), substr(s, 4, 2),
+		substr(s, 6, 2), substr(s, 8, 2), substr(s, 10, 2));
+}
+
+function normalize_lease_entry(L) {
+	return {
+		ip: L.ipaddr || L.ip || L.address || '',
+		hostname: L.hostname || '',
+		mac: format_mac(L.macaddr || L.mac || ''),
+		expires: (L.expires != null) ? L.expires : ((L.valid != null) ? L.valid : L.leasetime)
+	};
+}
+
+function push_leases(out, list) {
+	if (type(list) != 'array')
+		return;
+	for (let i = 0; i < length(list); i++)
+		push(out, normalize_lease_entry(list[i]));
+}
+
+function leases_from_odhcpd(data) {
+	let leases = [];
+	if (type(data) != 'object' || type(data) == 'array')
+		return leases;
+	for (let iface in data)
+		push_leases(leases, data[iface]);
+	return leases;
+}
+
+function dhcp_leasefile_paths() {
+	let paths = [];
+	let seen = {};
+
+	let fd = popen("uci -q show dhcp 2>/dev/null | grep 'leasefile=' | grep -v odhcpd", 'r');
+	if (fd) {
+		for (let line = fd.read('line'); length(line); line = fd.read('line')) {
+			let m = match(trim(line), /leasefile='([^']+)'$/);
+			if (m && !seen[m[1]]) {
+				seen[m[1]] = true;
+				push(paths, m[1]);
+			}
+		}
+		fd.close();
+	}
+
+	if (!length(paths) && access('/tmp/dhcp.leases') == true)
+		push(paths, '/tmp/dhcp.leases');
+
+	return paths;
+}
+
+function parse_dnsmasq_leases(path, now) {
+	let leases = [];
+	let content = readfile(path);
+	if (!content)
+		return leases;
+
+	for (let line in split(content, /\n/)) {
+		line = trim(line);
+		if (!length(line))
+			continue;
+
+		let parts = split(line, ' ');
+		if (length(parts) < 4)
+			continue;
+
+		let exp = int(parts[0]);
+		let hostname = parts[3];
+		if (hostname == '*')
+			hostname = '';
+
+		push(leases, normalize_lease_entry({
+			ipaddr: parts[2],
+			macaddr: parts[1],
+			hostname: hostname,
+			expires: (exp > now) ? exp - now : 0
+		}));
+	}
+
+	return leases;
+}
+
 function method_dhcp_leases() {
 	return {
 		call: function() {
-			let fd = popen('(ubus call dhcp ipv4leases "{}" 2>/dev/null; echo __HF_EXIT:$?)', 'r');
-			let all = fd ? fd.read('all') : '';
-			if (fd)
-				fd.close();
-			let m = match(all, /__HF_EXIT:(\d+)\s*$/);
-			let code = m ? int(m[1]) : 1;
-			let output = trim(replace(all, /__HF_EXIT:\d+\s*$/, ''));
-			if (code != 0)
-				return { ok: false, output: output || 'dhcp ipv4leases unavailable' };
-			try {
-				return { ok: true, data: json(output) };
+			let leases = [];
+			let source = '';
+			let now = time();
+
+			for (let path in dhcp_leasefile_paths()) {
+				let parsed = parse_dnsmasq_leases(path, now);
+				if (length(parsed)) {
+					leases = parsed;
+					source = 'dnsmasq';
+					break;
+				}
 			}
-			catch (err) {
-				return { ok: false, output: output };
+
+			if (!length(leases)) {
+				let odhcp = run_ubus('dhcp', 'ipv4leases', "'{}'");
+				if (odhcp.ok && length(odhcp.output)) {
+					try {
+						leases = leases_from_odhcpd(json(odhcp.output));
+						if (length(leases))
+							source = 'odhcpd';
+					}
+					catch (err) {
+						return { ok: false, output: odhcp.output || 'dhcp ipv4leases parse error' };
+					}
+				}
 			}
+
+			return { ok: true, data: { leases: leases, source: source } };
 		}
 	};
 }

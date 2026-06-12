@@ -61,7 +61,17 @@ var HF_CSS = [
 	'.hf-mon-stepper .hf-step-result { flex: 1 1 100%; font-size: 12px; padding: 10px; border-radius: 6px; background: var(--cbi-section-background-color, rgba(127,127,127,.06)); max-height: 160px; overflow: auto; white-space: pre-wrap; }',
 	'.hf-mon-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }',
 	'.hf-mon-modal { background: var(--background-color, #fff); color: inherit; border-radius: 10px; max-width: 520px; width: 100%; padding: 18px; box-shadow: 0 8px 32px rgba(0,0,0,.2); }',
+	'.hf-mon-modal--wide { max-width: min(920px, 96vw); }',
 	'.hf-mon-modal h4 { margin: 0 0 12px; }',
+	'.hf-mon-modal-body { overflow: hidden; }',
+	'.hf-mon-modal .hf-mon-table-wrap { margin: 0; overflow: visible; }',
+	'.hf-mon-modal .hf-mon-table { min-width: 0; width: 100%; table-layout: fixed; font-size: 12px; }',
+	'.hf-mon-modal .hf-mon-table th, .hf-mon-modal .hf-mon-table td { padding: 6px 8px; word-break: break-word; overflow-wrap: anywhere; }',
+	'.hf-mon-modal .hf-mon-table .hf-mon-col-ip { white-space: nowrap; }',
+	'.hf-mon-modal .hf-mon-table .hf-mon-col-mac { font-size: 11px; font-family: ui-monospace, monospace; }',
+	'.hf-mon-modal .hf-mon-table .hf-mon-col-lease { white-space: nowrap; }',
+	'.hf-mon-modal .hf-mon-table .hf-mon-col-act { white-space: nowrap; text-align: right; width: 72px; }',
+	'.hf-mon-modal .hf-mon-table .btn { padding: 4px 8px; font-size: 11px; white-space: nowrap; }',
 	'.hf-mon-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }',
 	'.hf-mon-checklist { list-style: none; margin: 0; padding: 0; font-size: 13px; }',
 	'.hf-mon-checklist li { padding: 6px 0; border-bottom: 1px solid var(--border-color, rgba(127,127,127,.2)); }',
@@ -635,11 +645,13 @@ function sectionOptions(controllers, fallback) {
 	return opts;
 }
 
-function showModal(title, bodyNodes, onConfirm) {
+function showModal(title, bodyNodes, onConfirm, opts) {
+	opts = opts || {};
+	var modalClass = 'hf-mon-modal' + (opts.wide ? ' hf-mon-modal--wide' : '');
 	var backdrop = E('div', { 'class': 'hf-mon-modal-backdrop' });
-	var modal = E('div', { 'class': 'hf-mon-modal' }, [
+	var modal = E('div', { 'class': modalClass }, [
 		E('h4', {}, title),
-		E('div', {}, bodyNodes),
+		E('div', { 'class': 'hf-mon-modal-body' }, bodyNodes),
 		E('div', { 'class': 'hf-mon-modal-actions' }, [
 			E('button', {
 				'class': 'btn cbi-button cbi-button-neutral',

@@ -27,10 +27,41 @@ var MODE_HINTS = {
 
 function normalizeLeases(res) {
 	var d = hfui.unwrapData(res) || res;
-	var leases = (d && d.dhcp && d.dhcp.leases) ? d.dhcp.leases : (d && d.leases) ? d.leases : [];
+	var leases = (d && d.leases) ? d.leases : [];
+	if (!leases.length && d && d.dhcp_leases)
+		leases = d.dhcp_leases;
+	if (!leases.length && d && d.dhcp && d.dhcp.leases)
+		leases = d.dhcp.leases;
 	if (!leases.length && d && d['dhcp.leases'])
 		leases = d['dhcp.leases'];
 	return leases;
+}
+
+function findOrCreateClientRuleIpInput() {
+	var inputs = document.querySelectorAll('input[name*=".ip"]');
+	var i;
+	for (i = 0; i < inputs.length; i++) {
+		if (!String(inputs[i].value || '').trim())
+			return inputs[i];
+	}
+	var addBtn = document.querySelector('.cbi-button-add');
+	if (addBtn) {
+		addBtn.click();
+		inputs = document.querySelectorAll('input[name*=".ip"]');
+		if (inputs.length)
+			return inputs[inputs.length - 1];
+	}
+	return inputs.length ? inputs[inputs.length - 1] : null;
+}
+
+function applyDhcpIpToForm(ip) {
+	var ipInput = findOrCreateClientRuleIpInput();
+	if (!ipInput)
+		return false;
+	ipInput.value = ip;
+	ipInput.dispatchEvent(new Event('change', { bubbles: true }));
+	ipInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+	return true;
 }
 
 return view.extend({
@@ -39,9 +70,19 @@ return view.extend({
 
 	loadEffectiveClients: function() {
 		var self = this;
-		return hfui.rpc.listClients().then(function(res) {
+		return Promise.all([
+			hfui.rpc.listClients(),
+			hfui.rpc.status().catch(function() { return null; })
+		]).then(function(results) {
+			var res = results[0];
+			var statusRes = results[1];
 			var d = hfui.unwrapData(res) || res;
-			self._renderEffectiveTable(d);
+			var coreRunning = null;
+			if (statusRes) {
+				var st = hfui.unwrapData(statusRes) || statusRes;
+				coreRunning = !!(st && st.singbox_running);
+			}
+			self._renderEffectiveTable(d, coreRunning);
 			if (self._effectiveHint)
 				self._effectiveHint.textContent = _('Обновлено') + ': ' + new Date().toLocaleTimeString();
 		}).catch(function(err) {
@@ -50,13 +91,21 @@ return view.extend({
 		});
 	},
 
-	_renderEffectiveTable: function(data) {
+	_renderEffectiveTable: function(data, coreRunning) {
 		if (!this._effectiveEl)
 			return;
 		hfui.emptyNode(this._effectiveEl);
-		var clients = (data && data.rules) ? data.rules : (data && data.clients) ? data.clients : (Array.isArray(data) ? data : []);
+		var rules = data && data.rules;
+		var clients = Array.isArray(rules) ? rules : (data && Array.isArray(data.clients) ? data.clients : []);
 		if (!clients.length) {
-			this._effectiveEl.appendChild(E('p', { 'class': 'hf-mon-empty' }, _('Нет effective rules (client_rule пуст или core не запущен).')));
+			var msg;
+			if (coreRunning === true)
+				msg = _('Нет правил клиентов. Добавьте client_rule ниже или выберите IP из DHCP.');
+			else if (coreRunning === false)
+				msg = _('Core не запущен. Запустите hybrid-failover, затем добавьте client_rule.');
+			else
+				msg = _('Нет effective rules (client_rule пуст или core не запущен).');
+			this._effectiveEl.appendChild(E('p', { 'class': 'hf-mon-empty' }, msg));
 			return;
 		}
 		var rows = clients.map(function(c) {
@@ -72,7 +121,7 @@ return view.extend({
 				E('td', {}, source)
 			]);
 		});
-		this._effectiveEl.appendChild(hfui.wrapTable([
+		this._effectiveEl.appendChild(hfui.wrapTable(E('table', { 'class': 'hf-mon-table' }, [
 			E('thead', {}, E('tr', {}, [
 				E('th', {}, _('IP')),
 				E('th', {}, _('Режим')),
@@ -80,51 +129,58 @@ return view.extend({
 				E('th', {}, _('Источник'))
 			])),
 			E('tbody', {}, rows)
-		]));
+		])));
 	},
 
 	showDhcpPicker: function() {
 		var self = this;
 		return hfui.rpc.dhcpLeases().then(function(res) {
+			if (res && res.ok === false) {
+				ui.addNotification(null, E('p', {}, _('Нет leases или ubus dhcp недоступен') +
+					(res.output ? ': ' + res.output : '')), 'warning');
+				return;
+			}
 			var leases = normalizeLeases(res);
 			if (!leases.length) {
-				ui.addNotification(null, E('p', {}, _('Нет leases или ubus dhcp недоступен')), 'info');
+				ui.addNotification(null, E('p', {}, _('Нет активных DHCP leases')), 'info');
 				return;
 			}
 			var tbody = E('tbody', {}, leases.map(function(L) {
-				var ip = L.ipaddr || L.ip || '';
-				var host = L.hostname || L.mac || '?';
+				var ip = L.ipaddr || L.ip || L.address || '';
+				var host = L.hostname || L.mac || L.macaddr || '?';
 				return E('tr', {}, [
-					E('td', {}, host),
-					E('td', {}, ip),
-					E('td', {}, L.mac || '-'),
-					E('td', {}, L.expires != null ? String(L.expires) : (L.leasetime || '-')),
-					E('td', {}, E('button', {
+					E('td', { 'class': 'hf-mon-col-host' }, host),
+					E('td', { 'class': 'hf-mon-col-ip' }, ip),
+					E('td', { 'class': 'hf-mon-col-mac' }, L.mac || L.macaddr || '-'),
+					E('td', { 'class': 'hf-mon-col-lease' }, L.expires != null ? String(L.expires) : (L.valid != null ? String(L.valid) : (L.leasetime || '-'))),
+					E('td', { 'class': 'hf-mon-col-act' }, E('button', {
 						'class': 'btn cbi-button cbi-button-action',
+						'title': _('Добавить'),
 						'click': function() {
 							document.body.querySelectorAll('.hf-mon-modal-backdrop').forEach(function(el) {
 								el.parentNode.removeChild(el);
 							});
-							var ipInput = document.querySelector('input[name*="ip"]');
-							if (ipInput)
-								ipInput.value = ip;
-							ui.addNotification(null, E('p', {}, _('IP подставлен в форму: ') + ip), 'info');
+							if (applyDhcpIpToForm(ip)) {
+								ui.addNotification(null, E('p', {}, _('IP подставлен. Выберите режим и нажмите Save & Apply.')), 'info');
+							} else {
+								ui.addNotification(null, E('p', {}, _('Нажмите «Добавить правило», затем снова выберите IP из DHCP.')), 'warning');
+							}
 						}
-					}, _('Добавить')))
+					}, _('Выбрать')))
 				]);
 			}));
 			hfui.showModal(_('DHCP leases'), [
-				hfui.wrapTable([
+				hfui.wrapTable(E('table', { 'class': 'hf-mon-table' }, [
 					E('thead', {}, E('tr', {}, [
-						E('th', {}, _('Hostname')),
-						E('th', {}, _('IP')),
-						E('th', {}, _('MAC')),
-						E('th', {}, _('Lease')),
-						E('th', {}, '')
+						E('th', { 'class': 'hf-mon-col-host' }, _('Hostname')),
+						E('th', { 'class': 'hf-mon-col-ip' }, _('IP')),
+						E('th', { 'class': 'hf-mon-col-mac' }, _('MAC')),
+						E('th', { 'class': 'hf-mon-col-lease' }, _('Lease')),
+						E('th', { 'class': 'hf-mon-col-act' }, '')
 					])),
 					tbody
-				])
-			]);
+				]))
+			], null, { wide: true });
 		});
 	},
 

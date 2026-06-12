@@ -15,10 +15,11 @@
 5. [Пакеты OpenWrt](#пакеты-openwrt)
 6. [Установка](#установка)
 7. [LuCI](#luci)
-8. [Telegram-бот](#telegram-бот)
-9. [Диагностика (Clash API)](#диагностика-clash-api)
-10. [Типичные проблемы](#типичные-проблемы)
-11. [Содержимое репозитория](#содержимое-репозитория)
+8. [Per-client правила](#per-client-правила)
+9. [Telegram-бот](#telegram-бот)
+10. [Диагностика (Clash API)](#диагностика-clash-api)
+11. [Типичные проблемы](#типичные-проблемы)
+12. [Содержимое репозитория](#содержимое-репозитория)
 
 ---
 
@@ -239,14 +240,47 @@ hybrid-failover migrate
 
 **Сервисы → Hybrid Failover**: `/cgi-bin/luci/admin/services/hybrid-failover`
 
+**Подробное руководство:** [docs/LUCI.md](LUCI.md) (вкладки, клиенты, DHCP picker, pending).
+
 | Подраздел | Назначение |
 |-----------|------------|
-| Маршрутизация | VPN + failover, URLTest, подписки |
-| Статус | Дашборд Clash API |
-| Клиенты | Per-client include/exclude по IP |
-| Telegram-бот | JSON, pending validate/apply/rollback |
+| Обзор | Дашборд: sing-box, nft, Clash API, failover, delay history |
+| Маршрутизация | VPN + failover, URLTest, подписки, community-списки (pending apply) |
+| Диагностика | validate, global-check, backup UCI |
+| Клиенты | `client_rule` по IP, effective rules, выбор IP из DHCP |
+| Telegram | JSON бота, pending validate/apply/rollback |
 
-Действия apply/validate через rpcd → `hybrid-failover rpc`.
+Действия apply/validate/status: rpcd → `hybrid-failover rpc`.
+
+---
+
+## Per-client правила
+
+Глобальная **маршрутизация** (секции, списки доменов) задаёт, **какой трафик** попадает в sing-box. **Клиенты** задают, **какие устройства LAN** участвуют и с каким режимом.
+
+UCI: секции **`config client_rule`** (LuCI: **Клиенты → Правила клиентов**).
+
+| `mode` | Поведение |
+|--------|-----------|
+| `include` | Клиент получает nft mark и идёт через tproxy/sing-box |
+| `exclude` | Клиент минует Hybrid Failover (direct) |
+| `full_route` | Весь трафик клиента через указанную секцию (`option section`) |
+| `global_exclude` | Исключение из tproxy глобально |
+
+Effective rules на странице **Клиенты** показывает итог через `hybrid-failover rpc ListClients` (read-only). Пустой список при работающем core означает отсутствие правил, а не ошибку.
+
+Legacy-списки (`settings.include_source_ips`, `exclude_source_ips`, `fully_routed_ips` в секциях) импортируются migrate v2 в `client_rule`. Пока есть хотя бы один `client_rule`, legacy lists не используются.
+
+```sh
+# Пример: консоль 192.168.1.50 через HF
+uci set hybrid-failover.console=client_rule
+uci set hybrid-failover.console.ip='192.168.1.50'
+uci set hybrid-failover.console.mode='include'
+uci commit hybrid-failover
+hybrid-failover reload
+```
+
+Подробнее: [UCI.md](UCI.md#config-client_rule-name), [LUCI.md](LUCI.md#клиенты-per-client-правила).
 
 ---
 
@@ -296,6 +330,21 @@ FakeIP на роутере: `hybrid-failover check-fakeip` (dig `@127.0.0.42 fak
 ---
 
 ## Типичные проблемы
+
+### «Нет effective rules» / пустая таблица на вкладке Клиенты
+
+Core может быть **запущен** (`singbox_running: true` на Обзоре). Сообщение значит: **нет секций `client_rule`**. Добавьте правило на вкладке **Клиенты** или через UCI (см. [LUCI.md](LUCI.md#клиенты-per-client-правила)).
+
+### «Нет leases» / пустой DHCP picker
+
+Picker читает lease-файлы **dnsmasq** (`/tmp/dhcp.leases`). Проверьте:
+
+```sh
+cat /tmp/dhcp.leases
+/etc/init.d/dnsmasq status
+```
+
+На OpenWrt `ubus call dhcp ipv4leases` работает только при odhcpd как основном DHCPv4, для dnsmasq leases там пусто.
 
 ### `missing fakeip record` (sing-box)
 
