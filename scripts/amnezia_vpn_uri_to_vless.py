@@ -201,7 +201,7 @@ def vpn_uri_to_proxy(uri: str) -> str:
         if container_name:
             containers_seen.append(container_name)
         if c.get("container") != "amnezia-xray":
-            if c.get("container") == "amnezia-awg2":
+            if c.get("container") in ("amnezia-awg2", "amnezia-awg"):
                 awg = c.get("awg") or {}
                 return _amnezia_awg2_to_uri(awg)
             continue
