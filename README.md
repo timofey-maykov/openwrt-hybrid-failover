@@ -4,7 +4,7 @@
 
 Релизы (`.ipk` / `.apk`): [github.com/timofey-maykov/openwrt-hybrid-failover/releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases)
 
-**Полное описание (архитектура, URI, UCI, установка, бот, диагностика):** [**docs/OVERVIEW.md**](docs/OVERVIEW.md)
+**Полное описание:** [docs/OVERVIEW.md](docs/OVERVIEW.md) · **LuCI по шагам:** [docs/LUCI.md](docs/LUCI.md)
 
 ---
 
@@ -18,6 +18,8 @@
 | **LuCI** | Маршрутизация, дашборд, per-client, Telegram-бот: **Сервисы → Hybrid Failover** |
 
 Конфиг UCI: **`/etc/config/hybrid-failover`**. Первичная настройка и миграция: `hybrid-failover migrate`.
+
+**Быстрый старт в LuCI:** [docs/LUCI.md](docs/LUCI.md)
 
 ---
 
@@ -68,7 +70,8 @@ ash /tmp/install.sh
 | | |
 |---|---|
 | Документация бота | [bot/README.md](bot/README.md) |
-| LuCI | **Сервисы → Hybrid Failover** |
+| LuCI (интерфейс) | [docs/LUCI.md](docs/LUCI.md) |
+| LuCI (исходники) | [luci/README.md](luci/README.md) |
 
 ---
 
@@ -76,12 +79,13 @@ ash /tmp/install.sh
 
 | Файл | Тема |
 |------|------|
-| [**docs/OVERVIEW.md**](docs/OVERVIEW.md) | **Полное описание проекта** |
-| [docs/UCI.md](docs/UCI.md) | Опции UCI |
+| [**docs/OVERVIEW.md**](docs/OVERVIEW.md) | Архитектура, URI, DNS, failover, per-client |
+| [**docs/LUCI.md**](docs/LUCI.md) | **LuCI: вкладки, клиенты, DHCP, pending** |
+| [docs/UCI.md](docs/UCI.md) | Все опции UCI |
 | [docs/INSTALL.md](docs/INSTALL.md) | Установка, режимы, зависимости |
+| [luci/README.md](luci/README.md) | Исходники LuCI, rpcd, сборка |
 | [packages/README.md](packages/README.md) | Пакеты `.ipk` / `.apk` |
-| [luci/README.md](luci/README.md) | LuCI, дашборд, `vpn://` |
-| [examples/glob-uci-commands.txt](examples/glob-uci-commands.txt) | Пример UCI для `glob` |
+| [examples/glob-uci-commands.txt](examples/glob-uci-commands.txt) | Пример UCI для секции `glob` |
 
 ---
 

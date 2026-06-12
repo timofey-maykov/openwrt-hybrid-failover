@@ -267,7 +267,11 @@ func runRPCListClients() int {
 	if err != nil {
 		return rpcErr(err.Error())
 	}
-	emitJSON(map[string]any{"ok": true, "rules": clientrules.ListRules(pkg)})
+	rules := clientrules.ListRules(pkg)
+	if rules == nil {
+		rules = []clientrules.Rule{}
+	}
+	emitJSON(map[string]any{"ok": true, "rules": rules})
 	return 0
 }
 

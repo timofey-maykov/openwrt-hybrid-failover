@@ -55,7 +55,8 @@ hybrid-failover migrate
    /etc/init.d/hybrid-failover-bot restart
    ```
 3. Откройте LuCI: **Сервисы → Hybrid Failover**  
-   `http://ROUTER/cgi-bin/luci/admin/services/hybrid-failover`
+   `http://ROUTER/cgi-bin/luci/admin/services/hybrid-failover`  
+   Краткий путь: **Обзор** (статус) → **Маршрутизация** (секции и URI) → **Клиенты** (правила по IP). См. [docs/LUCI.md](LUCI.md).
 4. В Telegram откройте своего бота и отправьте `/panel`.
 
 ## Ручная установка пакетов

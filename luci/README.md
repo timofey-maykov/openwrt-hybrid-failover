@@ -1,66 +1,77 @@
 # LuCI (`luci-app-hybrid-failover`)
 
-Единый интерфейс Hybrid Failover для OpenWrt. Меню: **Сервисы → Hybrid Failover**.
+Веб-интерфейс Hybrid Failover для OpenWrt.
 
-Базовый URL: `/cgi-bin/luci/admin/services/hybrid-failover`
+**Руководство пользователя (что нажимать и зачем):** [docs/LUCI.md](../docs/LUCI.md)
 
-| Подраздел | Путь | Назначение |
-|-----------|------|------------|
-| Маршрутизация | `/routing` | VPN + failover, URLTest, subscription URLs |
-| Статус | `/dashboard` | Мониторинг: карточки сервисов, каналы с задержкой, контроллер failover, журнал переключений |
-| Клиенты | `/clients` | Per-client include/exclude по IP |
-| Telegram-бот | `/bot` | JSON-конфиг, pending validate/apply/rollback |
+---
 
-Исходники: `luci/root/www/luci-static/resources/view/hybrid-failover/`, menu: `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover.json`, rpcd: `luci/root/usr/share/rpcd/ucode/hybrid-failover`.
+## Меню и пути
 
-## Что настраивается
+**Сервисы → Hybrid Failover** · базовый URL: `/cgi-bin/luci/admin/services/hybrid-failover`
 
-1. **VPN + failover**: `failover_vpn_enabled`, `failover_proxy_links`: резервные URI при `connection_type=vpn`.
-2. **Proxy URLTest**: `urltest_proxy_links` при `connection_type=proxy`.
-3. **URLTest**: `urltest_check_interval`, `urltest_idle_timeout`, `urltest_interrupt_exist_connections`.
-4. **Подписки**: `settings.subscription_urls` → `hybrid-failover subscription-refresh`.
-5. **Per-client**: `settings.include_source_ips`, `settings.exclude_source_ips`.
-6. **`vpn://` (Amnezia)**: в списках URI; декод в core (Go), Python не нужен.
+| Вкладка | Путь | Назначение |
+|---------|------|------------|
+| Обзор | `/dashboard` | Статус, failover, delay history |
+| Маршрутизация | `/routing` | Секции, URI, pending apply |
+| Диагностика | `/diagnostics` | validate, global-check, backup |
+| Клиенты | `/clients` | `client_rule`, DHCP picker, effective rules |
+| Telegram | `/bot` | Конфиг бота, pending |
+
+---
+
+## Исходники
+
+| Путь | Содержимое |
+|------|------------|
+| `luci/root/www/luci-static/resources/view/hybrid-failover/` | Страницы LuCI (JS) |
+| `luci/root/www/luci-static/resources/hybrid-failover/hf-ui.js` | Общий UI: карточки, таблицы, модалки, RPC |
+| `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover.json` | Меню |
+| `luci/root/usr/share/rpcd/ucode/hybrid-failover` | rpcd/ubus backend |
+| `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover.json` | ACL |
+| `luci/po/en/hybrid-failover.po` | i18n (EN) |
+
+Компиляция переводов: `./scripts/compile-luci-i18n.sh`
+
+---
 
 ## Backend
 
-Действия apply/validate/status вызывают **`/usr/sbin/hybrid-failover`** через rpcd (`hybrid-failover rpc …`).
+Действия LuCI вызывают **`/usr/sbin/hybrid-failover`** через rpcd:
 
-UCI: **`/etc/config/hybrid-failover`**. После сохранения в LuCI:
-
-```sh
-hybrid-failover validate
-hybrid-failover apply
-/etc/init.d/hybrid-failover restart
+```text
+LuCI (browser) → ubus hybrid-failover.* → rpcd ucode → hybrid-failover rpc …
 ```
 
-## Amnezia `vpn://`
+Примеры ubus-методов: `status`, `apply`, `reload`, `list_clients`, `dhcp_leases`, `pending_apply`.
 
-Ссылка **`vpn://…`** декодируется core в **`vless://…`** (`internal/amnezia`). Поддерживается типичный экспорт **amnezia-xray** с VLESS в `last_config`.
+UCI: **`/etc/config/hybrid-failover`**.
 
-## Установка
+**Клиенты:** `dhcp_leases` читает lease-файлы dnsmasq напрямую (не `luci-rpc` из rpcd, иначе deadlock).
 
-Пакет **`luci-app-hybrid-failover`** (режим `HF_MODE=full` или вместе с core):
+---
+
+## Сборка и установка
 
 ```sh
 ./scripts/build-packages.sh
 opkg install /tmp/luci-app-hybrid-failover_*_all.ipk
 ```
 
-Или одной командой: [docs/INSTALL.md](../docs/INSTALL.md).
+Или одной командой на роутере: [docs/INSTALL.md](../docs/INSTALL.md).
 
-## Эксплуатационные заметки
+Зависимости пакета: `luci-base`, `luci-compat`, `luci-i18n-hybrid-failover`, `hybrid-failover-core`.
 
-- Если в логах sing-box появляется `missing fakeip record`, задайте `hybrid-failover.settings.cache_path='/etc/sing-box/cache.db'` и перезапустите core.
-- Clash API: `settings.clash_api_listen` (по умолчанию `127.0.0.1:9090`; для `/health` бота часто нужен LAN IP).
-- Failover вживую: `http://ROUTER:9090/proxies/<section>-urltest-out`.
+---
 
-## Связанная документация
+## Эксплуатация
 
-- [docs/OVERVIEW.md](../docs/OVERVIEW.md): архитектура, URI, диагностика
-- [docs/UCI.md](../docs/UCI.md): все опции UCI
-- [bot/README.md](../bot/README.md): Telegram-бот
+- FakeIP: `hybrid-failover.settings.cache_path='/etc/sing-box/cache.db'`
+- Clash API: `settings.clash_api_listen` (для бота часто LAN IP, не только `127.0.0.1`)
+- Failover live: `http://ROUTER:9090/proxies/<section>-urltest-out`
+
+---
 
 ## Legacy
 
-Устаревший patch-based LuCI (`legacy/section.js`) не входит в релиз. Для установок используйте **`luci-app-hybrid-failover`**.
+Patch-based LuCI (`legacy/section.js`) не входит в релиз. Используйте **`luci-app-hybrid-failover`**.

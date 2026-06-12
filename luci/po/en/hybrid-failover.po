@@ -611,10 +611,25 @@ msgid "Не удалось получить статус с роутера."
 msgstr "Не удалось получить статус с роутера."
 
 msgid "Нет effective rules (client_rule пуст или core не запущен)."
-msgstr "Нет effective rules (client_rule пуст или core не запущен)."
+msgstr "No effective rules (empty client_rule or core not running)."
+
+msgid "Нет правил клиентов. Добавьте client_rule ниже или выберите IP из DHCP."
+msgstr "No client rules yet. Add a client_rule below or pick an IP from DHCP."
+
+msgid "Core не запущен. Запустите hybrid-failover, затем добавьте client_rule."
+msgstr "Core is not running. Start hybrid-failover, then add client_rule."
+
+msgid "IP подставлен. Выберите режим и нажмите Save & Apply."
+msgstr "IP filled in. Choose mode and click Save & Apply."
+
+msgid "Нажмите «Добавить правило», затем снова выберите IP из DHCP."
+msgstr "Click Add rule, then pick the IP from DHCP again."
 
 msgid "Нет leases или ubus dhcp недоступен"
-msgstr "Нет leases или ubus dhcp unavailable"
+msgstr "No DHCP leases (check dnsmasq/odhcpd and rpcd-mod-luci)"
+
+msgid "Нет активных DHCP leases"
+msgstr "No active DHCP leases"
 
 msgid "Нет данных"
 msgstr "No data"
