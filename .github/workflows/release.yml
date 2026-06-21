@@ -24,9 +24,13 @@ jobs:
             go.sum
             bot/go.sum
 
+      - name: Install UPX
+        run: sudo apt-get update && sudo apt-get install -y upx-ucl
+
       - name: Build .ipk and .apk packages
         env:
           HF_PKG_FORMAT: both
+          HF_UPX: 1
           GOTOOLCHAIN: local
         run: |
           chmod +x scripts/build-packages.sh scripts/lib/*.sh

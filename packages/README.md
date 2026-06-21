@@ -4,8 +4,10 @@
 
 ```sh
 chmod +x scripts/build-packages.sh scripts/lib/*.sh
-./scripts/build-packages.sh
+HF_UPX=1 ./scripts/build-packages.sh   # UPX по умолчанию в CI; ~60% меньше core/bot
 ```
+
+Урезанный sing-box для малого overlay: [docs/SING-BOX-SIZE.md](../docs/SING-BOX-SIZE.md), `./scripts/build-sing-box-lite.sh`.
 
 По умолчанию (`HF_PKG_FORMAT=both`):
 

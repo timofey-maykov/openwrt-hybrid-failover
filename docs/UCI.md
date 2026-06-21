@@ -173,7 +173,7 @@ LuCI: **Hybrid Failover → Клиенты**. Пошагово: [LUCI.md](LUCI.m
 hybrid-failover migrate          # импорт прежнего UCI при необходимости, schema v1
 hybrid-failover validate         # проверка UCI и dry-run apply
 hybrid-failover apply            # генерация sing-box + nft
-hybrid-failover check-fakeip     # dig/curl через 127.0.0.42
+hybrid-failover check-fakeip     # DNS через 127.0.0.42 (без bind-dig)
 hybrid-failover list-update      # community domain lists
 hybrid-failover subscription-refresh  # merge subscription URLs
 ```

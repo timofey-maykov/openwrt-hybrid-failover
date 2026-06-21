@@ -24,6 +24,8 @@ HF_MODE="${HF_MODE:-full}"
 HF_BRANCH="${HF_BRANCH:-main}"
 HF_TOKEN="${HF_TOKEN:-}"
 HF_ADMIN_IDS="${HF_ADMIN_IDS:-}"
+HF_LOW_SPACE_KB="${HF_LOW_SPACE_KB:-45000}"
+HF_FORCE_REINSTALL="${HF_FORCE_REINSTALL:-0}"
 GITHUB_RAW="https://raw.githubusercontent.com/${HF_REPO}/${HF_BRANCH}"
 GITHUB_API="https://api.github.com/repos/${HF_REPO}"
 WORKDIR="/tmp/hybrid-failover-install.$$"
@@ -80,6 +82,35 @@ pkg_update() {
 	esac
 }
 
+overlay_free_kb() {
+	_target="${1:-/overlay}"
+	_kb=""
+	if [ -d "$_target" ]; then
+		_kb="$(df -k "$_target" 2>/dev/null | awk 'NR==2 {print $4}')"
+	fi
+	[ -n "$_kb" ] && echo "$_kb" || echo 0
+}
+
+overlay_low_space() {
+	_free="$(overlay_free_kb /overlay)"
+	[ "$_free" -lt "$HF_LOW_SPACE_KB" ]
+}
+
+stop_hf_services() {
+	/etc/init.d/hybrid-failover-bot stop 2>/dev/null || true
+	/etc/init.d/hybrid-failover stop 2>/dev/null || true
+	/etc/init.d/sing-box stop 2>/dev/null || true
+}
+
+pkg_remove() {
+	_pkg="$1"
+	_pm="$(pkg_manager)"
+	case "$_pm" in
+		opkg) opkg remove --force-depends "$_pkg" 2>/dev/null || true ;;
+		apk) apk del "$_pkg" 2>/dev/null || true ;;
+	esac
+}
+
 pkg_is_installed() {
 	_pkg="$1"
 	_pm="$(pkg_manager)"
@@ -92,14 +123,26 @@ pkg_is_installed() {
 
 pkg_install_file() {
 	_path="$1"
+	_pkg="${2:-}"
 	_pm="$(pkg_manager)"
+	_low=0
+	if overlay_low_space || [ "$HF_FORCE_REINSTALL" = "1" ]; then
+		_low=1
+	fi
+	if [ "$_low" = 1 ] && [ -n "$_pkg" ] && pkg_is_installed "$_pkg"; then
+		log "Мало места ($(overlay_free_kb /overlay)K) или HF_FORCE_REINSTALL: снимаю $_pkg"
+		stop_hf_services
+		pkg_remove "$_pkg"
+	fi
 	case "$_pm" in
 		apk)
 			apk add --allow-untrusted "$_path" 2>/dev/null || \
 				apk add --force-overwrite --allow-untrusted "$_path" 2>/dev/null || true
 			;;
 		opkg)
-			opkg install "$_path" 2>/dev/null || \
+			opkg install --force-space --force-overwrite "$_path" 2>/dev/null || \
+				opkg install --force-space --force-overwrite --force-reinstall "$_path" 2>/dev/null || \
+				opkg install "$_path" 2>/dev/null || \
 				opkg install --force-reinstall "$_path" 2>/dev/null || true
 			;;
 		*) return 1 ;;
@@ -119,7 +162,7 @@ install_deps() {
 	_pm="$(pkg_manager)"
 	log "Установка зависимостей (${_pm})..."
 	pkg_update
-	for pkg in curl ca-bundle wget coreutils-base64; do
+	for pkg in curl ca-bundle wget; do
 		pkg_is_installed "$pkg" && continue
 		pkg_install_named "$pkg" || warn "не удалось установить $pkg"
 	done
@@ -127,7 +170,7 @@ install_deps() {
 		full)
 			for pkg in sing-box; do
 				pkg_is_installed "$pkg" && continue
-				pkg_install_named "$pkg" || warn "не удалось установить $pkg"
+				pkg_install_named "$pkg" || warn "не удалось установить $pkg (см. docs/SING-BOX-SIZE.md, sing-box-lite)"
 			done
 			;;
 		patches)
@@ -177,7 +220,7 @@ install_pkg_url() {
 	_path="${WORKDIR}/${_name}"
 	download_file_optional "$_url" "$_path" || return 1
 	log "Установка $_name ..."
-	pkg_install_file "$_path"
+	pkg_install_file "$_path" "$_pkg"
 	pkg_is_installed "$_pkg" && return 0
 	return 1
 }
@@ -269,25 +312,31 @@ install_from_local_dist() {
 				for _f in "${_dir}"/hybrid-failover-core_*_"${_arch}".* \
 					"${_dir}"/hybrid-failover-core-*_"${_arch}".* \
 					"${_dir}"/hybrid-failover-core-*."${_sub}"; do
-					[ -f "$_f" ] || continue
-					pkg_install_file "$_f"
-					break
-				done
-			fi
-			for _f in "${_dir}"/hybrid-failover-bot_*_"${_arch}".* "${_dir}"/hybrid-failover-bot-*_"${_arch}".* \
-				"${_dir}"/hybrid-failover-bot-*."${_sub}"; do
 				[ -f "$_f" ] || continue
-				pkg_install_file "$_f"
+				pkg_install_file "$_f" "hybrid-failover-core"
 				break
 			done
-			for _f in "${_dir}"/luci-app-hybrid-failover_*_all.* \
-				"${_dir}"/luci-app-hybrid-failover-*."${_sub}" \
-				"${_dir}"/luci-app-hybrid-failover-bot_*_all.* \
-				"${_dir}"/luci-app-hybrid-failover-bot-*."${_sub}"; do
-				[ -f "$_f" ] || continue
-				pkg_install_file "$_f"
-				break
-			done
+		fi
+		for _f in "${_dir}"/hybrid-failover-bot_*_"${_arch}".* "${_dir}"/hybrid-failover-bot-*_"${_arch}".* \
+			"${_dir}"/hybrid-failover-bot-*."${_sub}"; do
+			[ -f "$_f" ] || continue
+			pkg_install_file "$_f" "hybrid-failover-bot"
+			break
+		done
+		for _f in "${_dir}"/luci-i18n-hybrid-failover_*_all.* \
+			"${_dir}"/luci-i18n-hybrid-failover-*."${_sub}"; do
+			[ -f "$_f" ] || continue
+			pkg_install_file "$_f" "luci-i18n-hybrid-failover"
+			break
+		done
+		for _f in "${_dir}"/luci-app-hybrid-failover_*_all.* \
+			"${_dir}"/luci-app-hybrid-failover-*."${_sub}" \
+			"${_dir}"/luci-app-hybrid-failover-bot_*_all.* \
+			"${_dir}"/luci-app-hybrid-failover-bot-*."${_sub}"; do
+			[ -f "$_f" ] || continue
+			pkg_install_file "$_f" "luci-app-hybrid-failover"
+			break
+		done
 			;;
 	esac
 	return 0
@@ -313,8 +362,17 @@ post_install() {
 	/etc/init.d/rpcd restart 2>/dev/null || true
 	/etc/init.d/uhttpd restart 2>/dev/null || true
 	configure_bot_json
+	# Legacy monolith in /usr/bin (~6 MiB) after core split.
+	if [ -x /usr/sbin/hybrid-failover ] && [ -f /usr/bin/hybrid-failover ]; then
+		rm -f /usr/bin/hybrid-failover
+		log "Удалён legacy /usr/bin/hybrid-failover"
+	fi
+	/etc/init.d/sing-box enable 2>/dev/null || true
+	/etc/init.d/sing-box start 2>/dev/null || true
+	/etc/init.d/hybrid-failover enable 2>/dev/null || true
+	/etc/init.d/hybrid-failover start 2>/dev/null || true
 
-	log "Готово."
+	log "Готово. Свободно на overlay: $(overlay_free_kb /overlay)K"
 	log "LuCI: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/hybrid-failover"
 	log "Настройте /etc/hybrid-failover-bot.json (token, admin_ids), затем:"
 	log "  uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot"
@@ -325,7 +383,7 @@ main() {
 	need_openwrt
 	ARCH="$(normalize_arch)"
 	log "Hybrid Failover installer"
-	log "Репозиторий: ${HF_REPO}, режим: ${HF_MODE}, arch: ${ARCH}, pkg: $(pkg_manager)"
+	log "Репозиторий: ${HF_REPO}, режим: ${HF_MODE}, arch: ${ARCH}, pkg: $(pkg_manager), overlay free: $(overlay_free_kb /overlay)K"
 
 	mkdir -p "$WORKDIR"
 	install_deps
