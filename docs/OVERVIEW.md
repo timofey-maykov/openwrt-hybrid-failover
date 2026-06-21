@@ -62,7 +62,7 @@ CLI: `hybrid-failover migrate | validate | apply | start | stop | status | rpc �
 
 1. **dnsmasq**: backup `/etc/hybrid-failover/dnsmasq-dhcp.bak`, `noresolv=1`, `server=127.0.0.42`.
 2. **sing-box inbound `dns-in`**: слушает `127.0.0.42:53`, обрабатывает DNS (fakeip, DoH upstream, community rulesets).
-3. **Проверка**: `hybrid-failover check-fakeip`: `dig @127.0.0.42 fakeip.hybrid-failover` → адрес `198.18.x.x`, затем HTTPS `/check` на порту **8443**.
+3. **Проверка**: `hybrid-failover check-fakeip`: DNS-запрос к `127.0.0.42` для `fakeip.hybrid-failover` → адрес `198.18.x.x`, затем HTTPS `/check` на порту **8443** (если `HF_CHECK_FAKEIP_ROUTE=1`).
 
 При `stop` dnsmasq восстанавливается из backup.
 
@@ -206,7 +206,7 @@ uci commit hybrid-failover
 | `hybrid-failover-bot` | per-target | Go-бинарник, init.d, JSON/UCI-шаблон |
 | `luci-app-hybrid-failover` | all | Маршрутизация, дашборд, клиенты, бот |
 
-Зависимости core: `sing-box`, `curl`, `coreutils-base64`. **Без `jq` и `python3-light`.**
+Зависимости core: `sing-box`, `curl`. **`check-fakeip` не требует `bind-dig`.** **Без `jq` и `python3-light`.**
 
 ---
 
@@ -325,7 +325,7 @@ wget -qO- 'http://ROUTER:9090/proxies/glob-awg-out/delay?timeout=5000&url=http:/
 
 CLI: `hybrid-failover global-check`. Бот: `/health`, `/status`.
 
-FakeIP на роутере: `hybrid-failover check-fakeip` (dig `@127.0.0.42 fakeip.hybrid-failover` + HTTPS check).
+FakeIP на роутере: `hybrid-failover check-fakeip` (встроенный DNS к `@127.0.0.42`, без `dig`).
 
 ---
 

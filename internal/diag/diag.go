@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
@@ -118,17 +117,14 @@ func CheckProxy(testURL string) error {
 
 // CheckFakeIP verifies router DNS reaches sing-box fakeip via 127.0.0.42.
 func CheckFakeIP() error {
-	out, err := exec.Command("dig", "+short", "+time=2", "+tries=1",
-		"@"+singbox.DNSInboundAddress, singbox.FAKEIPTestDomain).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), fakeipLookupTimeout)
+	defer cancel()
+	result, err := lookupFakeIP(ctx, singbox.DNSInboundAddress, singbox.FAKEIPTestDomain)
 	if err != nil {
-		return fmt.Errorf("dig @%s: %w: %s", singbox.DNSInboundAddress, err, string(out))
+		return fmt.Errorf("dns @%s: %w", singbox.DNSInboundAddress, err)
 	}
-	result := strings.TrimSpace(string(out))
-	if result == "" {
-		return fmt.Errorf("no fakeip response for %s", singbox.FAKEIPTestDomain)
-	}
-	if !strings.HasPrefix(result, "198.18.") {
-		return fmt.Errorf("unexpected fakeip address %q (want 198.18.x.x)", result)
+	if err := validateFakeIPResult(result); err != nil {
+		return err
 	}
 	if os.Getenv("HF_CHECK_FAKEIP_ROUTE") != "1" {
 		return nil

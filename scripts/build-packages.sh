@@ -50,7 +50,7 @@ mkdir -p "$IPK_DIR" "$APK_DIR" "$BIN_DIR" "$STAGE_DIR"
 hf_want_ipk && rm -rf "$IPK_DIR" && mkdir -p "$IPK_DIR"
 hf_want_apk && rm -rf "$APK_DIR" && mkdir -p "$APK_DIR"
 
-	echo "==> Building Hybrid Failover packages (v${FULL_VERSION}, set=${HF_BUILD_SET}, format: ${HF_PKG_FORMAT:-both}, HF_UPX=${HF_UPX:-auto})"
+	echo "==> Building Hybrid Failover packages (v${FULL_VERSION}, set=${HF_BUILD_SET}, format: ${HF_PKG_FORMAT:-both}, HF_UPX=${HF_UPX:-1})"
 
 go_build_binary() {
 	local owrt_arch="$1"

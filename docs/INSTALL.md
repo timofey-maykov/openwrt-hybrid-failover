@@ -100,7 +100,7 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 
 | Компонент | Пакеты (opkg / apk) |
 |-----------|---------------------|
-| Core | `sing-box`, `curl`, `coreutils-base64` |
+| Core | `sing-box`, `curl` |
 | Бот | `uci`, `procd`, `hybrid-failover-core` (для RPC) |
 | LuCI | `luci-base`, `luci-compat`, `hybrid-failover-core` |
 
@@ -109,3 +109,12 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 ## Релизы GitHub
 
 Тег `v*.*.*` запускает [workflow сборки](../.github/workflows/release.yml): в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) публикуются и `.ipk` (24.x), и `.apk` (25.12+).
+
+## Мало места на overlay
+
+См. [docs/SING-BOX-SIZE.md](SING-BOX-SIZE.md): sing-box-lite, UPX, remove→install, legacy-бинарники.
+
+```sh
+# Установщик сам снимает старые пакеты при нехватке места:
+HF_FORCE_REINSTALL=1 ash /tmp/install.sh
+```

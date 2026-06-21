@@ -2,5 +2,9 @@
 # hybrid-failover-core postinst
 mkdir -p /etc/hybrid-failover/pending
 chmod 755 /etc/hybrid-failover /etc/hybrid-failover/pending
+# Legacy layout: monolithic binary in /usr/bin (current core is /usr/sbin/hybrid-failover).
+if [ -x /usr/sbin/hybrid-failover ] && [ -f /usr/bin/hybrid-failover ]; then
+	rm -f /usr/bin/hybrid-failover
+fi
 [ -x /usr/sbin/hybrid-failover ] && /usr/sbin/hybrid-failover migrate 2>/dev/null || true
 exit 0
