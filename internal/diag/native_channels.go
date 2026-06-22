@@ -258,6 +258,10 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember string, pro
 		Selected: channelSelected(name, activeOutbound, urltestMember),
 		Probed:   probed,
 	}
+	if !engine.Alive() && !probed {
+		ch.Detail = "engine not running"
+		return ch
+	}
 	if last.Time.IsZero() {
 		if snap, ok := engineDelays()[name]; ok {
 			ch.DelayMs = snap.DelayMs
