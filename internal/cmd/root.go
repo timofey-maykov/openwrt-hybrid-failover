@@ -1,15 +1,18 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
+	"os/signal"
+	"syscall"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lifecycle"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/migrate"
@@ -112,6 +115,7 @@ func runValidate(args []string) int {
 	fs := flag.NewFlagSet("validate", flag.ExitOnError)
 	dryRun := fs.Bool("dry-run", false, "")
 	uciPath := fs.String("uci", paths.UCIConfig, "")
+	engineMode := fs.String("engine", "", "force engine mode: native|singbox")
 	_ = fs.Parse(args)
 
 	pkg, err := uci.Load(*uciPath)
@@ -119,8 +123,8 @@ func runValidate(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	if !pkg.HasOutboundSection() {
-		fmt.Fprintln(os.Stderr, "no outbound section")
+	if len(pkg.SectionNames("section")) == 0 {
+		fmt.Fprintln(os.Stderr, "no routing section")
 		return 1
 	}
 	for _, name := range pkg.SectionNames("section") {
@@ -138,10 +142,36 @@ func runValidate(args []string) int {
 			}
 		}
 	}
-	_, err = lifecycle.Apply(lifecycle.Options{UCIPath: *uciPath, DryRun: *dryRun})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	useNative := true
+	if *engineMode == "singbox" {
+		fmt.Fprintln(os.Stderr, "validate: engine_mode=singbox removed; use --engine native")
 		return 1
+	}
+	if *engineMode == "native" {
+		useNative = true
+	} else if engine.NativeEnabled(pkg) {
+		useNative = true
+	} else {
+		fmt.Fprintln(os.Stderr, "engine_mode=singbox removed; run hybrid-failover migrate")
+		return 1
+	}
+	if useNative {
+		p, err := engine.CompilePlan(pkg)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if err := engine.ValidatePlan(p); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if *dryRun {
+			_, err = lifecycle.Apply(lifecycle.Options{UCIPath: *uciPath, DryRun: true})
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				return 1
+			}
+		}
 	}
 	fmt.Println("validate: ok")
 	return 0
@@ -180,6 +210,7 @@ func runStart(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	_ = dnsmasq.EnsureLocalResolv()
 	fmt.Printf("started (config hash %s)\n", res.ConfigHash)
 	return 0
 }
@@ -191,7 +222,7 @@ func runStop(args []string) int {
 	lists.ClearPID()
 	_ = dnsmasq.Restore()
 	_ = netlink.Teardown()
-	_ = execSingbox("stop")
+	lifecycle.StopNativeEngine()
 	fmt.Println("stopped")
 	return 0
 }
@@ -214,8 +245,12 @@ func runReload(args []string) int {
 func runMonitor(args []string) int {
 	_ = args
 	fmt.Println("hybrid-failover monitor: policy controller + watchdog")
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
 	lifecycle.StartBackground(paths.UCIConfig)
-	select {}
+	<-ctx.Done()
+	lifecycle.CancelBackground()
+	return 0
 }
 
 func runStatus(args []string) int {
@@ -395,9 +430,13 @@ func runGlobalCheck(args []string) int {
 
 func runListUpdate(args []string) int {
 	_ = args
-	u := lists.NewUpdater(false)
+	u := lists.NewFromUCI(paths.UCIConfig)
 	update, err := u.UpdateOnce()
 	if err != nil {
+		if u.HasValidCache() {
+			fmt.Println("list-update: ok changed=false (cached)")
+			return 0
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -461,22 +500,11 @@ func runSubscriptionRefresh(args []string) int {
 		return 1
 	}
 	fmt.Printf("subscription: wrote %d links to %s.%s\n", len(links), mainSection, listKey)
-	if _, err := lifecycle.Apply(lifecycle.Options{UCIPath: *uciPath}); err != nil {
+	if res, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{UCIPath: *uciPath}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
+	} else {
+		fmt.Printf("subscription: applied changed=%v\n", res.Changed)
 	}
-	if err := lifecycle.ReloadSingbox(""); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	fmt.Println("subscription: applied and reloaded")
 	return 0
-}
-
-func execSingbox(action string) error {
-	out, err := exec.Command(paths.SingboxInit, action).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("sing-box %s: %w: %s", action, err, string(out))
-	}
-	return nil
 }

@@ -80,7 +80,7 @@ return view.extend({
 			var coreRunning = null;
 			if (statusRes) {
 				var st = hfui.unwrapData(statusRes) || statusRes;
-				coreRunning = !!(st && st.singbox_running);
+				coreRunning = !!(st && hfui.proxyRunning(st));
 			}
 			self._renderEffectiveTable(d, coreRunning);
 			if (self._effectiveHint)

@@ -6,15 +6,21 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/failover"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 )
 
 type Report struct {
 	SingboxRunning bool            `json:"singbox_running"`
+	EngineRunning  bool            `json:"engine_running,omitempty"`
+	EngineMode     string          `json:"engine_mode,omitempty"`
 	NFTOK          bool            `json:"nft_ok"`
 	ClashOK        bool            `json:"clash_ok"`
 	FakeIPOK       *bool           `json:"fakeip_ok,omitempty"`
@@ -34,6 +40,7 @@ type ControllerSection struct {
 	Policy        string `json:"policy"`
 	Mode          string `json:"mode"`
 	Active        string `json:"active"`
+	URLTestMember string `json:"urltest_member,omitempty"`
 	PrimaryOK     bool   `json:"primary_ok"`
 	PrimaryDelay  int    `json:"primary_delay_ms,omitempty"`
 	FailStreak    int    `json:"fail_streak"`
@@ -51,33 +58,55 @@ type DryRunHint struct {
 }
 
 func GlobalCheck(clashURL, selectorTag string) Report {
-	r := Report{}
-	singboxRunning := false
-	if out, err := exec.Command("pidof", "sing-box").CombinedOutput(); err == nil && len(out) > 0 {
-		r.SingboxRunning = true
-		singboxRunning = true
+	return globalCheck(clashURL, selectorTag, plan.LoadEngineMode())
+}
+
+func globalCheck(clashURL, selectorTag, engineMode string) Report {
+	r := Report{EngineMode: engineMode}
+	native := engineMode == plan.ModeNative
+	proxyRunning := false
+	if native {
+		if engine.Alive() {
+			r.EngineRunning = true
+			r.SingboxRunning = true
+			proxyRunning = true
+		} else {
+			r.Errors = append(r.Errors, "native engine not running")
+		}
 	} else {
-		r.Errors = append(r.Errors, "sing-box not running")
+		r.Errors = append(r.Errors, "engine_mode=singbox removed; run hybrid-failover migrate")
 	}
 	if err := netlink.Check(); err != nil {
 		r.Errors = append(r.Errors, err.Error())
 	} else {
 		r.NFTOK = true
 	}
-	cli := clash.New(clashURL, 5*time.Second)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if resp, err := cli.Proxies(ctx); err != nil {
-		r.Errors = append(r.Errors, "clash api: "+err.Error())
+	if native {
+		if states, err := failover.ReadRuntimeState(); err == nil {
+			for _, st := range states {
+				if st.Active != "" && st.Active != plan.OutboundTag(st.Section) {
+					r.ActiveOutbound = st.Active
+					break
+				}
+			}
+		}
+		r.ClashOK = r.EngineRunning
 	} else {
-		r.ClashOK = true
-		if selectorTag != "" {
-			if p, ok := resp.Proxies[selectorTag]; ok {
-				r.ActiveOutbound = p.Now
+		cli := clash.New(clashURL, 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if resp, err := cli.Proxies(ctx); err != nil {
+			r.Errors = append(r.Errors, "clash api: "+err.Error())
+		} else {
+			r.ClashOK = true
+			if selectorTag != "" {
+				if p, ok := resp.Proxies[selectorTag]; ok {
+					r.ActiveOutbound = p.Now
+				}
 			}
 		}
 	}
-	if shouldCheckFakeIP(singboxRunning) {
+	if shouldCheckFakeIP(proxyRunning) {
 		if err := CheckFakeIP(); err != nil {
 			r.Errors = append(r.Errors, "fakeip: "+err.Error())
 			ok := false
@@ -115,7 +144,7 @@ func CheckProxy(testURL string) error {
 	return nil
 }
 
-// CheckFakeIP verifies router DNS reaches sing-box fakeip via 127.0.0.42.
+// CheckFakeIP verifies router DNS reaches fakeip resolver on 127.0.0.42.
 func CheckFakeIP() error {
 	ctx, cancel := context.WithTimeout(context.Background(), fakeipLookupTimeout)
 	defer cancel()
@@ -136,4 +165,11 @@ func CheckFakeIP() error {
 		return fmt.Errorf("curl fakeip check: %w: %s", err, string(curlOut))
 	}
 	return nil
+}
+
+func sectionFromSelectorTag(selectorTag string) string {
+	if !strings.HasSuffix(selectorTag, "-out") {
+		return ""
+	}
+	return strings.TrimSuffix(selectorTag, "-out")
 }

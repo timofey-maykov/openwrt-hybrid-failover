@@ -93,9 +93,18 @@ func (b *Builder) configureRoute() {
 		route["default_interface"] = outputIface
 	}
 
+	listDownloadInbounds := []string{TPROXYInboundTag, DNSInboundTag}
+	if detour := b.listDownloadDetourTag(); detour != "" {
+		listDownloadInbounds = append(listDownloadInbounds, ListDownloadInboundTag)
+		rr.add(map[string]any{
+			"action":   "route",
+			"inbound":  ListDownloadInboundTag,
+			"outbound": detour,
+		})
+	}
 	rr.add(map[string]any{
 		"action":  "sniff",
-		"inbound": []string{TPROXYInboundTag, DNSInboundTag},
+		"inbound": listDownloadInbounds,
 	})
 	rr.add(map[string]any{
 		"action":   "hijack-dns",

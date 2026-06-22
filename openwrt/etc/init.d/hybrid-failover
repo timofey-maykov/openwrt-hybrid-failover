@@ -8,6 +8,11 @@ USE_PROCD=1
 start_service() {
 	/usr/sbin/hybrid-failover start
 
+	lan="$(uci -q get network.lan.ipaddr 2>/dev/null)"
+	if [ -n "$lan" ]; then
+		printf 'search lan\nnameserver %s\n' "$lan" > /tmp/resolv.conf
+	fi
+
 	procd_open_instance
 	procd_set_param command /usr/sbin/hybrid-failover monitor
 	procd_set_param respawn 3600 5 0

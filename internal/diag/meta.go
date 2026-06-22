@@ -2,7 +2,6 @@ package diag
 
 import (
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/version"
@@ -16,17 +15,10 @@ type MetaInfo struct {
 }
 
 func BuildMeta(schemaVersion string) MetaInfo {
-	m := MetaInfo{
+	return MetaInfo{
 		CoreVersion: version.Core,
 		UCISchema:   schemaVersion,
 	}
-	if out, err := exec.Command("sing-box", "version").CombinedOutput(); err == nil {
-		line := strings.TrimSpace(strings.Split(string(out), "\n")[0])
-		if line != "" {
-			m.SingboxVersion = line
-		}
-	}
-	return m
 }
 
 // WritePrometheusTextfile exports minimal metrics for node_exporter textfile collector.

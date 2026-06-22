@@ -17,6 +17,8 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/ipc"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/failover"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
@@ -29,7 +31,15 @@ func buildStatusReport(health bool) diag.Report {
 	clashURL, mainSection, sec := statusContext()
 	selectorTag := singbox.OutboundTag(mainSection)
 	report := diag.GlobalCheck(clashURL, selectorTag)
-	report = diag.EnrichReport(report, clashURL, mainSection, sec)
+	states, _ := failover.ReadRuntimeState()
+	if len(report.Controller) == 0 && len(states) > 0 {
+		report.Controller = diag.MapControllerStates(states)
+	}
+	if report.EngineMode == "native" {
+		report = diag.EnrichNativeReport(report, mainSection, sec, states)
+	} else {
+		report = diag.EnrichReport(report, clashURL, mainSection, sec)
+	}
 	schema := ""
 	if pkg, err := uci.Load(paths.UCIConfig); err == nil {
 		if settings := pkg.Section("settings"); settings != nil {
@@ -37,15 +47,15 @@ func buildStatusReport(health bool) diag.Report {
 		}
 	}
 	report.Meta = diag.BuildMeta(schema)
-	states, _ := failover.ReadRuntimeState()
-	if len(report.Controller) == 0 && len(states) > 0 {
-		report.Controller = diag.MapControllerStates(states)
-	}
 	for _, h := range failover.BuildDryRunHints(states) {
 		report.DryRun = append(report.DryRun, diag.DryRunHint{Section: h.Section, Suggestion: h.Suggestion})
 	}
 	if health {
-		report = diag.ProbeChannels(report, clashURL, mainSection, sec)
+		if report.EngineMode == "native" {
+			report = diag.ProbeNativeChannels(report, mainSection, sec)
+		} else {
+			report = diag.ProbeChannels(report, clashURL, mainSection, sec)
+		}
 	}
 	_ = diag.WritePrometheusTextfile(report, paths.MetricsPromFile)
 	return report
@@ -71,7 +81,12 @@ func runRPCCheckFakeIP() int {
 
 func runRPCGlobalCheck() int {
 	report := buildStatusReport(false)
-	ok := report.SingboxRunning && report.NFTOK && report.ClashOK
+	ok := report.NFTOK && report.ClashOK
+	if report.EngineMode == "native" {
+		ok = report.NFTOK && report.EngineRunning
+	} else {
+		ok = report.NFTOK && report.ClashOK && report.SingboxRunning
+	}
 	emitJSON(map[string]any{"ok": ok, "report": report})
 	if !ok {
 		return 1
@@ -116,14 +131,24 @@ func runRPCSwitchProxy(args []string) int {
 	if err := failover.ValidateSelectorMember(pkg, section, outbound); err != nil {
 		return rpcErr(err.Error())
 	}
-	clashURL, _, _ := statusContext()
-	cli := clash.New(clashURL, 12*time.Second)
 	selector := singbox.OutboundTag(section)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	prev, _ := cli.ActiveOutbound(ctx, selector)
-	if err := cli.SwitchProxy(ctx, selector, outbound); err != nil {
-		emitJSON(map[string]any{"ok": false, "error": err.Error()})
+	var prev string
+	var errSwitch error
+	if engine.NativeEnabled(pkg) {
+		if !engine.Alive() {
+			return rpcErr("native engine not running")
+		}
+		prev, _, errSwitch = ipc.SubmitSwitch(section, outbound, 15*time.Second)
+	} else {
+		clashURL, _, _ := statusContext()
+		cli := clash.New(clashURL, 12*time.Second)
+		prev, _ = cli.ActiveOutbound(ctx, selector)
+		errSwitch = cli.SwitchProxy(ctx, selector, outbound)
+	}
+	if errSwitch != nil {
+		emitJSON(map[string]any{"ok": false, "error": errSwitch.Error()})
 		return 1
 	}
 	if err := failover.NoteManualSwitch(section, outbound); err != nil {

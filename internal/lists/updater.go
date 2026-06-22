@@ -3,6 +3,7 @@ package lists
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/netfetch"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
@@ -30,12 +32,59 @@ type UpdateResult struct {
 }
 
 func NewUpdater(viaProxy bool) *Updater {
-	return &Updater{
+	u := &Updater{
 		RulesetDir: singbox.RulesetDir,
 		UCIPath:    paths.UCIConfig,
 		ViaProxy:   viaProxy,
-		HTTP:       &http.Client{Timeout: 60 * time.Second},
 	}
+	u.HTTP = u.httpClient(viaProxy)
+	return u
+}
+
+// NewFromUCI builds an updater using hybrid-failover.settings list download options.
+func NewFromUCI(uciPath string) *Updater {
+	if uciPath == "" {
+		uciPath = paths.UCIConfig
+	}
+	pkg, err := uci.Load(uciPath)
+	if err != nil {
+		return NewUpdater(false)
+	}
+	enabled, section := singbox.ListDownloadSection(pkg)
+	u := &Updater{
+		RulesetDir: singbox.RulesetDir,
+		UCIPath:    uciPath,
+		ViaProxy:   enabled && section != "",
+	}
+	u.HTTP = u.httpClient(u.ViaProxy)
+	return u
+}
+
+func (u *Updater) httpClient(viaProxy bool) *http.Client {
+	dnsAddr := u.resolverDNS(viaProxy)
+	proxyURL := ""
+	if viaProxy {
+		proxyURL = singbox.ListDownloadProxyURL
+	}
+	return netfetch.HTTPClient(dnsAddr, proxyURL, 60*time.Second)
+}
+
+func (u *Updater) resolverDNS(viaProxy bool) string {
+	if viaProxy {
+		return netfetch.SingboxDNSAddr
+	}
+	pkg, err := uci.Load(u.UCIPath)
+	if err != nil {
+		return netfetch.DefaultDNSAddr
+	}
+	settings := pkg.Section("settings")
+	if settings == nil {
+		return netfetch.DefaultDNSAddr
+	}
+	if boot := strings.TrimSpace(settings.Get("bootstrap_dns_server", "")); boot != "" {
+		return net.JoinHostPort(boot, "53")
+	}
+	return netfetch.DefaultDNSAddr
 }
 
 func (u *Updater) UpdateOnce() (UpdateResult, error) {
@@ -62,18 +111,46 @@ func (u *Updater) UpdateOnce() (UpdateResult, error) {
 	}
 
 	var result UpdateResult
+	changed, err := u.syncCommunityDomainRulesets()
+	if err != nil {
+		return result, err
+	}
+	result.Changed = result.Changed || changed
 	for _, svc := range services {
-		subnetURL, ok := singbox.SubnetListURLs[svc]
+		subnetURL, ok := subnetListURL(svc)
 		if !ok {
 			continue
 		}
-		changed, err := u.fetchSubnetList(subnetURL, svc+".lst")
+		filename := svc + ".lst"
+		changed, err := u.fetchSubnetList(subnetURL, filename)
 		if err != nil {
+			if u.cachedListValid(filename) {
+				continue
+			}
 			return result, err
 		}
 		result.Changed = result.Changed || changed
 	}
 	return result, nil
+}
+
+// HasValidCache reports whether all configured subnet lists exist locally with entries.
+func (u *Updater) HasValidCache() bool {
+	for _, svc := range u.configuredServices() {
+		if _, ok := subnetListURL(svc); !ok {
+			continue
+		}
+		if !u.cachedListValid(svc + ".lst") {
+			return false
+		}
+	}
+	return true
+}
+
+func (u *Updater) cachedListValid(filename string) bool {
+	path := filepath.Join(u.RulesetDir, filename)
+	cidrs, err := subnets.ParseFile(path)
+	return err == nil && len(cidrs) > 0
 }
 
 func (u *Updater) configuredServices() []string {
@@ -103,6 +180,95 @@ func (u *Updater) configuredServices() []string {
 	return out
 }
 
+func (u *Updater) syncCommunityDomainRulesets() (bool, error) {
+	pkg, err := uci.Load(u.UCIPath)
+	if err != nil {
+		return false, err
+	}
+	var changed bool
+	var fetchErrs []string
+	for _, name := range pkg.SectionNames("section") {
+		sec := pkg.Section(name)
+		if sec == nil || !singbox.SectionHasEnabledLists(sec) {
+			continue
+		}
+		for _, svc := range sec.GetList("community_lists") {
+			svc = strings.TrimSpace(svc)
+			if svc == "" {
+				continue
+			}
+			tag := singbox.RulesetTag(name, svc, "community")
+			path := filepath.Join(u.RulesetDir, tag+".json")
+			if singbox.DomainRulesetEmpty(path) {
+				singbox.EnsureSourceRuleset(path)
+			}
+			url := singbox.CommunityServiceDomainURL(svc)
+			c, err := u.fetchDomainRuleset(url, path)
+			if err != nil {
+				if singbox.DomainRulesetEmpty(path) {
+					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: %v", tag, err))
+				}
+				continue
+			}
+			changed = changed || c
+		}
+	}
+	if len(fetchErrs) > 0 {
+		return changed, fmt.Errorf("community domain rulesets: %s", strings.Join(fetchErrs, "; "))
+	}
+	return changed, nil
+}
+
+func (u *Updater) fetchDomainRuleset(url, path string) (bool, error) {
+	resp, err := u.HTTP.Get(url)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("fetch %s: %s", url, resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, err
+	}
+	domains := parseDomainListBody(string(body))
+	if len(domains) == 0 {
+		return false, nil
+	}
+	prev, _ := os.ReadFile(path)
+	if err := singbox.WriteDomainRuleset(path, domains); err != nil {
+		return false, err
+	}
+	next, _ := os.ReadFile(path)
+	return !bytesEqual(prev, next), nil
+}
+
+func parseDomainListBody(raw string) []string {
+	raw = strings.ReplaceAll(raw, "\r\n", "\n")
+	var out []string
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (u *Updater) fetchSubnetList(url, filename string) (bool, error) {
 	resp, err := u.HTTP.Get(url)
 	if err != nil {
@@ -130,4 +296,9 @@ func WritePID() error {
 
 func ClearPID() {
 	_ = os.Remove(paths.ListUpdatePID)
+}
+
+var subnetListURL = func(service string) (string, bool) {
+	url, ok := singbox.SubnetListURLs[service]
+	return url, ok
 }

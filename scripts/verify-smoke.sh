@@ -42,29 +42,20 @@ ok "help output"
 
 [[ -d "$TESTDATA_DIR" ]] || die "missing testdata dir: $TESTDATA_DIR"
 
-fixture_needs_cli_validate() {
-	# Matches internal/uci HasOutboundSection: proxy/vpn sections with outbounds.
-	grep -qE "option interface |option proxy_string |option outbound_json |failover_proxy_links|urltest_proxy_links" "$1"
-}
-
 fixture_count=0
 for fixture in "$TESTDATA_DIR"/*.conf; do
 	[[ -f "$fixture" ]] || continue
 	fixture_count=$((fixture_count + 1))
 	name="$(basename "$fixture")"
-	if fixture_needs_cli_validate "$fixture"; then
-		TMP_UCI="$(mktemp "${TMPDIR:-/tmp}/hybrid-failover-uci.XXXXXX")"
-		cp "$fixture" "$TMP_UCI"
-		if ! "$BIN" validate --dry-run --uci "$TMP_UCI" >/dev/null 2>&1; then
-			"$BIN" validate --dry-run --uci "$TMP_UCI" 2>&1 || true
-			die "validate on fixture $name failed"
-		fi
-		rm -f "$TMP_UCI"
-		TMP_UCI=""
-		ok "validate fixture: $name"
-	else
-		ok "fixture $name (builder-only; covered by go test)"
+	TMP_UCI="$(mktemp "${TMPDIR:-/tmp}/hybrid-failover-uci.XXXXXX")"
+	cp "$fixture" "$TMP_UCI"
+	if ! "$BIN" validate --engine native --dry-run --uci "$TMP_UCI" >/dev/null 2>&1; then
+		"$BIN" validate --engine native --dry-run --uci "$TMP_UCI" 2>&1 || true
+		die "validate --engine native failed: $name"
 	fi
+	rm -f "$TMP_UCI"
+	TMP_UCI=""
+	ok "validate native fixture: $name"
 done
 
 [[ "$fixture_count" -gt 0 ]] || die "no *.conf fixtures in $TESTDATA_DIR"
@@ -72,18 +63,27 @@ ok "validated $fixture_count fixture(s)"
 
 (
 	cd "$ROOT_DIR"
+	GOFLAGS=-mod=mod go test ./internal/migrate/...
+)
+ok "go test ./internal/migrate/..."
+
+(
+	cd "$ROOT_DIR"
 	GOFLAGS=-mod=mod go test ./internal/singbox/...
 )
 ok "go test ./internal/singbox/..."
+
+chmod +x "$ROOT_DIR/scripts/verify-native.sh"
+HF_BIN="$BIN" "$ROOT_DIR/scripts/verify-native.sh"
 
 if command -v sing-box >/dev/null 2>&1; then
 	(
 		cd "$ROOT_DIR"
 		GOFLAGS=-mod=mod go test -run TestBuilderSingboxCheckOptional ./internal/singbox/...
 	)
-	ok "sing-box check on generated configs"
+	ok "optional sing-box config check (legacy builder)"
 else
-	printf 'verify-smoke: SKIP: sing-box not installed (optional config check)\n'
+	printf 'verify-smoke: SKIP: sing-box not installed (optional legacy builder check)\n'
 fi
 
 printf 'verify-smoke: all checks passed\n'

@@ -23,7 +23,7 @@ Steps (default: all):
   remote    Run hybrid-failover checks over SSH on the lab VM
   luci      Run scripts/luci-ubus-smoke.sh on guest (ubus status/health/history)
   smoke     Run host regression-smoke.sh
-  failover  URLTest failover scenario (requires running sing-box + Clash API)
+  failover  URLTest failover scenario (requires running native engine)
 
 Environment:
   HF_SSH_PORT      SSH port forwarded to QEMU guest (default: 18022)
@@ -74,19 +74,20 @@ run_remote() {
 			echo
 		fi
 		hybrid-failover migrate
-		hybrid-failover validate --dry-run
+		uci set hybrid-failover.settings.engine_mode=native 2>/dev/null || true
+		uci commit hybrid-failover 2>/dev/null || true
+		hybrid-failover validate --engine native --dry-run
 		/etc/init.d/hybrid-failover enable
 		/etc/init.d/hybrid-failover start
 		sleep 3
 		hybrid-failover check-nft
-		test -f /etc/sing-box/config.json
 		hybrid-failover pending capture || true
 		hybrid-failover pending validate || echo "pending validate: skipped (no pending changes)"
 		hybrid-failover global-check
-		if pidof sing-box >/dev/null 2>&1; then
+		if hybrid-failover status 2>/dev/null | grep -q "\"engine_running\":true"; then
 			hybrid-failover check-fakeip
 		else
-			echo "check-fakeip: skipped (sing-box not running)"
+			echo "check-fakeip: skipped (native engine not running)"
 		fi
 		if uci get dhcp.@dnsmasq[0].server 2>/dev/null | grep -q 127.0.0.42; then
 			echo "dnsmasq: ok (127.0.0.42)"
@@ -106,8 +107,8 @@ run_failover() {
 
 	ssh_guest '
 		set -e
-		if ! pidof sing-box >/dev/null 2>&1; then
-			echo "failover: skipped (sing-box not running: configure proxy UCI first)"
+		if ! hybrid-failover status 2>/dev/null | grep -q "\"engine_running\":true"; then
+			echo "failover: skipped (native engine not running: configure proxy UCI first)"
 			exit 0
 		fi
 		HIST=/var/log/hybrid-failover/history.jsonl

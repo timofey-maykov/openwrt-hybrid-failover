@@ -6,7 +6,54 @@
 var HF_DELAY_MAX = 40;
 
 var HF_CSS = [
-	'.hf-mon { max-width: 1100px; margin: 0 auto 24px; color: var(--cbi-section-text-color, inherit); }',
+	'.hf-mon { max-width: 1280px; margin: 0 auto 28px; color: var(--cbi-section-text-color, inherit); }',
+	'.hf-ent-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color, rgba(127,127,127,.25)); }',
+	'.hf-ent-top__brand h2 { margin: 0 0 6px; font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em; }',
+	'.hf-ent-top__meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }',
+	'.hf-ent-top__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }',
+	'.hf-ent-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }',
+	'.hf-ent-pill--ok { background: rgba(60,186,84,.15); color: #2d8a3e; }',
+	'.hf-ent-pill--warn { background: rgba(240,173,78,.18); color: #9a6700; }',
+	'.hf-ent-pill--bad { background: rgba(231,76,60,.15); color: #c0392b; }',
+	'.hf-ent-pill--neutral { background: rgba(127,127,127,.12); opacity: .85; }',
+	'.hf-ent-pill__dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }',
+	'.hf-ent-hero { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px 20px; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; border: 1px solid var(--border-color, rgba(127,127,127,.3)); background: var(--cbi-section-background-color, rgba(127,127,127,.04)); }',
+	'.hf-ent-hero--ok { border-left: 4px solid #3cba54; }',
+	'.hf-ent-hero--warn { border-left: 4px solid #f0ad4e; }',
+	'.hf-ent-hero--bad { border-left: 4px solid #e74c3c; }',
+	'.hf-ent-hero__main { flex: 1 1 260px; min-width: 0; }',
+	'.hf-ent-hero__title { margin: 0 0 4px; font-size: 1.05rem; font-weight: 700; }',
+	'.hf-ent-hero__sub { margin: 0; font-size: 13px; opacity: .85; line-height: 1.45; }',
+	'.hf-ent-hero__active { margin-top: 10px; font-size: 13px; }',
+	'.hf-ent-hero__links { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; align-self: center; }',
+	'.hf-ent-hero__links a { text-decoration: none; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color, rgba(127,127,127,.35)); }',
+	'.hf-ent-hero__links a:hover { background: rgba(127,127,127,.08); }',
+	'.hf-ent-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border-color, rgba(127,127,127,.25)); }',
+	'.hf-ent-tab { appearance: none; background: transparent; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 14px; font-size: 13px; font-weight: 500; cursor: pointer; color: inherit; opacity: .75; }',
+	'.hf-ent-tab:hover { opacity: 1; }',
+	'.hf-ent-tab--active { opacity: 1; font-weight: 700; border-bottom-color: #2980b9; color: #2980b9; }',
+	'.hf-ent-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }',
+	'.hf-ent-sidebar { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 8px; }',
+	'.hf-ent-card { border: 1px solid var(--border-color, rgba(127,127,127,.3)); border-radius: 10px; padding: 14px 16px; background: var(--cbi-section-background-color, rgba(127,127,127,.04)); }',
+	'.hf-ent-card__title { margin: 0 0 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }',
+	'.hf-ent-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }',
+	'.hf-ent-tools .btn { width: 100%; text-align: left; justify-content: flex-start; }',
+	'.hf-ent-channels { margin-bottom: 16px; }',
+	'.hf-ent-channels__summary { margin: 0 0 12px; font-size: 13px; opacity: .85; }',
+	'.hf-ent-channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }',
+	'.hf-ent-channel-card { border: 1px solid var(--border-color, rgba(127,127,127,.3)); border-radius: 10px; padding: 12px 14px; background: var(--cbi-section-background-color, rgba(127,127,127,.03)); }',
+	'.hf-ent-channel-card--up { border-left: 3px solid #3cba54; }',
+	'.hf-ent-channel-card--down { border-left: 3px solid #e74c3c; }',
+	'.hf-ent-channel-card--unknown { border-left: 3px solid #f0ad4e; }',
+	'.hf-ent-channel-card--active { box-shadow: inset 0 0 0 1px rgba(60,186,84,.35); background: rgba(60,186,84,.06); }',
+	'.hf-ent-channel-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }',
+	'.hf-ent-channel-card__role { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; opacity: .7; }',
+	'.hf-ent-channel-card__name { font-size: 13px; font-weight: 600; line-height: 1.35; margin-bottom: 6px; word-break: break-word; }',
+	'.hf-ent-channel-card__meta { font-size: 12px; opacity: .75; }',
+	'.hf-ent-channel-card__flag { margin-top: 8px; font-size: 11px; font-weight: 700; color: #2d8a3e; text-transform: uppercase; }',
+	'.hf-ent-channel-card__err { margin-top: 8px; font-size: 11px; color: #c0392b; line-height: 1.35; }',
+	'.hf-ent-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }',
+	'.hf-ent-section-head h3 { margin: 0; font-size: 14px; font-weight: 700; }',
 	'.hf-mon-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }',
 	'.hf-mon-toolbar .hf-mon-updated { opacity: 0.75; font-size: 12px; margin-left: auto; }',
 	'.hf-mon-toolbar .btn:focus-visible { outline: 2px solid #2980b9; outline-offset: 2px; }',
@@ -17,7 +64,9 @@ var HF_CSS = [
 	'.hf-mon-banner--bad { background: rgba(231,76,60,.12); border: 1px solid rgba(231,76,60,.45); }',
 	'.hf-mon-banner__links { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }',
 	'.hf-mon-banner__links a { text-decoration: underline; }',
-	'.hf-mon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }',
+	'.hf-mon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-bottom: 18px; }',
+	'@media (max-width: 1100px) { .hf-mon-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .hf-ent-layout { grid-template-columns: 1fr; } .hf-ent-sidebar { position: static; } }',
+	'@media (max-width: 640px) { .hf-mon-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }',
 	'.hf-mon-card { border: 1px solid var(--border-color, rgba(127,127,127,.35)); border-radius: 8px; padding: 12px 14px; background: var(--cbi-section-background-color, rgba(127,127,127,.06)); }',
 	'.hf-mon-card__label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .7; margin-bottom: 6px; }',
 	'.hf-mon-card__value { font-size: 15px; font-weight: 600; }',
@@ -39,6 +88,7 @@ var HF_CSS = [
 	'.hf-mon-table th, .hf-mon-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-color, rgba(127,127,127,.25)); }',
 	'.hf-mon-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; opacity: .75; font-weight: 600; }',
 	'.hf-mon-table tr.hf-mon-row--active { background: rgba(60,186,84,.08); }',
+	'.hf-mon-table tbody tr:nth-child(even) { background: rgba(127,127,127,.03); }',
 	'.hf-mon-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }',
 	'.hf-mon-badge--ok { background: rgba(60,186,84,.2); color: #2d8a3e; }',
 	'.hf-mon-badge--bad { background: rgba(231,76,60,.2); color: #c0392b; }',
@@ -106,15 +156,79 @@ function unwrapData(res) {
 	return res;
 }
 
+function isNativeEngine(data) {
+	return !!(data && data.engine_mode === 'native');
+}
+
+function proxyRunning(data) {
+	if (!data)
+		return false;
+	if (data.engine_running != null)
+		return !!data.engine_running;
+	return !!data.singbox_running;
+}
+
+function controlOk(data) {
+	if (!data)
+		return false;
+	if (isNativeEngine(data))
+		return proxyRunning(data);
+	return !!data.clash_ok;
+}
+
+function controllerForSection(data, section) {
+	if (!data || !data.controller)
+		return null;
+	for (var i = 0; i < data.controller.length; i++) {
+		if (!section || data.controller[i].section === section)
+			return data.controller[i];
+	}
+	return data.controller[0] || null;
+}
+
+function activeOutboundTag(data, section) {
+	var ctrl = controllerForSection(data, section);
+	if (ctrl && ctrl.active)
+		return ctrl.active;
+	if (data && data.failover && data.failover.selector_now)
+		return data.failover.selector_now;
+	return (data && data.active_outbound) || '';
+}
+
+function activeOutboundDisplay(data, section) {
+	var tag = activeOutboundTag(data, section);
+	if (!tag)
+		return '';
+	if (data && data.channels) {
+		for (var i = 0; i < data.channels.length; i++) {
+			if (data.channels[i].name === tag && data.channels[i].display)
+				return data.channels[i].display;
+		}
+	}
+	return tag;
+}
+
+function visibleErrors(data) {
+	if (!data || !Array.isArray(data.errors))
+		return [];
+	if (!isNativeEngine(data))
+		return data.errors;
+	return data.errors.filter(function(e) {
+		var s = String(e);
+		return s.indexOf('clash') === -1 && s.indexOf('9090') === -1 && s.indexOf('channels:') === -1;
+	});
+}
+
 function overallState(data) {
 	if (!data || typeof data !== 'object')
 		return 'unknown';
-	var critical = data.singbox_running && data.nft_ok && data.clash_ok;
+	var critical = proxyRunning(data) && data.nft_ok && controlOk(data);
 	if (!critical)
 		return 'down';
 	if (data.fakeip_ok === false)
 		return 'degraded';
-	if (data.errors && data.errors.length)
+	var errs = visibleErrors(data);
+	if (errs.length)
 		return 'degraded';
 	return 'up';
 }
@@ -130,6 +244,166 @@ function badgeWarn(label) {
 
 function badgeInfo(label) {
 	return E('span', { 'class': 'hf-mon-badge hf-mon-badge--info' }, label);
+}
+
+function channelKind(ch) {
+	if (!ch)
+		return 'reserve';
+	if (ch.type === 'direct' || /-awg-out$/.test(ch.name || ''))
+		return 'primary';
+	if (ch.type === 'urltest')
+		return 'urltest';
+	return 'reserve';
+}
+
+function channelAliveState(ch, probed, ctrl) {
+	var kind = channelKind(ch);
+	if (kind === 'primary' && ctrl) {
+		if (ctrl.primary_ok === true)
+			return 'up';
+		if (ctrl.primary_ok === false)
+			return 'down';
+	}
+	if (ch.available === true || (ch.delay_ms && ch.delay_ms > 0))
+		return 'up';
+	if (probed && ch.available === false && !(ch.delay_ms && ch.delay_ms > 0))
+		return 'down';
+	if (ch.detail && String(ch.detail).indexOf('no delay data') !== -1)
+		return 'unknown';
+	return ch.available === false ? 'down' : 'unknown';
+}
+
+function channelStatusBadge(ch, probed, ctrl) {
+	var st = channelAliveState(ch, probed, ctrl);
+	if (st === 'up')
+		return badge(true, 'UP', 'DOWN');
+	if (st === 'down')
+		return badge(false, 'UP', 'DOWN');
+	return badgeWarn(_('н/д'));
+}
+
+function channelRoleLabel(ch, ctrl) {
+	var kind = channelKind(ch);
+	if (kind === 'primary')
+		return _('Primary VPN');
+	if (kind === 'urltest')
+		return _('URLTest группа');
+	if (ch.selected || (ctrl && ctrl.urltest_member === ch.name))
+		return _('активный резерв');
+	return _('резерв');
+}
+
+function channelsReserveSummary(channels, data, probed) {
+	if (!channels || !channels.length)
+		return '';
+	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
+	var alive = 0, total = 0;
+	for (var i = 0; i < channels.length; i++) {
+		if (channelKind(channels[i]) !== 'reserve')
+			continue;
+		total++;
+		if (channelAliveState(channels[i], probed, ctrl) === 'up')
+			alive++;
+	}
+	if (!total)
+		return '';
+	return alive + '/' + total + ' ' + _('живы');
+}
+
+function buildChannelOverviewCard(ch, probed, ctrl) {
+	var kind = channelKind(ch);
+	var alive = channelAliveState(ch, probed, ctrl);
+	var cardCls = 'hf-ent-channel-card hf-ent-channel-card--' + alive;
+	if (ch.selected && kind === 'reserve')
+		cardCls += ' hf-ent-channel-card--active';
+	var metaParts = [];
+	if (ch.type)
+		metaParts.push(ch.type);
+	if (ch.delay_ms && ch.delay_ms > 0)
+		metaParts.push(ch.delay_ms + ' ms');
+	var body = [
+		E('div', { 'class': 'hf-ent-channel-card__head' }, [
+			E('span', { 'class': 'hf-ent-channel-card__role' }, channelRoleLabel(ch, ctrl)),
+			channelStatusBadge(ch, probed, ctrl)
+		]),
+		E('div', { 'class': 'hf-ent-channel-card__name' }, ch.display || ch.name),
+		E('div', { 'class': 'hf-ent-channel-card__meta' }, metaParts.join(' · ') || '-')
+	];
+	if (ch.selected && kind === 'reserve')
+		body.push(E('div', { 'class': 'hf-ent-channel-card__flag' }, _('активный резерв')));
+	if (kind === 'primary' && ctrl && ctrl.last_error && ctrl.primary_ok === false)
+		body.push(E('div', { 'class': 'hf-ent-channel-card__err' }, ctrl.last_error));
+	else if (ch.detail && alive === 'unknown')
+		body.push(E('div', { 'class': 'hf-ent-channel-card__err', 'style': 'color:#9a6700;' }, ch.detail));
+	return E('div', { 'class': cardCls }, body);
+}
+
+function buildChannelsOverview(channels, data, probed, opts) {
+	opts = opts || {};
+	var ctrl = controllerForSection(data, opts.section);
+	if (!channels || !channels.length) {
+		return E('div', { 'class': 'hf-ent-card hf-ent-channels' }, [
+			E('div', { 'class': 'hf-ent-section-head' }, [
+				E('h3', {}, _('Каналы failover'))
+			]),
+			E('p', { 'class': 'hf-mon-empty' },
+				_('Каналы не найдены. Включите VPN+failover в секции маршрутизации.'))
+		]);
+	}
+
+	var primary = [], reserves = [];
+	for (var i = 0; i < channels.length; i++) {
+		var kind = channelKind(channels[i]);
+		if (kind === 'urltest')
+			continue;
+		if (kind === 'primary')
+			primary.push(channels[i]);
+		else
+			reserves.push(channels[i]);
+	}
+
+	var summaryParts = [];
+	var reserveSummary = channelsReserveSummary(channels, data, probed);
+	if (reserveSummary)
+		summaryParts.push(_('Резервы') + ': ' + reserveSummary);
+	if (ctrl && ctrl.mode)
+		summaryParts.push(_('Режим') + ': ' + ctrl.mode);
+	if (ctrl && ctrl.urltest_member)
+		summaryParts.push(_('URLTest member') + ': ' + ctrl.urltest_member);
+	else if (ctrl && ctrl.active && ctrl.mode === 'backup')
+		summaryParts.push(_('Активный') + ': ' + activeOutboundDisplay(data, opts.section));
+
+	var headChildren = [E('h3', {}, _('Каналы failover'))];
+	if (typeof opts.onProbe === 'function') {
+		headChildren.push(E('button', {
+			'class': 'btn cbi-button cbi-button-save',
+			'id': 'hf-btn-probe-overview',
+			'click': opts.onProbe
+		}, _('Live probe')));
+	}
+
+	var grid = E('div', { 'class': 'hf-ent-channel-grid' });
+	for (var p = 0; p < primary.length; p++)
+		grid.appendChild(buildChannelOverviewCard(primary[p], probed, ctrl));
+	for (var r = 0; r < reserves.length; r++)
+		grid.appendChild(buildChannelOverviewCard(reserves[r], probed, ctrl));
+
+	var footer = '';
+	if (!probed) {
+		footer = E('p', { 'class': 'hint', 'style': 'margin:10px 0 0;font-size:12px;' },
+			isNativeEngine(data)
+				? _('Статус резервов из engine. Live probe обновит проверку всех каналов.')
+				: _('Статус из кэша Clash. Live probe обновит проверку всех каналов.'));
+	}
+
+	return E('div', { 'class': 'hf-ent-card hf-ent-channels' }, [
+		E('div', { 'class': 'hf-ent-section-head' }, headChildren),
+		summaryParts.length
+			? E('p', { 'class': 'hf-ent-channels__summary' }, summaryParts.join(' · '))
+			: '',
+		grid,
+		footer
+	]);
 }
 
 function card(label, value, state) {
@@ -322,6 +596,113 @@ function wrapTable(tableEl) {
 	return E('div', { 'class': 'hf-mon-table-wrap' }, [tableEl]);
 }
 
+function buildStatusPill(state) {
+	var label, cls;
+	switch (state) {
+	case 'up':
+		label = _('В норме');
+		cls = 'hf-ent-pill hf-ent-pill--ok';
+		break;
+	case 'degraded':
+		label = _('Деградация');
+		cls = 'hf-ent-pill hf-ent-pill--warn';
+		break;
+	case 'down':
+		label = _('Недоступно');
+		cls = 'hf-ent-pill hf-ent-pill--bad';
+		break;
+	default:
+		label = _('Неизвестно');
+		cls = 'hf-ent-pill hf-ent-pill--neutral';
+	}
+	return E('span', { 'class': cls }, [
+		E('span', { 'class': 'hf-ent-pill__dot' }),
+		label
+	]);
+}
+
+function buildEnterpriseMeta(data) {
+	var m = data && data.meta;
+	var parts = [];
+	if (m && m.core_version)
+		parts.push('v' + m.core_version);
+	if (data && data.engine_mode)
+		parts.push(String(data.engine_mode));
+	if (m && m.uci_schema)
+		parts.push('schema ' + m.uci_schema);
+	if (!parts.length)
+		return E('span', { 'class': 'hint', 'style': 'font-size:12px;' }, '-');
+	return E('span', { 'class': 'hint', 'style': 'font-size:12px;' }, parts.join(' · '));
+}
+
+function buildStatusHero(data, opts) {
+	opts = opts || {};
+	var state = overallState(data);
+	var heroCls = 'hf-ent-hero hf-ent-hero--' +
+		(state === 'up' ? 'ok' : state === 'degraded' ? 'warn' : state === 'down' ? 'bad' : 'neutral');
+	var title, sub;
+	if (state === 'up') {
+		title = _('Маршрутизация активна');
+		sub = _('Критичные компоненты в норме.');
+	} else if (state === 'degraded') {
+		title = _('Частичная деградация');
+		sub = _('Сервис работает с предупреждениями.');
+	} else if (state === 'down') {
+		title = _('Маршрутизация недоступна');
+		sub = isNativeEngine(data)
+			? _('Engine, nft или control plane не отвечают.')
+			: _('sing-box, nft или Clash API не отвечают.');
+	} else {
+		title = _('Нет данных');
+		sub = _('Не удалось получить статус с роутера.');
+	}
+	var main = E('div', { 'class': 'hf-ent-hero__main' }, [
+		E('p', { 'class': 'hf-ent-hero__title' }, title),
+		E('p', { 'class': 'hf-ent-hero__sub' }, sub)
+	]);
+	var activeDisp = activeOutboundDisplay(data, opts.section);
+	if (activeDisp) {
+		main.appendChild(E('div', { 'class': 'hf-ent-hero__active' }, [
+			_('Активный канал') + ': ',
+			E('span', { 'class': 'hf-mon-tag' }, activeDisp)
+		]));
+	}
+	var errs = visibleErrors(data);
+	if (errs.length) {
+		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:8px;color:#c0392b;' },
+			errs.join(' · ')));
+	}
+	if (opts.primaryError) {
+		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:6px;color:#c0392b;' },
+			_('Primary') + ': ' + opts.primaryError));
+	}
+	var links = E('div', { 'class': 'hf-ent-hero__links' }, [
+		E('a', { 'href': L.url('admin/services/hybrid-failover/routing') }, _('Маршрутизация')),
+		E('a', { 'href': L.url('admin/services/hybrid-failover/diagnostics') }, _('Диагностика')),
+		E('a', { 'href': L.url('admin/services/hybrid-failover/clients') }, _('Клиенты'))
+	]);
+	return E('div', { 'class': heroCls }, [main, links]);
+}
+
+function buildTabBar(tabs, activeId, onSelect) {
+	var bar = E('div', { 'class': 'hf-ent-tabs', 'role': 'tablist' });
+	for (var i = 0; i < tabs.length; i++) {
+		(function(tab) {
+			bar.appendChild(E('button', {
+				'type': 'button',
+				'class': 'hf-ent-tab' + (tab.id === activeId ? ' hf-ent-tab--active' : ''),
+				'role': 'tab',
+				'aria-selected': tab.id === activeId ? 'true' : 'false',
+				'click': function(ev) {
+					ev.preventDefault();
+					onSelect(tab.id);
+				}
+			}, tab.label));
+		})(tabs[i]);
+	}
+	return bar;
+}
+
 function buildErrorBanner(msg) {
 	return E('div', { 'class': 'hf-mon-banner hf-mon-banner--bad hf-mon-banner--sticky' }, [
 		E('strong', {}, _('Ошибка') + ': '),
@@ -344,28 +725,22 @@ function buildSummaryBanner(data, opts) {
 	} else if (state === 'down') {
 		cls = 'hf-mon-banner hf-mon-banner--bad hf-mon-banner--sticky';
 		title = _('Маршрутизация неактивна');
-		text = _('sing-box, nft или Clash API недоступны.');
+		text = isNativeEngine(data)
+			? _('Engine, nft или control API недоступны.')
+			: _('sing-box, nft или Clash API недоступны.');
 	} else {
 		cls = 'hf-mon-banner hf-mon-banner--sticky';
 		title = _('Нет данных');
 		text = _('Не удалось получить статус с роутера.');
 	}
 	var children = [E('strong', {}, title + ': '), text];
-	if (data && data.active_outbound) {
-		var disp = data.active_outbound;
-		if (data.channels) {
-			for (var i = 0; i < data.channels.length; i++) {
-				if (data.channels[i].name === data.active_outbound && data.channels[i].display) {
-					disp = data.channels[i].display;
-					break;
-				}
-			}
-		}
+	var activeDisp = activeOutboundDisplay(data, opts.section);
+	if (activeDisp) {
 		children.push(E('span', { 'class': 'hf-mon-tag', 'style': 'display:block;margin-top:6px;' },
-			_('Активный канал') + ': ' + disp));
+			_('Активный канал') + ': ' + activeDisp));
 	}
-	if (data && data.errors && data.errors.length)
-		children.push(E('div', { 'style': 'margin-top:8px;color:#c0392b;' }, data.errors.join(' · ')));
+	if (visibleErrors(data).length)
+		children.push(E('div', { 'style': 'margin-top:8px;color:#c0392b;' }, visibleErrors(data).join(' · ')));
 	var ctrlErr = opts.primaryError;
 	if (ctrlErr)
 		children.push(E('div', { 'style': 'margin-top:6px;color:#c0392b;' }, _('Primary') + ': ' + ctrlErr));
@@ -378,7 +753,7 @@ function buildSummaryBanner(data, opts) {
 	return E('div', { 'class': cls }, children);
 }
 
-function buildMetricCards(data) {
+function buildMetricCards(data, section) {
 	var fakeipState = 'neutral';
 	var fakeipVal = _('н/д');
 	if (data) {
@@ -392,17 +767,57 @@ function buildMetricCards(data) {
 	var policyVal = '-';
 	if (data && data.failover && data.failover.policy)
 		policyVal = data.failover.policy;
+	else {
+		var ctrlPol = controllerForSection(data, section);
+		if (ctrlPol && ctrlPol.policy)
+			policyVal = ctrlPol.policy;
+	}
+	var engineLabel = isNativeEngine(data) ? 'Engine' : 'sing-box';
+	var controlLabel = isNativeEngine(data) ? _('Control') : 'Clash API';
+	var engineRunning = proxyRunning(data);
+	var controlRunning = controlOk(data);
+	var activeTag = activeOutboundTag(data, section);
+	var activeState = activeTag ? 'ok' : 'neutral';
+	var ctrl = controllerForSection(data, section);
+	if (ctrl && ctrl.mode === 'backup' && !ctrl.primary_ok)
+		activeState = 'warn';
 	return E('div', { 'class': 'hf-mon-grid' }, [
-		card('sing-box', data && data.singbox_running ? _('работает') : _('остановлен'),
-			data && data.singbox_running ? 'ok' : 'bad'),
+		card(engineLabel, engineRunning ? _('работает') : _('остановлен'),
+			engineRunning ? 'ok' : 'bad'),
 		card('nft / tproxy', data && data.nft_ok ? 'OK' : _('ошибка'),
 			data && data.nft_ok ? 'ok' : 'bad'),
-		card('Clash API', data && data.clash_ok ? 'OK' : _('недоступен'),
-			data && data.clash_ok ? 'ok' : 'bad'),
+		card(controlLabel, controlRunning ? 'OK' : _('недоступен'),
+			controlRunning ? 'ok' : 'bad'),
 		card('fakeip DNS', fakeipVal, fakeipState),
 		card(_('Политика'), policyVal, 'info'),
-		card(_('Активный outbound'), (data && data.active_outbound) || '-',
-			data && data.active_outbound ? 'ok' : 'neutral')
+		card(_('Активный outbound'), activeOutboundDisplay(data, section) || activeTag || '-', activeState),
+		card(_('Резервы'), (function() {
+			var ch = data && data.channels;
+			if (!ch || !ch.length)
+				return '-';
+			var sum = channelsReserveSummary(ch, data, false);
+			return sum || '-';
+		})(), (function() {
+			var ch = data && data.channels;
+			if (!ch || !ch.length)
+				return 'neutral';
+			var ctrl = controllerForSection(data, section);
+			var alive = 0, total = 0;
+			for (var i = 0; i < ch.length; i++) {
+				if (channelKind(ch[i]) !== 'reserve')
+					continue;
+				total++;
+				if (channelAliveState(ch[i], false, ctrl) === 'up')
+					alive++;
+			}
+			if (!total)
+				return 'neutral';
+			if (alive === total)
+				return 'ok';
+			if (alive === 0)
+				return 'bad';
+			return 'warn';
+		})())
 	]);
 }
 
@@ -491,8 +906,20 @@ function buildFailoverPanels(data, sectionFilter) {
 		[_('Секция'), (ctrl && ctrl.section) || (fo && fo.section) || sectionFilter || '-'],
 		[_('Политика'), fo ? fo.policy : (ctrl && ctrl.policy) || '-'],
 		[_('Описание'), fo ? policyHint(fo.policy) : policyHint(ctrl && ctrl.policy)],
-		[_('Selector'), fo && fo.selector_now ? E('span', { 'class': 'hf-mon-tag' }, fo.selector_now) : '-'],
-		[_('URLTest'), fo && fo.urltest_now ? E('span', { 'class': 'hf-mon-tag' }, fo.urltest_now) : '-']
+		[_('Selector'), fo && fo.selector_now ? E('span', { 'class': 'hf-mon-tag' }, fo.selector_now) :
+			(ctrl && ctrl.active ? E('span', { 'class': 'hf-mon-tag' }, ctrl.active) : '-')],
+		[_('URLTest'), (function() {
+			var val = fo && fo.urltest_now;
+			if (!val && ctrl && ctrl.urltest_member)
+				val = ctrl.urltest_member;
+			if (!val && ctrl && ctrl.active) {
+				if (ctrl.active.indexOf('-urltest-out') !== -1)
+					val = ctrl.active;
+				else if (ctrl.active.indexOf('-awg-out') === -1 && ctrl.active !== ((ctrl.section || '') + '-out'))
+					val = ctrl.active;
+			}
+			return val ? E('span', { 'class': 'hf-mon-tag' }, val) : '-';
+		})()]
 	];
 	var ctrlRows = [
 		[_('Режим'), ctrl ? ctrl.mode : '-'],
@@ -528,11 +955,12 @@ function buildFailoverPanels(data, sectionFilter) {
 	]);
 }
 
-function buildChannelsTable(channels, probed, serverDelayData) {
+function buildChannelsTable(channels, probed, serverDelayData, nativeEngine, data) {
 	if (!channels || !channels.length)
 		return E('p', { 'class': 'hf-mon-empty' },
 			_('Каналы не найдены. Включите VPN+failover в секции маршрутизации.'));
 
+	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
 	var maxMs = maxChannelDelay(channels);
 	var thead = E('tr', {}, [
 		E('th', {}, _('Статус')),
@@ -546,10 +974,14 @@ function buildChannelsTable(channels, probed, serverDelayData) {
 	for (var i = 0; i < channels.length; i++) {
 		var ch = channels[i];
 		var rowCls = ch.selected ? 'hf-mon-row--active' : '';
-		var role = ch.selected ? _('активен') : (ch.probed || probed ? _('резерв') : _('кэш'));
-		var statusCell = badge(ch.available, 'UP', 'DOWN');
-		if (ch.detail)
-			statusCell = E('div', {}, [statusCell, E('div', { 'style': 'font-size:11px;opacity:.75;margin-top:2px;' }, ch.detail)]);
+		var role = channelRoleLabel(ch, ctrl);
+		var statusCell = channelStatusBadge(ch, probed, ctrl);
+		if (ch.detail && channelAliveState(ch, probed, ctrl) !== 'up') {
+			statusCell = E('div', {}, [
+				statusCell,
+				E('div', { 'style': 'font-size:11px;opacity:.75;margin-top:2px;' }, ch.detail)
+			]);
+		}
 		tbody.appendChild(E('tr', { 'class': rowCls }, [
 			E('td', {}, statusCell),
 			E('td', {}, [
@@ -565,7 +997,9 @@ function buildChannelsTable(channels, probed, serverDelayData) {
 	if (!probed)
 		tbody.appendChild(E('tr', {}, [
 			E('td', { 'colspan': '6', 'style': 'font-size:12px;opacity:.7;' },
-				_('Данные из кэша Clash. Нажмите «Live probe» для актуальной проверки.'))
+				nativeEngine
+					? _('Данные из engine. Нажмите «Live probe» для актуальной проверки.')
+					: _('Данные из кэша Clash. Нажмите «Live probe» для актуальной проверки.'))
 		]));
 
 	return wrapTable(E('table', { 'class': 'hf-mon-table' }, [E('thead', {}, [thead]), tbody]));
@@ -693,13 +1127,15 @@ function parseChecklist(data) {
 	}
 	if (d.ok === true || d.ok === false)
 		items.unshift({ ok: !!d.ok, text: d.message || (d.ok ? 'OK' : 'FAIL') });
-	if (d.singbox_running != null)
-		items.push({ ok: !!d.singbox_running, text: 'sing-box: ' + (d.singbox_running ? 'running' : 'stopped') });
+	if (d.engine_running != null)
+		items.push({ ok: !!d.engine_running, text: 'engine: ' + (d.engine_running ? 'running' : 'stopped') });
+	else if (d.singbox_running != null)
+		items.push({ ok: !!d.singbox_running, text: 'engine: ' + (d.singbox_running ? 'running' : 'stopped') });
 	if (d.nft_ok != null)
 		items.push({ ok: !!d.nft_ok, text: 'nft: ' + (d.nft_ok ? 'OK' : 'FAIL') });
 	if (d.fakeip_ok != null)
 		items.push({ ok: !!d.fakeip_ok, text: 'fakeip: ' + (d.fakeip_ok ? 'OK' : 'FAIL') });
-	if (d.clash_ok != null)
+	if (!isNativeEngine(d) && d.clash_ok != null)
 		items.push({ ok: !!d.clash_ok, text: 'Clash API: ' + (d.clash_ok ? 'OK' : 'FAIL') });
 	return items;
 }
@@ -750,6 +1186,12 @@ return baseclass.extend({
 	},
 	emptyNode: emptyNode,
 	unwrapData: unwrapData,
+	proxyRunning: proxyRunning,
+	controlOk: controlOk,
+	isNativeEngine: isNativeEngine,
+	controllerForSection: controllerForSection,
+	activeOutboundTag: activeOutboundTag,
+	activeOutboundDisplay: activeOutboundDisplay,
 	overallState: overallState,
 	badge: badge,
 	badgeWarn: badgeWarn,
@@ -767,10 +1209,17 @@ return baseclass.extend({
 	buildKvPanel: buildKvPanel,
 	wrapTable: wrapTable,
 	buildErrorBanner: buildErrorBanner,
+	buildStatusPill: buildStatusPill,
+	buildEnterpriseMeta: buildEnterpriseMeta,
+	buildStatusHero: buildStatusHero,
+	buildTabBar: buildTabBar,
 	buildSummaryBanner: buildSummaryBanner,
 	buildMetricCards: buildMetricCards,
+	buildChannelsOverview: buildChannelsOverview,
 	buildFailoverPanels: buildFailoverPanels,
 	buildChannelsTable: buildChannelsTable,
+	channelsReserveSummary: channelsReserveSummary,
+	channelAliveState: channelAliveState,
 	buildHistoryTable: buildHistoryTable,
 	buildMetaLine: buildMetaLine,
 	buildControllerTable: buildControllerTable,

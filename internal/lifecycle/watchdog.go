@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 )
 
@@ -14,18 +16,19 @@ type Watchdog struct {
 	Restart  func() error
 }
 
-func DefaultWatchdog() *Watchdog {
+func DefaultWatchdog(uciPath string) *Watchdog {
+	_ = uciPath
 	return &Watchdog{
-		Interval: 30 * time.Second,
+		Interval: 15 * time.Second,
 		Probe: func() error {
-			out, err := exec.Command("pidof", "sing-box").CombinedOutput()
-			if err != nil || len(out) == 0 {
-				return err
+			if engine.Alive() {
+				return nil
 			}
-			return nil
+			return exec.ErrNotFound
 		},
 		Restart: func() error {
-			return exec.Command("/etc/init.d/sing-box", "restart").Run()
+			engine.Default().Stop()
+			return nil
 		},
 	}
 }
@@ -43,6 +46,7 @@ func (w *Watchdog) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			_ = netlink.EnsureIPRules()
+			_ = dnsmasq.EnsureLocalResolv()
 			if err := w.Probe(); err != nil {
 				_ = w.Restart()
 				time.Sleep(backoff)

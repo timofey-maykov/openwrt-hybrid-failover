@@ -15,6 +15,90 @@ msgstr "Маршрутизация"
 msgid "Обзор"
 msgstr "Обзор"
 
+msgid "Каналы"
+msgstr "Каналы"
+
+msgid "Журнал"
+msgstr "Журнал"
+
+msgid "Инструменты"
+msgstr "Инструменты"
+
+msgid "В норме"
+msgstr "В норме"
+
+msgid "Деградация"
+msgstr "Деградация"
+
+msgid "Недоступно"
+msgstr "Недоступно"
+
+msgid "Неизвестно"
+msgstr "Неизвестно"
+
+msgid "Маршрутизация активна"
+msgstr "Маршрутизация активна"
+
+msgid "Частичная деградация"
+msgstr "Частичная деградация"
+
+msgid "Маршрутизация недоступна"
+msgstr "Маршрутизация недоступна"
+
+msgid "Критичные компоненты в норме."
+msgstr "Критичные компоненты в норме."
+
+msgid "Сервис работает с предупреждениями."
+msgstr "Сервис работает с предупреждениями."
+
+msgid "Нет данных"
+msgstr "Нет данных"
+
+msgid "Не удалось получить статус с роутера."
+msgstr "Не удалось получить статус с роутера."
+
+msgid "Активный канал"
+msgstr "Активный канал"
+
+msgid "Ручное переключение"
+msgstr "Ручное переключение"
+
+msgid "Диагностика и данные"
+msgstr "Диагностика и данные"
+
+msgid "Primary VPN"
+msgstr "Primary VPN"
+
+msgid "URLTest группа"
+msgstr "URLTest группа"
+
+msgid "активный резерв"
+msgstr "активный резерв"
+
+msgid "резерв"
+msgstr "резерв"
+
+msgid "живы"
+msgstr "живы"
+
+msgid "Резервы"
+msgstr "Резервы"
+
+msgid "Режим"
+msgstr "Режим"
+
+msgid "URLTest member"
+msgstr "URLTest member"
+
+msgid "Статус резервов из engine. Live probe обновит проверку всех каналов."
+msgstr "Статус резервов из engine. Live probe обновит проверку всех каналов."
+
+msgid "Статус из кэша Clash. Live probe обновит проверку всех каналов."
+msgstr "Статус из кэша Clash. Live probe обновит проверку всех каналов."
+
+msgid "Каналы failover"
+msgstr "Каналы failover"
+
 msgid "Telegram"
 msgstr "Telegram"
 

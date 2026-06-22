@@ -13,12 +13,13 @@
 | Опция | Тип | По умолчанию | Описание |
 |--------|-----|--------------|----------|
 | `enabled` | `0` / `1` | `1` | Включить Hybrid Failover |
-| `dns_type` | string | `doh` | Тип DNS в sing-box (`doh`, `udp`, `dot`) |
+| `engine_mode` | `native` / `singbox` | `native` | `native`: in-process engine (tproxy, DNS, outbounds). `singbox`: legacy внешний sing-box |
+| `dns_type` | string | `doh` | Тип DNS upstream (`doh`, `udp`, `dot`) |
 | `dns_server` | string | `1.1.1.1` | Основной DNS (DoH/DoT/UDP) |
 | `bootstrap_dns_server` | string | `77.88.8.8` | Bootstrap DNS для резолва DoH-хоста |
 | `dns_rewrite_ttl` | string | `60` | TTL rewrite для fakeip DNS-правил |
 | `cache_path` | string | `/etc/sing-box/cache.db` | Путь cache sing-box (не `/tmp/…`) |
-| `config_schema_version` | int | `2` | Версия схемы после `migrate` |
+| `config_schema_version` | int | `3` | Версия схемы после `migrate` |
 | `disable_quic` | `0` / `1` | `0` | Отключить QUIC в маршрутизации |
 | `dont_touch_dhcp` | `0` / `1` | `0` | Не менять dnsmasq (не перенаправлять DNS на `127.0.0.42`) |
 | `clash_api_listen` | string | `127.0.0.1:9090` | Адрес Clash API (LuCI/бот; часто LAN IP) |
@@ -28,8 +29,8 @@
 | `yacd_secret_key` | string | *(пусто)* | Bearer secret для Clash API |
 | `main_section` | string | `glob` | Секция по умолчанию для `subscription-refresh` |
 | `update_interval` | duration | `1d` | Интервал обновления community rulesets в sing-box |
-| `download_lists_via_proxy` | `0` / `1` | `0` | Скачивать списки через proxy-секцию |
-| `download_lists_via_proxy_section` | string | *(пусто)* | Имя секции для загрузки списков через proxy |
+| `download_lists_via_proxy` | `0` / `1` | `1` | Скачивать community-списки через proxy-секцию (`.srs` и `.lst`) |
+| `download_lists_via_proxy_section` | string | *(пусто)* | Секция для загрузки; пусто = `main_section`. В sing-box поднимается local mixed inbound `127.0.0.1:1610` |
 | `output_network_interface` | string | *(пусто)* | Привязка исходящего интерфейса sing-box |
 | `webhook_url` | string | *(пусто)* | HTTP webhook при событиях failover (watchdog) |
 | `failover_probe_interval` | duration | `30s` | Интервал фонового controller (не URLTest interval) |

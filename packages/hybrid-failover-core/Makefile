@@ -10,7 +10,7 @@ define Package/hybrid-failover-core
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Hybrid Failover Core (Go)
-  DEPENDS:=+sing-box +ca-bundle +uci +procd
+  DEPENDS:=+ca-bundle +uci +procd
 endef
 
 define Package/hybrid-failover-core/install

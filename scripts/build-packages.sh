@@ -50,7 +50,7 @@ mkdir -p "$IPK_DIR" "$APK_DIR" "$BIN_DIR" "$STAGE_DIR"
 hf_want_ipk && rm -rf "$IPK_DIR" && mkdir -p "$IPK_DIR"
 hf_want_apk && rm -rf "$APK_DIR" && mkdir -p "$APK_DIR"
 
-	echo "==> Building Hybrid Failover packages (v${FULL_VERSION}, set=${HF_BUILD_SET}, format: ${HF_PKG_FORMAT:-both}, HF_UPX=${HF_UPX:-1})"
+	echo "==> Building Hybrid Failover packages (v${FULL_VERSION}, set=${HF_BUILD_SET}, format: ${HF_PKG_FORMAT:-both}, HF_UPX=${HF_UPX:-auto})"
 
 go_build_binary() {
 	local owrt_arch="$1"
@@ -132,7 +132,7 @@ build_core_pkg() {
 	local size_kb
 	size_kb="$(( ($(stat -f%z "$bin_src" 2>/dev/null || stat -c%s "$bin_src") + 1023) / 1024 ))"
 	write_control "$pkg_root/CONTROL/control" "hybrid-failover-core" "$owrt_arch" \
-		"sing-box ca-bundle uci procd" \
+		"ca-bundle uci procd" \
 		"Hybrid Failover Core: Go routing stack for OpenWrt" \
 		"$size_kb" "$FULL_VERSION"
 

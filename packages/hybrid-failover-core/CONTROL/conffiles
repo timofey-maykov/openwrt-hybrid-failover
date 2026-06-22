@@ -1,3 +1,2 @@
 /etc/config/hybrid-failover
-/etc/sing-box/config.json
 /etc/hybrid-failover/dnsmasq-dhcp.bak
