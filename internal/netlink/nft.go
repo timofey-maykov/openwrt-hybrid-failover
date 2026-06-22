@@ -86,6 +86,7 @@ func ApplyFromUCI(pkg *uci.Package) error {
 			}
 			steps = append(steps,
 				mangleMarkRule("iifname @"+ifaceSetName+" ip daddr @"+proxySubnetsSetName),
+				"nft add rule inet "+NFTTable+" mangle_output ip daddr @"+proxySubnetsSetName+" meta l4proto { tcp, udp } meta mark set "+FWMark,
 			)
 		}
 	}

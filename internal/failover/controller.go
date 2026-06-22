@@ -10,6 +10,9 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/ipc"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/probe"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -45,6 +48,7 @@ type SectionRuntime struct {
 	Policy        string    `json:"policy"`
 	Mode          string    `json:"mode"`
 	Active        string    `json:"active"`
+	URLTestMember string    `json:"urltest_member,omitempty"`
 	PrimaryOK     bool      `json:"primary_ok"`
 	PrimaryDelay  int       `json:"primary_delay_ms,omitempty"`
 	FailStreak    int       `json:"fail_streak"`
@@ -137,6 +141,7 @@ func (c *Controller) pollOnce() {
 	if err != nil {
 		return
 	}
+	c.processEngineIPC(pkg)
 	c.reloadSettings(pkg)
 	c.syncStatesFromDisk()
 	c.sections = loadManagedSections(pkg)
@@ -144,7 +149,7 @@ func (c *Controller) pollOnce() {
 		return
 	}
 
-	cli := clash.New(c.ClashURL, 12*time.Second)
+	cli := c.backendFor(pkg)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -153,10 +158,40 @@ func (c *Controller) pollOnce() {
 		rt := c.pollSection(ctx, cli, sec)
 		runtimes = append(runtimes, rt)
 	}
+	if plan.NativeEnabled(pkg) && engine.Alive() {
+		_ = engine.WriteRuntimeSnapshot(engine.Default().Snapshot())
+	}
 	_ = writeRuntimeState(runtimes)
 }
 
-func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec SectionConfig) SectionRuntime {
+func (c *Controller) processEngineIPC(pkg *uci.Package) {
+	if pkg == nil || !plan.NativeEnabled(pkg) {
+		return
+	}
+	ipc.ProcessPendingSwitch(func(section, outbound string) (string, error) {
+		if err := ValidateSelectorMember(pkg, section, outbound); err != nil {
+			return "", err
+		}
+		backend := NewEngineBackend()
+		selector := singbox.OutboundTag(section)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		prev, _ := backend.ActiveOutbound(ctx, selector)
+		if err := backend.SwitchProxy(ctx, selector, outbound); err != nil {
+			return prev, err
+		}
+		return prev, nil
+	})
+}
+
+func (c *Controller) backendFor(pkg *uci.Package) Backend {
+	if plan.NativeEnabled(pkg) {
+		return NewEngineBackend()
+	}
+	return NewClashBackend(c.ClashURL, 12*time.Second)
+}
+
+func (c *Controller) pollSection(ctx context.Context, backend Backend, sec SectionConfig) SectionRuntime {
 	st := c.stateFor(sec.Section)
 	rt := SectionRuntime{
 		Section: sec.Section,
@@ -164,13 +199,19 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 		Mode:    st.mode,
 	}
 
-	active, err := cli.ActiveOutbound(ctx, sec.SelectorTag)
+	active, err := backend.ActiveOutbound(ctx, sec.SelectorTag)
 	if err != nil {
 		rt.LastError = err.Error()
 		return rt
 	}
 	rt.Active = active
 	st.lastActive = active
+	if engine.Alive() {
+		snap := engine.Default().Snapshot()
+		if snap.Sections != nil {
+			rt.URLTestMember = snap.Sections[sec.Section].URLTestMember
+		}
+	}
 
 	if sec.Policy == policy.Fastest || sec.PrimaryTag == "" {
 		c.recordPassive(sec, st, active)
@@ -179,7 +220,7 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 	}
 
 	now := time.Now().UTC()
-	primaryDelay, primaryOK, probeDetail := probeOutbound(ctx, cli, sec, sec.PrimaryTag, sec.TestURL)
+	primaryDelay, primaryOK, probeDetail := probeOutbound(ctx, backend, sec, sec.PrimaryTag, sec.TestURL)
 	rt.PrimaryOK = primaryOK
 	rt.PrimaryDelay = primaryDelay
 	if !primaryOK && probeDetail != "" {
@@ -195,6 +236,16 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 		rt.LastSwitch = st.lastSwitchAt
 	}
 
+	// Engine restart resets the selector to primary; restore backup without waiting for fail streak.
+	if st.mode == modeBackup && !primaryOK && (active == sec.PrimaryTag || active == sec.SelectorTag) {
+		if err := c.switchTo(ctx, backend, sec, sec.URLTestTag, "restore backup"); err != nil {
+			rt.LastError = err.Error()
+		} else {
+			active = sec.URLTestTag
+			rt.Active = active
+		}
+	}
+
 	onPrimary := active == sec.PrimaryTag
 	onBackup := active == sec.URLTestTag || isBackupTag(active, sec)
 
@@ -205,7 +256,7 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 			st.failStreak++
 			st.recoverStreak = 0
 			if st.failStreak >= sec.FailThreshold {
-				if err := c.switchTo(ctx, cli, sec, sec.URLTestTag, "primary outage"); err != nil {
+				if err := c.switchTo(ctx, backend, sec, sec.URLTestTag, "primary outage"); err != nil {
 					rt.LastError = err.Error()
 				} else {
 					st.mode = modeBackup
@@ -222,7 +273,7 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 			st.recoverStreak++
 			st.failStreak = 0
 			if st.recoverStreak >= sec.RecoverThreshold {
-				if err := c.switchTo(ctx, cli, sec, sec.PrimaryTag, "primary recovered"); err != nil {
+				if err := c.switchTo(ctx, backend, sec, sec.PrimaryTag, "primary recovered"); err != nil {
 					rt.LastError = err.Error()
 				} else {
 					st.mode = modePrimary
@@ -233,17 +284,17 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 			st.recoverStreak = 0
 			// Ensure urltest group is selected among backups.
 			if active != sec.URLTestTag {
-				_ = c.switchTo(ctx, cli, sec, sec.URLTestTag, "backup urltest")
+				_ = c.switchTo(ctx, backend, sec, sec.URLTestTag, "backup urltest")
 			}
 		}
 
 	default:
 		// Manual selection or drift: re-attach to policy.
 		if primaryOK {
-			_ = c.switchTo(ctx, cli, sec, sec.PrimaryTag, "sync primary")
+			_ = c.switchTo(ctx, backend, sec, sec.PrimaryTag, "sync primary")
 			st.mode = modePrimary
 		} else {
-			_ = c.switchTo(ctx, cli, sec, sec.URLTestTag, "sync backup")
+			_ = c.switchTo(ctx, backend, sec, sec.URLTestTag, "sync backup")
 			st.mode = modeBackup
 		}
 	}
@@ -255,12 +306,12 @@ func (c *Controller) pollSection(ctx context.Context, cli *clash.Client, sec Sec
 	return rt
 }
 
-func (c *Controller) switchTo(ctx context.Context, cli *clash.Client, sec SectionConfig, target, reason string) error {
+func (c *Controller) switchTo(ctx context.Context, backend Backend, sec SectionConfig, target, reason string) error {
 	prev := c.stateFor(sec.Section).lastActive
 	if prev == target {
 		return nil
 	}
-	if err := cli.SwitchProxy(ctx, sec.SelectorTag, target); err != nil {
+	if err := backend.SwitchProxy(ctx, sec.SelectorTag, target); err != nil {
 		return err
 	}
 	st := c.stateFor(sec.Section)
@@ -395,15 +446,15 @@ func parseControllerInterval(raw string) time.Duration {
 	return d
 }
 
-func probeOutbound(ctx context.Context, cli *clash.Client, sec SectionConfig, tag, testURL string) (delay int, ok bool, detail string) {
+func probeOutbound(ctx context.Context, backend Backend, sec SectionConfig, tag, testURL string) (delay int, ok bool, detail string) {
 	bind := sec.PrimaryIface
 	if sec.Sec != nil && tag != sec.PrimaryTag {
 		bind = probe.BindIfaceForChannel(sec.Section, sec.Sec, tag)
 	}
 	if tag == sec.PrimaryTag && bind != "" {
-		return probe.PrimaryVPN(ctx, cli, tag, testURL, bind)
+		return probe.PrimaryVPN(ctx, backend, tag, testURL, bind)
 	}
-	delay, ok, detail = probe.Outbound(ctx, cli, tag, testURL, "direct", bind)
+	delay, ok, detail = probe.Outbound(ctx, backend, tag, testURL, "direct", bind)
 	return delay, ok, detail
 }
 

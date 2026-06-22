@@ -55,7 +55,7 @@ func failoverInfoFromSection(section string, sec *uci.Section) *FailoverInfo {
 
 // EnrichReport adds per-channel status and failover parameters when Clash API is up.
 func EnrichReport(r Report, clashURL, mainSection string, sec *uci.Section) Report {
-	if !r.ClashOK || mainSection == "" {
+	if r.EngineMode == "native" || !r.ClashOK || mainSection == "" {
 		return r
 	}
 	cli := clash.New(clashURL, 8*time.Second)
@@ -97,6 +97,7 @@ func MapControllerStates(states []failover.SectionRuntime) []ControllerSection {
 			Policy:        st.Policy,
 			Mode:          st.Mode,
 			Active:        st.Active,
+			URLTestMember: st.URLTestMember,
 			PrimaryOK:     st.PrimaryOK,
 			PrimaryDelay:  st.PrimaryDelay,
 			FailStreak:    st.FailStreak,
@@ -112,7 +113,7 @@ func MapControllerStates(states []failover.SectionRuntime) []ControllerSection {
 
 // ProbeChannels runs live delay probes for each listed channel (slower, like bot /health).
 func ProbeChannels(r Report, clashURL, mainSection string, sec *uci.Section) Report {
-	if !r.ClashOK {
+	if r.EngineMode == "native" || !r.ClashOK {
 		return r
 	}
 	testURL := "https://www.gstatic.com/generate_204"

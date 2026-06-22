@@ -12,7 +12,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
-const targetSchema = 2
+const targetSchema = 4
 
 // MigrationChange is a uci CLI command without the "uci" prefix.
 type MigrationChange struct {
@@ -49,6 +49,12 @@ func PlanMigration(pkg *uci.Package) []MigrationChange {
 	}
 	if schema < 2 {
 		changes = append(changes, planSchemaV2ClientRules(pkg, pkgName)...)
+	}
+	if schema < 3 {
+		changes = append(changes, planSchemaV3EngineMode(pkg, pkgName)...)
+	}
+	if schema < 4 {
+		changes = append(changes, planSchemaV4NativeEngine(pkg, pkgName)...)
 	}
 	changes = append(changes, MigrationChange{fmt.Sprintf("set %s.settings.config_schema_version=%d", pkgName, targetSchema)})
 	return changes
@@ -101,6 +107,34 @@ func planSchemaV2ClientRules(pkg *uci.Package, pkgName string) []MigrationChange
 	return changes
 }
 
+func planSchemaV3EngineMode(pkg *uci.Package, pkgName string) []MigrationChange {
+	settings := pkg.Section("settings")
+	if settings == nil {
+		return []MigrationChange{
+			MigrationChange{fmt.Sprintf("set %s.settings.engine_mode=native", pkgName)},
+		}
+	}
+	if settings.Get("engine_mode", "") != "" {
+		return nil
+	}
+	return []MigrationChange{
+		MigrationChange{fmt.Sprintf("set %s.settings.engine_mode=native", pkgName)},
+	}
+}
+
+func planSchemaV4NativeEngine(pkg *uci.Package, pkgName string) []MigrationChange {
+	settings := pkg.Section("settings")
+	if settings == nil {
+		return nil
+	}
+	if settings.Get("engine_mode", "") != "singbox" {
+		return nil
+	}
+	return []MigrationChange{
+		MigrationChange{fmt.Sprintf("set %s.settings.engine_mode=native", pkgName)},
+	}
+}
+
 // Run applies schema migrations and imports legacy UCI once if needed.
 func Run(configPath string, dryRun bool) (changed bool, err error) {
 	if configPath == "" {
@@ -136,6 +170,7 @@ func Run(configPath string, dryRun bool) (changed bool, err error) {
 		}
 	}
 	disableLegacyInit(dryRun)
+	removeLegacySingbox(dryRun)
 	warnLegacyScripts()
 	return len(changes) > 0 || imported, nil
 }
@@ -149,6 +184,37 @@ func disableLegacyInit(dryRun bool) {
 		return
 	}
 	_ = exec.Command(paths.LegacyInitScript, "disable").Run()
+}
+
+// removeLegacySingbox stops the external sing-box service and removes the OpenWrt
+// package when native engine is active. The in-tree engine no longer uses /usr/bin/sing-box.
+func removeLegacySingbox(dryRun bool) {
+	if _, err := os.Stat(paths.SingboxInit); os.IsNotExist(err) {
+		if _, err := exec.LookPath("sing-box"); err != nil {
+			return
+		}
+	} else if err != nil {
+		return
+	}
+	if dryRun {
+		fmt.Fprintf(os.Stderr, "migrate: would stop and remove sing-box package\n")
+		return
+	}
+	if _, err := os.Stat(paths.SingboxInit); err == nil {
+		_ = exec.Command(paths.SingboxInit, "stop").Run()
+		_ = exec.Command(paths.SingboxInit, "disable").Run()
+	}
+	if _, err := exec.LookPath("opkg"); err == nil {
+		out, err := exec.Command("opkg", "list-installed").CombinedOutput()
+		if err == nil && strings.Contains(string(out), "sing-box") {
+			if err := exec.Command("opkg", "remove", "--force-depends", "sing-box").Run(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: opkg remove sing-box: %v\n", err)
+			} else {
+				fmt.Fprintf(os.Stderr, "removed legacy sing-box package\n")
+			}
+		}
+	}
+	_ = os.Remove(paths.SingboxConfig)
 }
 
 func warnLegacyScripts() {

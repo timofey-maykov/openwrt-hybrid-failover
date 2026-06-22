@@ -58,4 +58,12 @@ func (b *Builder) configureInbounds() {
 		"listen":      DNSInboundAddress,
 		"listen_port": DNSInboundPort,
 	})
+	if b.listDownloadDetourTag() != "" {
+		b.cfg.AddInbound(map[string]any{
+			"type":        "mixed",
+			"tag":         ListDownloadInboundTag,
+			"listen":      "127.0.0.1",
+			"listen_port": ListDownloadMixedPort,
+		})
+	}
 }

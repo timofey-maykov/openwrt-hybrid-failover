@@ -63,6 +63,57 @@ detect_arch() {
 
 normalize_arch() { detect_arch; }
 
+# Return candidate OpenWrt package archs (primary + known fallbacks).
+arch_candidates() {
+	_primary="$(detect_arch)"
+	echo "$_primary"
+	case "$_primary" in
+		aarch64_cortex-a53) echo "aarch64_generic" ;;
+		aarch64_generic) echo "aarch64_cortex-a53" ;;
+	esac
+}
+
+find_local_pkg() {
+	_dir="$1"
+	_pkg="$2"
+	_arch="$3"
+	_ver="$(tr -d '[:space:]' <"${HF_DIST_DIR:-/tmp/hf-dist}/../VERSION" 2>/dev/null || echo "")"
+	[ -n "$_ver" ] || _ver="$(echo "${HF_VERSION:-latest}" | sed 's/^v//')"
+	_rel="${HF_PKG_RELEASE:-1}"
+	for _pat in \
+		"${_dir}/${_pkg}_${_ver}-${_rel}_${_arch}.ipk" \
+		"${_dir}/${_pkg}_${_ver}-${_rel}_${_arch}.apk" \
+		"${_dir}/${_pkg}_"*"_${_arch}.ipk" \
+		"${_dir}/${_pkg}_"*"_${_arch}.apk" \
+		"${_dir}/${_pkg}-${_ver}-r${_rel}_${_arch}.apk" \
+		"${_dir}/${_pkg}-${_ver}-r${_rel}.apk"; do
+		for _f in $_pat; do
+			[ -f "$_f" ] || continue
+			echo "$_f"
+			return 0
+		done
+	done
+	return 1
+}
+
+install_local_pkg() {
+	_dir="$1"
+	_pkg="$2"
+	_path=""
+	for _arch in $(arch_candidates); do
+		if _path="$(find_local_pkg "$_dir" "$_pkg" "$_arch")"; then
+			break
+		fi
+	done
+	if [ -z "$_path" ] && [ "$_pkg" != "hybrid-failover-core" ] && [ "$_pkg" != "hybrid-failover-bot" ]; then
+		_path="$(find_local_pkg "$_dir" "$_pkg" all)" || true
+	fi
+	[ -n "$_path" ] || return 1
+	log "Установка $(basename "$_path") ..."
+	pkg_install_file "$_path" "$_pkg"
+	pkg_is_installed "$_pkg"
+}
+
 pkg_manager() {
 	if command -v apk >/dev/null 2>&1; then
 		echo apk
@@ -99,7 +150,6 @@ overlay_low_space() {
 stop_hf_services() {
 	/etc/init.d/hybrid-failover-bot stop 2>/dev/null || true
 	/etc/init.d/hybrid-failover stop 2>/dev/null || true
-	/etc/init.d/sing-box stop 2>/dev/null || true
 }
 
 pkg_remove() {
@@ -125,6 +175,15 @@ pkg_install_file() {
 	_path="$1"
 	_pkg="${2:-}"
 	_pm="$(pkg_manager)"
+	if [ -n "$_pkg" ] && ! pkg_is_installed "$_pkg"; then
+		case "$_pm" in
+			opkg) opkg install --force-space --force-overwrite "$_path" || return 1 ;;
+			apk) apk add --allow-untrusted "$_path" || return 1 ;;
+			*) return 1 ;;
+		esac
+		pkg_is_installed "$_pkg" && return 0
+		return 1
+	fi
 	_low=0
 	if overlay_low_space || [ "$HF_FORCE_REINSTALL" = "1" ]; then
 		_low=1
@@ -137,16 +196,20 @@ pkg_install_file() {
 	case "$_pm" in
 		apk)
 			apk add --allow-untrusted "$_path" 2>/dev/null || \
-				apk add --force-overwrite --allow-untrusted "$_path" 2>/dev/null || true
+				apk add --force-overwrite --allow-untrusted "$_path" 2>/dev/null || return 1
 			;;
 		opkg)
 			opkg install --force-space --force-overwrite "$_path" 2>/dev/null || \
 				opkg install --force-space --force-overwrite --force-reinstall "$_path" 2>/dev/null || \
-				opkg install "$_path" 2>/dev/null || \
-				opkg install --force-reinstall "$_path" 2>/dev/null || true
+				opkg install "$_path" 2>/dev/null || return 1
 			;;
 		*) return 1 ;;
 	esac
+	if [ -n "$_pkg" ]; then
+		pkg_is_installed "$_pkg"
+	else
+		return 0
+	fi
 }
 
 pkg_install_named() {
@@ -168,10 +231,6 @@ install_deps() {
 	done
 	case "$HF_MODE" in
 		full)
-			for pkg in sing-box; do
-				pkg_is_installed "$pkg" && continue
-				pkg_install_named "$pkg" || warn "не удалось установить $pkg (см. docs/SING-BOX-SIZE.md, sing-box-lite)"
-			done
 			;;
 		patches)
 			die "HF_MODE=patches удалён: используйте HF_MODE=full"
@@ -252,14 +311,26 @@ release_pkg_names() {
 }
 
 try_install_pkg() {
-	_base="https://github.com/${HF_REPO}/releases/download/$1"
+	_tag="$1"
 	_pkg="$2"
-	_arch="$3"
-	for _name in $(release_pkg_names "$1" "$_pkg" "$_arch"); do
-		_url="${_base}/${_name}"
-		if install_pkg_url "$_url" "$_pkg"; then
-			return 0
-		fi
+	_arch_hint="${3:-}"
+	_base="https://github.com/${HF_REPO}/releases/download/${_tag}"
+	if [ "$_arch_hint" = "all" ]; then
+		for _name in $(release_pkg_names "$_tag" "$_pkg" "all"); do
+			_url="${_base}/${_name}"
+			if install_pkg_url "$_url" "$_pkg"; then
+				return 0
+			fi
+		done
+		return 1
+	fi
+	for _arch in $(arch_candidates); do
+		for _name in $(release_pkg_names "$_tag" "$_pkg" "$_arch"); do
+			_url="${_base}/${_name}"
+			if install_pkg_url "$_url" "$_pkg"; then
+				return 0
+			fi
+		done
 	done
 	return 1
 }
@@ -272,8 +343,8 @@ install_from_release() {
 
 	case "$HF_MODE" in
 		bot)
-			try_install_pkg "$_tag" "hybrid-failover-bot" "$_arch" || \
-				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
+			try_install_pkg "$_tag" "hybrid-failover-bot" || \
+				die "Не найден hybrid-failover-bot для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
 			try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
 				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
 			;;
@@ -281,10 +352,10 @@ install_from_release() {
 			die "HF_MODE=patches удалён: используйте HF_MODE=full (hybrid-failover-core)"
 			;;
 		full)
-			try_install_pkg "$_tag" "hybrid-failover-core" "$_arch" || \
-				die "Не найден hybrid-failover-core для $_arch в релизе $_tag"
-			try_install_pkg "$_tag" "hybrid-failover-bot" "$_arch" || \
-				die "Не найден hybrid-failover-bot для $_arch в релизе $_tag"
+			try_install_pkg "$_tag" "hybrid-failover-core" || \
+				die "Не найден hybrid-failover-core для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
+			try_install_pkg "$_tag" "hybrid-failover-bot" || \
+				die "Не найден hybrid-failover-bot для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
 			try_install_pkg "$_tag" "luci-app-hybrid-failover" "all" || \
 				try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
 				die "Не найден luci-app-hybrid-failover в релизе $_tag"
@@ -309,34 +380,15 @@ install_from_local_dist() {
 	case "$HF_MODE" in
 		bot|full)
 			if [ "$HF_MODE" = "full" ]; then
-				for _f in "${_dir}"/hybrid-failover-core_*_"${_arch}".* \
-					"${_dir}"/hybrid-failover-core-*_"${_arch}".* \
-					"${_dir}"/hybrid-failover-core-*."${_sub}"; do
-				[ -f "$_f" ] || continue
-				pkg_install_file "$_f" "hybrid-failover-core"
-				break
-			done
-		fi
-		for _f in "${_dir}"/hybrid-failover-bot_*_"${_arch}".* "${_dir}"/hybrid-failover-bot-*_"${_arch}".* \
-			"${_dir}"/hybrid-failover-bot-*."${_sub}"; do
-			[ -f "$_f" ] || continue
-			pkg_install_file "$_f" "hybrid-failover-bot"
-			break
-		done
-		for _f in "${_dir}"/luci-i18n-hybrid-failover_*_all.* \
-			"${_dir}"/luci-i18n-hybrid-failover-*."${_sub}"; do
-			[ -f "$_f" ] || continue
-			pkg_install_file "$_f" "luci-i18n-hybrid-failover"
-			break
-		done
-		for _f in "${_dir}"/luci-app-hybrid-failover_*_all.* \
-			"${_dir}"/luci-app-hybrid-failover-*."${_sub}" \
-			"${_dir}"/luci-app-hybrid-failover-bot_*_all.* \
-			"${_dir}"/luci-app-hybrid-failover-bot-*."${_sub}"; do
-			[ -f "$_f" ] || continue
-			pkg_install_file "$_f" "luci-app-hybrid-failover"
-			break
-		done
+				install_local_pkg "$_dir" hybrid-failover-core || \
+					die "Не найден hybrid-failover-core в $_dir (arch: $(arch_candidates | tr '\n' ' '))"
+			fi
+			install_local_pkg "$_dir" hybrid-failover-bot || \
+				warn "hybrid-failover-bot не установлен"
+			install_local_pkg "$_dir" luci-i18n-hybrid-failover || true
+			install_local_pkg "$_dir" luci-app-hybrid-failover || \
+				install_local_pkg "$_dir" luci-app-hybrid-failover-bot || \
+				warn "LuCI app не установлен"
 			;;
 	esac
 	return 0
@@ -367,10 +419,17 @@ post_install() {
 		rm -f /usr/bin/hybrid-failover
 		log "Удалён legacy /usr/bin/hybrid-failover"
 	fi
-	/etc/init.d/sing-box enable 2>/dev/null || true
-	/etc/init.d/sing-box start 2>/dev/null || true
 	/etc/init.d/hybrid-failover enable 2>/dev/null || true
+	/usr/sbin/hybrid-failover migrate 2>/dev/null || true
 	/etc/init.d/hybrid-failover start 2>/dev/null || true
+	if [ "$HF_MODE" != "bot" ]; then
+		if [ ! -x /usr/sbin/hybrid-failover ]; then
+			die "hybrid-failover-core не установлен (нет /usr/sbin/hybrid-failover)"
+		fi
+		if ! /usr/sbin/hybrid-failover validate >/dev/null 2>&1; then
+			warn "hybrid-failover validate не прошёл после установки"
+		fi
+	fi
 
 	log "Готово. Свободно на overlay: $(overlay_free_kb /overlay)K"
 	log "LuCI: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/hybrid-failover"

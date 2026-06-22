@@ -42,11 +42,42 @@ config section 'glob'
 		"failover_vpn_enabled=1",
 		"urltest_interrupt_exist_connections=0",
 		"cache_path=" + paths.SingboxCache,
-		"config_schema_version=2",
+		"config_schema_version=4",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in changes:\n%s", want, joined)
 		}
+	}
+}
+
+func TestPlanMigrationSingboxToNative(t *testing.T) {
+	dir := t.TempDir()
+	cfg := filepath.Join(dir, "hybrid-failover")
+	content := `
+config settings 'settings'
+	option config_schema_version '3'
+	option engine_mode 'singbox'
+`
+	if err := os.WriteFile(cfg, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pkg, err := uci.Load(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes := PlanMigration(pkg)
+	joined := strings.Join(func() []string {
+		out := make([]string, len(changes))
+		for i, c := range changes {
+			out[i] = c.Cmd
+		}
+		return out
+	}(), "\n")
+	if !strings.Contains(joined, "engine_mode=native") {
+		t.Fatalf("expected singbox->native migration:\n%s", joined)
+	}
+	if !strings.Contains(joined, "config_schema_version=4") {
+		t.Fatalf("expected schema v4:\n%s", joined)
 	}
 }
 
@@ -55,7 +86,7 @@ func TestPlanMigrationAlreadyAtSchema(t *testing.T) {
 	cfg := filepath.Join(dir, "hybrid-failover")
 	content := `
 config settings 'settings'
-	option config_schema_version '2'
+	option config_schema_version '4'
 	option cache_path '/etc/sing-box/cache.db'
 `
 	if err := os.WriteFile(cfg, []byte(content), 0o644); err != nil {

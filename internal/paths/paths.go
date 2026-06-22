@@ -6,6 +6,9 @@ var (
 	FailoverStateFile = "/var/run/hybrid-failover/policy-state.json"
 	MetricsPromFile   = "/var/run/hybrid-failover/metrics.prom"
 	DelayHistoryFile  = "/var/run/hybrid-failover/delay-history.json"
+	EngineRuntimeFile = "/var/run/hybrid-failover/engine-runtime.json"
+	SwitchRequestFile = "/var/run/hybrid-failover/switch-request.json"
+	SwitchResponseFile = "/var/run/hybrid-failover/switch-response.json"
 )
 
 // Legacy* are on-disk paths from pre-hybrid-failover installs (used only by migrate).

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -17,12 +16,17 @@ import (
 // ChannelTimeout is per-channel budget for live probes.
 const ChannelTimeout = 12 * time.Second
 
-// Outbound tries Clash /delay; for Direct outbounds falls back to curl via bind interface.
-func Outbound(ctx context.Context, cli *clash.Client, tag, testURL, proxyType, bindIface string) (delay int, ok bool, detail string) {
+// Delayer returns outbound delay in milliseconds (Clash API or native engine control).
+type Delayer interface {
+	ProxyDelay(ctx context.Context, tag, testURL string) (int, error)
+}
+
+// Outbound tries Delayer /delay; for Direct outbounds falls back to curl via bind interface.
+func Outbound(ctx context.Context, delayer Delayer, tag, testURL, proxyType, bindIface string) (delay int, ok bool, detail string) {
 	if testURL == "" {
 		testURL = "https://www.gstatic.com/generate_204"
 	}
-	delay, err := cli.ProxyDelay(ctx, tag, testURL)
+	delay, err := delayer.ProxyDelay(ctx, tag, testURL)
 	if err == nil && delay > 0 {
 		return delay, true, ""
 	}

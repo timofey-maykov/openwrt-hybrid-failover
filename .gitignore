@@ -1,5 +1,6 @@
 dist/
 .cache/
+/hybrid-failover
 bot/hybrid-failover-bot
 packages/hybrid-failover-bot/binaries/
 *.ipk
@@ -11,3 +12,5 @@ upstream-main/
 upstream-main-patched/
 .cursor/
 bot/hybrid-failover-bot-local
+deploy-backups/
+scripts/__pycache__/

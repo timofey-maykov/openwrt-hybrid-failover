@@ -253,11 +253,8 @@ func (s *Store) ApplyViaUCI() error {
 	if out, err := execUCI("commit", paths.UCIPackage); err != nil {
 		return fmt.Errorf("uci commit: %w: %s", err, out)
 	}
-	if _, err := lifecycle.Apply(lifecycle.Options{}); err != nil {
+	if _, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{}); err != nil {
 		return fmt.Errorf("lifecycle apply: %w", err)
-	}
-	if err := lifecycle.ReloadSingbox(""); err != nil {
-		return fmt.Errorf("lifecycle reload: %w", err)
 	}
 	return os.Remove(s.path("pending"))
 }

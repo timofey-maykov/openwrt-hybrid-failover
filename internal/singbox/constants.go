@@ -29,6 +29,10 @@ const (
 	DefaultDNSServer    = "1.1.1.1"
 	DefaultDNSType      = "doh"
 	DefaultUpdateInterval = "1d"
+
+	ListDownloadInboundTag = "list-download-in"
+	ListDownloadMixedPort  = 1610
+	ListDownloadProxyURL   = "http://127.0.0.1:1610"
 )
 
 var CommunityServices = []string{
@@ -52,7 +56,7 @@ var SubnetListURLs = map[string]string{
 }
 
 func CommunityServiceDomainURL(service string) string {
-	return GitHubRawURL + "/Services/" + service
+	return GitHubRawURL + "/Services/" + service + ".lst"
 }
 
 func CommunitySRSURL(service string) string {

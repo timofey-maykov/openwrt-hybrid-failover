@@ -2,9 +2,7 @@ package lifecycle
 
 import (
 	"fmt"
-	"os/exec"
 
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -12,9 +10,7 @@ import (
 )
 
 type StartOptions struct {
-	UCIPath     string
-	ConfigPath  string
-	SingboxInit string
+	UCIPath string
 }
 
 type StartResult struct {
@@ -26,27 +22,14 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 	if opts.UCIPath == "" {
 		opts.UCIPath = paths.UCIConfig
 	}
-	if opts.ConfigPath == "" {
-		opts.ConfigPath = paths.SingboxConfig
-	}
-	if opts.SingboxInit == "" {
-		opts.SingboxInit = paths.SingboxInit
-	}
 
 	pkg, err := uci.Load(opts.UCIPath)
 	if err != nil {
 		return StartResult{}, fmt.Errorf("load uci: %w", err)
 	}
 
-	updater := lists.NewUpdater(false)
-	if _, err := updater.UpdateOnce(); err != nil {
-		return StartResult{}, fmt.Errorf("list update: %w", err)
-	}
-
 	applyOpts := Options{
-		UCIPath:     opts.UCIPath,
-		ConfigPath:  opts.ConfigPath,
-		SingboxInit: opts.SingboxInit,
+		UCIPath: opts.UCIPath,
 	}
 	res, err := Apply(applyOpts)
 	if err != nil {
@@ -57,15 +40,14 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		return StartResult{}, fmt.Errorf("nft setup: %w", err)
 	}
 
-	if err := ReloadSingbox(opts.SingboxInit); err != nil {
-		if err2 := startSingbox(opts.SingboxInit); err2 != nil {
-			return StartResult{}, fmt.Errorf("sing-box start: %w (reload: %v)", err2, err)
-		}
+	if err := netlink.EnsureDNSBindAddr(); err != nil {
+		return StartResult{}, fmt.Errorf("dns bind addr: %w", err)
 	}
 
-	settings := pkg.Section("settings")
-	if settings == nil || !settings.GetBool("dont_touch_dhcp", false) {
-		_ = dnsmasq.Configure()
+	updater := lists.NewFromUCI(opts.UCIPath)
+	_, listErr := updater.UpdateOnce()
+	if listErr != nil && !updater.HasValidCache() {
+		return StartResult{}, fmt.Errorf("list update: %w", listErr)
 	}
 
 	if res2, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
@@ -77,12 +59,4 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 	_ = lists.InstallCron(opts.UCIPath)
 
 	return StartResult{ConfigHash: res.ConfigHash}, nil
-}
-
-func startSingbox(init string) error {
-	out, err := exec.Command(init, "start").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w: %s", init, err, string(out))
-	}
-	return nil
 }

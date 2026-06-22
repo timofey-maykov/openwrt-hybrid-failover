@@ -257,18 +257,23 @@ func (b *Builder) updateInterval() string {
 }
 
 func (b *Builder) downloadDetourTag() string {
-	settings := b.pkg.Section("settings")
-	if settings == nil || !settings.GetBool("download_lists_via_proxy", false) {
-		return ""
-	}
-	section := settings.Get("download_lists_via_proxy_section", "")
-	if section == "" {
+	return b.listDownloadDetourTag()
+}
+
+func (b *Builder) listDownloadDetourTag() string {
+	enabled, section := ListDownloadSection(b.pkg)
+	if !enabled || section == "" {
 		return ""
 	}
 	return OutboundTag(section)
 }
 
 func (b *Builder) ensureSourceRuleset(path string) {
+	EnsureSourceRuleset(path)
+}
+
+// EnsureSourceRuleset creates an empty sing-box source ruleset file when missing.
+func EnsureSourceRuleset(path string) {
 	if _, err := os.Stat(path); err == nil {
 		return
 	}
@@ -276,7 +281,34 @@ func (b *Builder) ensureSourceRuleset(path string) {
 	_ = os.WriteFile(path, []byte(`{"version":3,"rules":[]}`+"\n"), 0o644)
 }
 
+// DomainRulesetEmpty reports whether a ruleset file is missing or has no domain rules.
+func DomainRulesetEmpty(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	var doc struct {
+		Rules []struct {
+			DomainSuffix []string `json:"domain_suffix"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return true
+	}
+	for _, rule := range doc.Rules {
+		if len(rule.DomainSuffix) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func writeDomainRuleset(path string, domains []string) error {
+	return WriteDomainRuleset(path, domains)
+}
+
+// WriteDomainRuleset writes a sing-box source ruleset JSON for domain suffixes.
+func WriteDomainRuleset(path string, domains []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -296,6 +328,11 @@ func writeDomainRuleset(path string, domains []string) error {
 }
 
 func writeSubnetRuleset(path string, cidrs []string) error {
+	return WriteSubnetRuleset(path, cidrs)
+}
+
+// WriteSubnetRuleset writes a sing-box source ruleset JSON for CIDRs.
+func WriteSubnetRuleset(path string, cidrs []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

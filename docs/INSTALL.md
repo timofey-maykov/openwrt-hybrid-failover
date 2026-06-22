@@ -100,7 +100,7 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 
 | Компонент | Пакеты (opkg / apk) |
 |-----------|---------------------|
-| Core | `sing-box`, `curl` |
+| Core | `curl`, `ca-bundle`, `uci`, `procd` |
 | Бот | `uci`, `procd`, `hybrid-failover-core` (для RPC) |
 | LuCI | `luci-base`, `luci-compat`, `hybrid-failover-core` |
 
@@ -112,7 +112,7 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 
 ## Мало места на overlay
 
-См. [docs/SING-BOX-SIZE.md](SING-BOX-SIZE.md): sing-box-lite, UPX, remove→install, legacy-бинарники.
+Сборка core использует UPX; при нехватке места:
 
 ```sh
 # Установщик сам снимает старые пакеты при нехватке места:

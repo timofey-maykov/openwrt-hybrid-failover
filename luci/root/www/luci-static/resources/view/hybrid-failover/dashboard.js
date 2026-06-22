@@ -43,8 +43,10 @@ return view.extend({
 	_channelsProbed: false,
 	_healthStarted: false,
 	_pollCountdown: 5,
+	_lastRefreshTime: '',
 	_sectionFilter: '',
 	_historyLimit: 15,
+	_activeTab: 'overview',
 	_monRoot: null,
 	_monUpdated: null,
 	_switchSectionEl: null,
@@ -70,6 +72,112 @@ return view.extend({
 		]);
 	},
 
+	buildSwitchCard: function() {
+		var self = this;
+		return E('div', { 'class': 'hf-ent-card', 'id': 'hf-switch-block' }, [
+			E('p', { 'class': 'hf-ent-card__title' }, _('Ручное переключение')),
+			E('div', { 'class': 'hf-mon-switch' }, [
+				E('div', {}, [
+					E('label', {}, _('Секция')),
+					E('select', { 'id': 'hf-switch-section', 'class': 'cbi-input-select',
+						'change': ui.createHandlerFn(self, function(ev) {
+							self._sectionFilter = ev.target.value;
+							var picker = document.getElementById('hf-section-picker');
+							if (picker)
+								picker.value = ev.target.value;
+							self.renderMonitor();
+						})
+					})
+				]),
+				E('div', {}, [
+					E('label', {}, _('Outbound')),
+					E('select', { 'id': 'hf-switch-outbound', 'class': 'cbi-input-select' })
+				]),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-apply',
+					'click': ui.createHandlerFn(self, function() {
+						var section = document.getElementById('hf-switch-section');
+						var outbound = document.getElementById('hf-switch-outbound');
+						if (!section || !outbound || !outbound.value)
+							return Promise.resolve();
+						var fo = self._lastStatus && self._lastStatus.failover;
+						if (fo && fo.policy === 'fastest') {
+							ui.addNotification(null, E('p', {}, _('При policy fastest ручное переключение недоступно')), 'warning');
+							return Promise.resolve();
+						}
+						hfui.showModal(_('Подтверждение'), [
+							E('p', {}, _('Переключить selector ') + section.value + ':'),
+							E('p', { 'class': 'hf-mon-tag' }, outbound.value)
+						], function() {
+							hfui.rpc.switchProxy(section.value, outbound.value).then(function(res) {
+								var ok = res && res.ok !== false && !(res.data && res.data.ok === false);
+								ui.addNotification(null, E('p', {},
+									ok ? _('Переключено') : (res.data && res.data.error) || _('Ошибка')),
+									ok ? 'info' : 'danger');
+								if (ok)
+									return self.refreshAll();
+							}).catch(function(err) {
+								ui.addNotification(null, E('p', {}, String(err.message || err)), 'danger');
+							});
+						});
+						return Promise.resolve();
+					})
+				}, _('Переключить'))
+			])
+		]);
+	},
+
+	buildToolsPanel: function() {
+		var self = this;
+		return E('div', { 'class': 'hf-ent-card' }, [
+			E('p', { 'class': 'hf-ent-card__title' }, _('Диагностика и данные')),
+			E('div', { 'class': 'hf-ent-tools' }, [
+				E('button', {
+					'class': 'btn cbi-button cbi-button-save',
+					'id': 'hf-btn-probe',
+					'click': ui.createHandlerFn(self, function() { return self.runHealthProbe(); })
+				}, _('Live probe')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-action',
+					'click': ui.createHandlerFn(self, function() {
+						return hfui.rpc.globalCheck().then(function(res) {
+							var items = hfui.parseChecklist(res);
+							ui.addNotification(null, hfui.renderChecklist(items),
+								items.every(function(x) { return x.ok; }) ? 'info' : 'danger');
+						});
+					})
+				}, _('global-check')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-action',
+					'click': ui.createHandlerFn(self, function() {
+						return hfui.rpc.checkFakeip().then(function(res) {
+							var ok = res && res.ok !== false && !(res.data && res.data.ok === false);
+							ui.addNotification(null, E('p', {},
+								(res && res.data && res.data.message) || (res && res.output) || _('Готово')),
+								ok ? 'info' : 'danger');
+						});
+					})
+				}, _('check-fakeip')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'click': ui.createHandlerFn(self, function() {
+						return exportHistoryFile().catch(function(err) {
+							ui.addNotification(null, E('p', {}, String(err.message || err)), 'danger');
+						});
+					})
+				}, _('Экспорт журнала')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'click': ui.createHandlerFn(self, function() {
+						hfui.clearDelayHistoryLocal();
+						ui.addNotification(null, E('p', {}, _('Графики задержек сброшены')), 'info');
+						return Promise.resolve();
+					})
+				}, _('Сбросить графики'))
+			])
+		]);
+	},
+
 	renderMonitor: function() {
 		var self = this;
 		var root = this._monRoot;
@@ -90,20 +198,39 @@ return view.extend({
 			content = hfui.buildErrorBanner(this._loadError);
 		} else {
 			var channels = this._channelData || (this._lastStatus && this._lastStatus.channels) || [];
-			content = E('div', {}, [
-				hfui.buildMetaLine(this._lastStatus),
-				hfui.buildSummaryBanner(this._lastStatus, {
-					primaryError: primaryErrorForSection(this._lastStatus, section)
-				}),
-				hfui.buildMetricCards(this._lastStatus),
-				hfui.buildFailoverPanels(this._lastStatus, section),
-				E('div', { 'class': 'hf-mon-section' }, [
-					E('h3', {}, _('Каналы и задержки')),
-					hfui.buildChannelsTable(channels, this._channelsProbed, this._lastDelayHistory)
-				]),
-				E('div', { 'class': 'hf-mon-section' }, [
-					E('div', { 'style': 'display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap;' }, [
-						E('h3', { 'style': 'margin:0;' }, _('История переключений')),
+			var reserveLabel = hfui.channelsReserveSummary(channels, this._lastStatus, this._channelsProbed);
+			var tabs = [
+				{ id: 'overview', label: _('Обзор') },
+				{ id: 'channels', label: _('Каналы') + (reserveLabel ? ' (' + reserveLabel + ')' : '') },
+				{ id: 'events', label: _('Журнал') },
+				{ id: 'tools', label: _('Инструменты') }
+			];
+			var tabBar = hfui.buildTabBar(tabs, self._activeTab, function(id) {
+				self._activeTab = id;
+				self.renderMonitor();
+			});
+			var hero = hfui.buildStatusHero(this._lastStatus, {
+				section: section,
+				primaryError: primaryErrorForSection(this._lastStatus, section)
+			});
+			var tabBody;
+
+			if (self._activeTab === 'channels') {
+				tabBody = E('div', { 'class': 'hf-mon-section' }, [
+					E('div', { 'class': 'hf-ent-section-head' }, [
+						E('h3', {}, _('Каналы и задержки')),
+						E('button', {
+							'class': 'btn cbi-button cbi-button-save',
+							'click': ui.createHandlerFn(self, function() { return self.runHealthProbe(); })
+						}, _('Live probe'))
+					]),
+					hfui.buildChannelsTable(channels, this._channelsProbed, this._lastDelayHistory,
+						hfui.isNativeEngine(this._lastStatus), this._lastStatus)
+				]);
+			} else if (self._activeTab === 'events') {
+				tabBody = E('div', { 'class': 'hf-mon-section' }, [
+					E('div', { 'class': 'hf-ent-section-head' }, [
+						E('h3', {}, _('История переключений')),
 						E('label', { 'style': 'font-size:12px;' }, [
 							_('Показать') + ' ',
 							E('select', {
@@ -119,15 +246,52 @@ return view.extend({
 						])
 					]),
 					hfui.buildHistoryTable(this._lastHistory || [], section, self._historyLimit)
-				])
-			]);
+				]);
+			} else if (self._activeTab === 'tools') {
+				tabBody = E('div', {}, [
+					self.buildToolsPanel(),
+					E('div', { 'style': 'margin-top:16px;' }, self.buildSwitchCard())
+				]);
+			} else {
+				tabBody = E('div', { 'class': 'hf-ent-layout' }, [
+					E('div', {}, [
+						hfui.buildMetricCards(this._lastStatus, section),
+						hfui.buildChannelsOverview(channels, this._lastStatus, this._channelsProbed, {
+							section: section,
+							onProbe: ui.createHandlerFn(self, function() {
+								return self.runHealthProbe();
+							})
+						}),
+						hfui.buildFailoverPanels(this._lastStatus, section)
+					]),
+					E('div', { 'class': 'hf-ent-sidebar' }, [
+						self.buildSwitchCard()
+					])
+				]);
+			}
+
+			content = E('div', {}, [hero, tabBar, tabBody]);
 		}
 
 		hfui.emptyNode(root);
 		root.appendChild(content);
-		if (updated)
-			updated.textContent = _('Обновлено') + ': ' + new Date().toLocaleTimeString() +
+		if (self._activeTab === 'overview' || self._activeTab === 'tools')
+			self.updateSwitchPanel();
+		var pillWrap = document.getElementById('hf-status-pill-wrap');
+		if (pillWrap && self._lastStatus && !self._loadError) {
+			hfui.emptyNode(pillWrap);
+			pillWrap.appendChild(hfui.buildStatusPill(hfui.overallState(self._lastStatus)));
+		}
+		var metaEl = document.getElementById('hf-enterprise-meta');
+		if (metaEl && !self._loadError) {
+			hfui.emptyNode(metaEl);
+			metaEl.appendChild(hfui.buildEnterpriseMeta(self._lastStatus));
+		}
+		if (updated) {
+			self._lastRefreshTime = new Date().toLocaleTimeString();
+			updated.textContent = _('Обновлено') + ': ' + self._lastRefreshTime +
 				' · ' + _('следующее через') + ' ' + self._pollCountdown + 's';
+		}
 	},
 
 	updateSectionPicker: function() {
@@ -146,10 +310,12 @@ return view.extend({
 	},
 
 	updateSwitchPanel: function() {
-		var secEl = this._switchSectionEl;
-		var outEl = this._switchOutboundEl;
+		var secEl = document.getElementById('hf-switch-section');
+		var outEl = document.getElementById('hf-switch-outbound');
 		if (!secEl || !outEl)
 			return;
+		this._switchSectionEl = secEl;
+		this._switchOutboundEl = outEl;
 		var data = this._lastStatus;
 		var opts = hfui.sectionOptions(data && data.controller, data && data.failover && data.failover.section);
 		while (secEl.firstChild)
@@ -199,7 +365,8 @@ return view.extend({
 			self.renderMonitor();
 			self.updateSectionPicker();
 			self.updateSwitchPanel();
-			if (!self._loadError && !self._healthStarted && self._lastStatus && self._lastStatus.clash_ok)
+			if (!self._loadError && !self._healthStarted && self._lastStatus &&
+				hfui.controlOk(self._lastStatus))
 				return self.runHealthProbe();
 		}).catch(function(err) {
 			self._loadError = String(err.message || err);
@@ -212,7 +379,8 @@ return view.extend({
 		if (self.healthBusy)
 			return Promise.resolve();
 		self.healthBusy = true;
-		var btn = document.getElementById('hf-btn-probe');
+		var btn = document.getElementById('hf-btn-probe') ||
+			document.getElementById('hf-btn-probe-overview');
 		if (btn)
 			btn.disabled = true;
 		return hfui.rpc.health().then(function(res) {
@@ -229,6 +397,8 @@ return view.extend({
 					self._lastStatus.controller = data.controller;
 				if (data.failover)
 					self._lastStatus.failover = data.failover;
+				if (data.active_outbound)
+					self._lastStatus.active_outbound = data.active_outbound;
 			}
 			return hfui.rpc.delayHistory().then(function(dh) {
 				self._lastDelayHistory = hfui.unwrapData(dh);
@@ -253,126 +423,44 @@ return view.extend({
 		self._monRoot = root;
 		self.renderMonitor();
 
+		var state = hfui.overallState(self._lastStatus);
 		var box = E('div', { 'class': 'cbi-section hf-mon' }, [
-			E('h2', {}, _('Hybrid Failover: обзор')),
-			E('p', { 'class': 'hint' },
-				_('Сводка состояния, каналы failover, контроллер политики и журнал переключений. Обновление каждые 5 с.')),
-			E('div', { 'class': 'hf-mon-toolbar' }, [
-				E('label', { 'style': 'font-size:12px;' }, [
-					_('Секция') + ' ',
-					E('select', {
-						'id': 'hf-section-picker',
-						'class': 'cbi-input-select',
-						'change': ui.createHandlerFn(self, function(ev) {
-							self._sectionFilter = ev.target.value;
-							self.renderMonitor();
-							self.updateSwitchPanel();
-						})
-					})
+			E('div', { 'class': 'hf-ent-top' }, [
+				E('div', { 'class': 'hf-ent-top__brand' }, [
+					E('h2', {}, _('Hybrid Failover')),
+					E('div', { 'class': 'hf-ent-top__meta' }, [
+						E('span', { 'id': 'hf-status-pill-wrap' }, hfui.buildStatusPill(state)),
+						E('span', { 'id': 'hf-enterprise-meta' }, hfui.buildEnterpriseMeta(self._lastStatus))
+					])
 				]),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
-					'id': 'hf-btn-refresh',
-					'click': ui.createHandlerFn(self, function() { return self.refreshAll(); })
-				}, _('Обновить')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-save',
-					'id': 'hf-btn-probe',
-					'click': ui.createHandlerFn(self, function() { return self.runHealthProbe(); })
-				}, _('Live probe')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
-					'click': ui.createHandlerFn(self, function() {
-						return hfui.rpc.globalCheck().then(function(res) {
-							var items = hfui.parseChecklist(res);
-							ui.addNotification(null, hfui.renderChecklist(items), items.every(function(x) { return x.ok; }) ? 'info' : 'danger');
-						});
-					})
-				}, _('global-check')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
-					'click': ui.createHandlerFn(self, function() {
-						return hfui.rpc.checkFakeip().then(function(res) {
-							var ok = res && res.ok !== false && !(res.data && res.data.ok === false);
-							ui.addNotification(null, E('p', {},
-								(res && res.data && res.data.message) || (res && res.output) || _('Готово')),
-								ok ? 'info' : 'danger');
-						});
-					})
-				}, _('check-fakeip')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'click': ui.createHandlerFn(self, function() {
-						return exportHistoryFile().catch(function(err) {
-							ui.addNotification(null, E('p', {}, String(err.message || err)), 'danger');
-						});
-					})
-				}, _('Экспорт журнала')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'click': ui.createHandlerFn(self, function() {
-						hfui.clearDelayHistoryLocal();
-						ui.addNotification(null, E('p', {}, _('Графики задержек сброшены')), 'info');
-						return Promise.resolve();
-					})
-				}, _('Сбросить графики')),
-				E('span', { 'class': 'hf-mon-updated', 'id': 'hf-mon-updated' }, '')
-			]),
-			E('div', { 'class': 'hf-mon-section', 'id': 'hf-switch-block' }, [
-				E('h3', {}, _('Ручное переключение канала')),
-				E('div', { 'class': 'hf-mon-switch' }, [
-					E('div', {}, [
-						E('label', {}, _('Секция')),
-						E('select', { 'id': 'hf-switch-section', 'class': 'cbi-input-select',
+				E('div', { 'class': 'hf-ent-top__actions' }, [
+					E('label', { 'style': 'font-size:12px;' }, [
+						_('Секция') + ' ',
+						E('select', {
+							'id': 'hf-section-picker',
+							'class': 'cbi-input-select',
 							'change': ui.createHandlerFn(self, function(ev) {
 								self._sectionFilter = ev.target.value;
 								self.renderMonitor();
+								self.updateSwitchPanel();
 							})
 						})
 					]),
-					E('div', {}, [
-						E('label', {}, _('Outbound')),
-						E('select', { 'id': 'hf-switch-outbound', 'class': 'cbi-input-select' })
-					]),
 					E('button', {
-						'class': 'btn cbi-button cbi-button-apply',
-						'click': ui.createHandlerFn(self, function() {
-							var section = document.getElementById('hf-switch-section');
-							var outbound = document.getElementById('hf-switch-outbound');
-							if (!section || !outbound || !outbound.value)
-								return Promise.resolve();
-							var fo = self._lastStatus && self._lastStatus.failover;
-							if (fo && fo.policy === 'fastest') {
-								ui.addNotification(null, E('p', {}, _('При policy fastest ручное переключение недоступно')), 'warning');
-								return Promise.resolve();
-							}
-							hfui.showModal(_('Подтверждение'), [
-								E('p', {}, _('Переключить selector ') + section.value + ':'),
-								E('p', { 'class': 'hf-mon-tag' }, outbound.value)
-							], function() {
-								hfui.rpc.switchProxy(section.value, outbound.value).then(function(res) {
-									var ok = res && res.ok !== false && !(res.data && res.data.ok === false);
-									ui.addNotification(null, E('p', {},
-										ok ? _('Переключено') : (res.data && res.data.error) || _('Ошибка')),
-										ok ? 'info' : 'danger');
-									if (ok)
-										return self.refreshAll();
-								}).catch(function(err) {
-									ui.addNotification(null, E('p', {}, String(err.message || err)), 'danger');
-								});
-							});
-							return Promise.resolve();
-						})
-					}, _('Переключить'))
+						'class': 'btn cbi-button cbi-button-action',
+						'id': 'hf-btn-refresh',
+						'click': ui.createHandlerFn(self, function() { return self.refreshAll(); })
+					}, _('Обновить')),
+					E('span', { 'class': 'hf-mon-updated', 'id': 'hf-mon-updated' }, '')
 				])
 			]),
+			E('p', { 'class': 'hint', 'style': 'margin:-8px 0 16px;' },
+				_('Сводка состояния, каналы failover, контроллер политики и журнал переключений. Обновление каждые 5 с.')),
 			root
 		]);
 
 		hfui.injectStyles(box);
 		self._monUpdated = box.querySelector('#hf-mon-updated');
-		self._switchSectionEl = document.getElementById('hf-switch-section');
-		self._switchOutboundEl = document.getElementById('hf-switch-outbound');
 		self.updateSectionPicker();
 		self.updateSwitchPanel();
 
@@ -385,7 +473,10 @@ return view.extend({
 		poll.add(function() {
 			if (self._pollCountdown > 0)
 				self._pollCountdown--;
-			self.renderMonitor();
+			if (self._monUpdated)
+				self._monUpdated.textContent = _('Обновлено') + ': ' +
+					(self._lastRefreshTime || '-') +
+					' · ' + _('следующее через') + ' ' + self._pollCountdown + 's';
 		}, 1);
 
 		return box;

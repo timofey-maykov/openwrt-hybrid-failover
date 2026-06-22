@@ -1,6 +1,6 @@
 # Hybrid Failover: полное описание
 
-Автономный стек маршрутизации для OpenWrt: нативный **VPN + резервные proxy** через **urltest** в sing-box, поддержка **Amnezia `vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** на русском.
+Автономный стек маршрутизации для OpenWrt: нативный **proxy engine** в `hybrid-failover` (tproxy, DNS fakeip, outbounds, urltest), поддержка **Amnezia `vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** на русском.
 
 **Core:** `/usr/sbin/hybrid-failover` · **UCI:** `/etc/config/hybrid-failover` · **nft:** `inet hybrid_failover`
 
@@ -25,7 +25,7 @@
 
 ## Архитектура
 
-Go core **`hybrid-failover`** читает UCI, генерирует `/etc/sing-box/config.json`, настраивает **nft tproxy** (таблица `inet hybrid_failover`, mark `0x105`, порт **1602**) и управляет sing-box через init.d.
+Go core **`hybrid-failover`** читает UCI, компилирует **native engine Plan**, настраивает **nft tproxy** (таблица `inet hybrid_failover`, mark `0x105`, порт **1602**) и поднимает in-process proxy engine (`settings.engine_mode=native`). Режим `engine_mode=singbox` снят: `hybrid-failover migrate` переводит конфиг на native.
 
 ```mermaid
 flowchart TB
@@ -61,17 +61,17 @@ CLI: `hybrid-failover migrate | validate | apply | start | stop | status | rpc �
 При `start` (если `dont_touch_dhcp=0`) core перенаправляет DNS роутера на sing-box:
 
 1. **dnsmasq**: backup `/etc/hybrid-failover/dnsmasq-dhcp.bak`, `noresolv=1`, `server=127.0.0.42`.
-2. **sing-box inbound `dns-in`**: слушает `127.0.0.42:53`, обрабатывает DNS (fakeip, DoH upstream, community rulesets).
-3. **Проверка**: `hybrid-failover check-fakeip`: DNS-запрос к `127.0.0.42` для `fakeip.hybrid-failover` → адрес `198.18.x.x`, затем HTTPS `/check` на порту **8443** (если `HF_CHECK_FAKEIP_ROUTE=1`).
+2. **native engine DNS**: слушает `127.0.0.42:53`, fakeip, DoH upstream, community rulesets.
+3. **Проверка**: `hybrid-failover check-fakeip`: DNS-запрос к `127.0.0.42` для `fakeip.hybrid-failover` → адрес `198.18.x.x`.
 
 При `stop` dnsmasq восстанавливается из backup.
 
 ```mermaid
 flowchart LR
   LAN[LAN clients] --> dnsmasq
-  dnsmasq -->|"127.0.0.42:53"| singboxDNS[sing-box dns-in]
-  singboxDNS --> fakeip[fakeip 198.18.0.0/15]
-  singboxDNS --> doh[DoH upstream]
+  dnsmasq -->|"127.0.0.42:53"| engineDNS[engine DNS]
+  engineDNS --> fakeip[fakeip 198.18.0.0/15]
+  engineDNS --> doh[DoH upstream]
   router[Router itself] --> dnsmasq
 ```
 
@@ -83,18 +83,16 @@ flowchart LR
 |-----|----------|
 | Capture | `pending capture` / LuCI «Сохранить» → auto capture |
 | Validate | `pending validate` / «Проверить» |
-| Apply | `pending apply` → UCI commit + apply + reload sing-box |
+| Apply | `pending apply` → UCI commit + apply + reload engine |
 | Rollback | `pending rollback` |
 
 RPC: `CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback`. LuCI routing: save → capture, «Применить» → pending_apply.
 
 ### Списки и cron
 
-- **`list-update`**: загрузка community rulesets в `/tmp/hybrid-failover/rulesets/` и **автоматический** `apply` + reload sing-box при изменении конфига.
-- При **`start`** core вызывает list-update и перегенерирует sing-box, если списки скачались.
+- **`list-update`**: загрузка community rulesets в `/tmp/hybrid-failover/rulesets/` и **автоматический** `apply` + reload engine при изменении конфига.
+- При **`start`** core вызывает list-update и перекомпилирует plan, если списки скачались.
 - **`update_interval`** (UCI `settings`, по умолчанию `1d`): cron entry `hybrid-failover list-update` (ставится при `start`, снимается при `stop`).
-- Требуется **sing-box ≥ 1.12.4** (проверка в `lifecycle.Apply`).
-
 ---
 
 ## Режимы маршрутизации
@@ -206,7 +204,7 @@ uci commit hybrid-failover
 | `hybrid-failover-bot` | per-target | Go-бинарник, init.d, JSON/UCI-шаблон |
 | `luci-app-hybrid-failover` | all | Маршрутизация, дашборд, клиенты, бот |
 
-Зависимости core: `sing-box`, `curl`. **`check-fakeip` не требует `bind-dig`.** **Без `jq` и `python3-light`.**
+Зависимости core: `curl`. **`check-fakeip` не требует `bind-dig`.** **Без `jq`, `python3-light`, без внешнего sing-box.**
 
 ---
 
@@ -244,7 +242,7 @@ hybrid-failover migrate
 
 | Подраздел | Назначение |
 |-----------|------------|
-| Обзор | Дашборд: sing-box, nft, Clash API, failover, delay history |
+| Обзор | Дашборд: engine, nft, control API, failover, delay history |
 | Маршрутизация | VPN + failover, URLTest, подписки, community-списки (pending apply) |
 | Диагностика | validate, global-check, backup UCI |
 | Клиенты | `client_rule` по IP, effective rules, выбор IP из DHCP |

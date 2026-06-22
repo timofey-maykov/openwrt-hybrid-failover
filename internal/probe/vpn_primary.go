@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 )
 
 // PrimaryVPN probes a bind-interface VPN primary.
 // WireGuard/AmneziaWG: require a fresh handshake; HTTP probe is best-effort (split-tunnel may block gstatic).
 // Other interfaces: require a successful HTTP probe.
-func PrimaryVPN(ctx context.Context, cli *clash.Client, primaryTag, testURL, bindIface string) (delay int, ok bool, detail string) {
+func PrimaryVPN(ctx context.Context, delayer Delayer, primaryTag, testURL, bindIface string) (delay int, ok bool, detail string) {
 	if bindIface != "" && !IfaceLinkUp(bindIface) {
 		return 0, false, "interface down"
 	}
@@ -20,14 +19,14 @@ func PrimaryVPN(ctx context.Context, cli *clash.Client, primaryTag, testURL, bin
 			if !hs.fresh {
 				return 0, false, hs.detail
 			}
-			delay, ok, detail = Outbound(ctx, cli, primaryTag, testURL, "direct", bindIface)
+			delay, ok, detail = Outbound(ctx, delayer, primaryTag, testURL, "direct", bindIface)
 			if ok {
 				return delay, true, detail
 			}
 			return 0, true, "wireguard handshake OK"
 		}
 	}
-	return Outbound(ctx, cli, primaryTag, testURL, "direct", bindIface)
+	return Outbound(ctx, delayer, primaryTag, testURL, "direct", bindIface)
 }
 
 type wgHSResult struct {

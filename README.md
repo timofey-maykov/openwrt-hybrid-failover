@@ -12,7 +12,7 @@
 
 | Компонент | Что даёт |
 |-----------|----------|
-| **`hybrid-failover-core`** | Go-бинарник `/usr/sbin/hybrid-failover`: UCI → sing-box, nft, dnsmasq, списки |
+| **`hybrid-failover-core`** | Go-бинарник `/usr/sbin/hybrid-failover`: UCI → native engine, nft, dnsmasq, списки |
 | **Hybrid failover** | VPN-интерфейс + резервные `vless`/`ss`/`trojan`/`socks`/`hy2`/`vpn://` через urltest |
 | **Telegram-бот** | Управление с телефона: UCI `hybrid-failover`, failover, `/health`, pending-конфиг |
 | **LuCI** | Маршрутизация, дашборд, per-client, Telegram-бот: **Сервисы → Hybrid Failover** |

@@ -111,10 +111,12 @@ func (s Service) Status(ctx context.Context) (string, error) {
 	}
 
 	singboxState := "stopped"
-	if s.isSingBoxRunning(ctx) {
-		singboxState = "running"
+	if s.isEngineRunning(ctx) {
+		singboxState = "running (native engine)"
+	} else if s.isSingBoxRunning(ctx) {
+		singboxState = "running (legacy sing-box)"
 	}
-	lines = append(lines, "sing-box: "+singboxState)
+	lines = append(lines, "engine: "+singboxState)
 
 	proxy, perr := s.CurrentProxy(ctx)
 	if perr == nil && proxy != "" {
@@ -422,23 +424,34 @@ func (s Service) ChannelHealth(ctx context.Context) ([]ChannelHealth, error) {
 
 func formatDiagReport(r diag.Report) string {
 	var lines []string
-	if r.SingboxRunning {
-		lines = append(lines, "sing-box: running")
+	if r.EngineMode != "" {
+		lines = append(lines, "engine_mode: "+r.EngineMode)
+	}
+	if r.EngineRunning {
+		lines = append(lines, "engine: running")
+	} else if r.SingboxRunning {
+		lines = append(lines, "engine: running (legacy sing-box)")
 	} else {
-		lines = append(lines, "sing-box: stopped")
+		lines = append(lines, "engine: stopped")
 	}
 	if r.NFTOK {
 		lines = append(lines, "nft: ok")
 	} else {
 		lines = append(lines, "nft: not ok")
 	}
-	if r.ClashOK {
-		lines = append(lines, "clash api: ok")
-		if r.ActiveOutbound != "" {
-			lines = append(lines, "active_outbound: "+r.ActiveOutbound)
+	if r.EngineMode == "native" {
+		if r.EngineRunning {
+			lines = append(lines, "control: ok")
+		} else {
+			lines = append(lines, "control: unavailable")
 		}
+	} else if r.ClashOK {
+		lines = append(lines, "clash api: ok")
 	} else {
 		lines = append(lines, "clash api: unavailable")
+	}
+	if r.ActiveOutbound != "" {
+		lines = append(lines, "active_outbound: "+r.ActiveOutbound)
 	}
 	if r.FakeIPSkipped {
 		lines = append(lines, "fakeip: skipped")
@@ -452,7 +465,13 @@ func formatDiagReport(r diag.Report) string {
 	if len(r.Errors) > 0 {
 		lines = append(lines, "errors: "+strings.Join(r.Errors, "; "))
 	}
-	if r.SingboxRunning && r.NFTOK && r.ClashOK {
+	if r.EngineMode == "native" {
+		if r.EngineRunning && r.NFTOK {
+			lines = append(lines, "routing state: active")
+		} else {
+			lines = append(lines, "routing state: inactive")
+		}
+	} else if r.SingboxRunning && r.NFTOK && r.ClashOK {
 		lines = append(lines, "routing state: active")
 	} else {
 		lines = append(lines, "routing state: inactive")
@@ -462,6 +481,14 @@ func formatDiagReport(r diag.Report) string {
 
 func shellQuote(in string) string {
 	return "'" + strings.ReplaceAll(in, "'", "'\\''") + "'"
+}
+
+func (s Service) isEngineRunning(ctx context.Context) bool {
+	out, err := s.runner.RunCoreRPC(ctx, "Status")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, `"engine_running":true`)
 }
 
 func (s Service) isSingBoxRunning(ctx context.Context) bool {

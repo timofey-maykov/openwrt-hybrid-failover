@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/netfetch"
 )
 
 // NormalizeCIDRS returns sorted unique CIDR strings.
@@ -64,7 +66,7 @@ func WriteListBodyIfChanged(dest string, body []byte) (bool, error) {
 // RefreshFileIfChanged downloads url and updates dest when entries differ from the local file.
 func RefreshFileIfChanged(url, dest string, client *http.Client) (bool, error) {
 	if client == nil {
-		client = &http.Client{Timeout: 60 * time.Second}
+		client = netfetch.HTTPClient(netfetch.DefaultDNSAddr, "", 60*time.Second)
 	}
 	resp, err := client.Get(url)
 	if err != nil {
