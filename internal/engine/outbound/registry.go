@@ -147,6 +147,14 @@ func (r *Registry) Stop() {
 	for _, ut := range r.urltests {
 		ut.Stop()
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, h := range r.handlers {
+		_ = h.Close()
+	}
+	r.handlers = nil
+	r.selectors = nil
+	r.urltests = nil
 }
 
 // URLTestActive returns the active member tag for a urltest outbound group.
@@ -322,13 +330,14 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 	}
 	testURL := u.plan.URLTest.URL
 	delays := make(map[string]int, len(u.plan.Members))
+	batch := make(map[string]delayhistory.SampleInput, len(u.plan.Members))
 	for _, member := range u.plan.Members {
 		start := time.Now()
 		h, err := u.registry.Handler(member)
 		if err != nil {
 			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
-			_ = delayhistory.Record(member, 0, false)
 			delays[member] = -1
+			batch[member] = delayhistory.SampleInput{OK: false}
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -336,8 +345,8 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 		cancel()
 		if err != nil {
 			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
-			_ = delayhistory.Record(member, 0, false)
 			delays[member] = -1
+			batch[member] = delayhistory.SampleInput{OK: false}
 			continue
 		}
 		_ = conn.Close()
@@ -351,8 +360,9 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 			Delay: time.Duration(ms) * time.Millisecond,
 			OK:    true,
 		})
-		_ = delayhistory.Record(member, ms, true)
+		batch[member] = delayhistory.SampleInput{DelayMs: ms, OK: true}
 	}
+	_ = delayhistory.RecordBatch(batch)
 	u.mu.Lock()
 	u.active = pickURLTestMember(u.plan, delays, u.active)
 	u.mu.Unlock()

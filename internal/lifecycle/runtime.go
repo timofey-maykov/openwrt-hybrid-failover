@@ -136,6 +136,11 @@ func configureDNSMasqWhenReady(ctx context.Context, uciPath string) {
 			}
 			go func() {
 				for i := 0; i < 10; i++ {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
 					_ = dnsmasq.EnsureLocalResolvIfNeeded()
 					time.Sleep(500 * time.Millisecond)
 				}
@@ -162,7 +167,7 @@ func runResolvGuardLoop(ctx context.Context, uciPath string) {
 }
 
 func runEnginePlanSyncLoop(ctx context.Context, uciPath string) {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 	for {
 		SyncNativeEnginePlan(ctx, uciPath)

@@ -48,6 +48,28 @@ func readOrigDst(oob []byte) (*net.UDPAddr, error) {
 	return nil, fmt.Errorf("original destination missing")
 }
 
+var udpRelayBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 32*1024)
+		return &b
+	},
+}
+
+func acquireUDPRelayBuf() []byte {
+	if v := udpRelayBufPool.Get(); v != nil {
+		return *v.(*[]byte)
+	}
+	b := make([]byte, 32*1024)
+	return b
+}
+
+func releaseUDPRelayBuf(buf []byte) {
+	if cap(buf) < 32*1024 || cap(buf) > 64*1024 {
+		return
+	}
+	udpRelayBufPool.Put(&buf)
+}
+
 type udpSession struct {
 	remote net.PacketConn
 	last   time.Time
@@ -121,7 +143,8 @@ func (s *Server) serveUDP(ctx context.Context, conn *net.UDPConn) {
 }
 
 func (s *Server) relayUDP(ctx context.Context, client *net.UDPConn, clientAddr *net.UDPAddr, sess *udpSession, key string, mu *sync.Mutex, sessions map[string]*udpSession) {
-	buf := make([]byte, 64*1024)
+	buf := acquireUDPRelayBuf()
+	defer releaseUDPRelayBuf(buf)
 	for {
 		_ = sess.remote.SetReadDeadline(time.Now().Add(2 * time.Minute))
 		n, _, err := sess.remote.ReadFrom(buf)

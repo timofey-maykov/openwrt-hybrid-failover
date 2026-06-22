@@ -154,13 +154,20 @@ func (c *Controller) pollOnce() {
 	defer cancel()
 
 	runtimes := make([]SectionRuntime, 0, len(c.sections))
+	var urltestMembers map[string]string
+	if plan.NativeEnabled(pkg) && engine.Alive() {
+		snap := engine.Default().Snapshot()
+		urltestMembers = make(map[string]string, len(snap.Sections))
+		for section, st := range snap.Sections {
+			urltestMembers[section] = st.URLTestMember
+		}
+		_ = engine.WriteRuntimeSnapshot(snap)
+	}
 	for _, sec := range c.sections {
-		rt := c.pollSection(ctx, cli, sec)
+		rt := c.pollSection(ctx, cli, sec, urltestMembers)
 		runtimes = append(runtimes, rt)
 	}
-	if plan.NativeEnabled(pkg) && engine.Alive() {
-		_ = engine.WriteRuntimeSnapshot(engine.Default().Snapshot())
-	}
+	_ = delayhistory.Flush()
 	_ = writeRuntimeState(runtimes)
 }
 
@@ -191,7 +198,7 @@ func (c *Controller) backendFor(pkg *uci.Package) Backend {
 	return NewClashBackend(c.ClashURL, 12*time.Second)
 }
 
-func (c *Controller) pollSection(ctx context.Context, backend Backend, sec SectionConfig) SectionRuntime {
+func (c *Controller) pollSection(ctx context.Context, backend Backend, sec SectionConfig, urltestMembers map[string]string) SectionRuntime {
 	st := c.stateFor(sec.Section)
 	rt := SectionRuntime{
 		Section: sec.Section,
@@ -215,11 +222,8 @@ func (c *Controller) pollSection(ctx context.Context, backend Backend, sec Secti
 		rt.Active = active
 		st.lastActive = active
 	}
-	if engine.Alive() {
-		snap := engine.Default().Snapshot()
-		if snap.Sections != nil {
-			rt.URLTestMember = snap.Sections[sec.Section].URLTestMember
-		}
+	if urltestMembers != nil {
+		rt.URLTestMember = urltestMembers[sec.Section]
 	}
 
 	if sec.Policy == policy.Fastest || sec.PrimaryTag == "" {

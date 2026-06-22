@@ -133,9 +133,9 @@ func TestPollSectionPrimaryFailover(t *testing.T) {
 	cli := clash.New(srv.URL, 5*time.Second)
 	ctx := context.Background()
 
-	c.pollSection(ctx, cli, sec)
-	c.pollSection(ctx, cli, sec)
-	rt := c.pollSection(ctx, cli, sec)
+	c.pollSection(ctx, cli, sec, nil)
+	c.pollSection(ctx, cli, sec, nil)
+	rt := c.pollSection(ctx, cli, sec, nil)
 	if rt.Active != urltest && c.stateFor("glob").lastActive != urltest {
 		t.Fatalf("after 2 fails want urltest active, got rt=%q mem=%q", rt.Active, c.stateFor("glob").lastActive)
 	}

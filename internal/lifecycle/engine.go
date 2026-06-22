@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -16,9 +17,21 @@ import (
 const enginePlanHashPath = "/var/run/hybrid-failover/engine-plan.sha256"
 
 var (
-	engineSyncMu       sync.Mutex
-	lastEnginePlanHash string
+	engineSyncMu        sync.Mutex
+	lastEnginePlanHash  string
+	lastUCIConfigFP     string
 )
+
+func uciConfigFingerprint(path string) (string, error) {
+	if path == "" {
+		path = paths.UCIConfig
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d:%d", st.ModTime().UnixNano(), st.Size()), nil
+}
 
 func initEnginePlanHashFromDisk() {
 	data, err := os.ReadFile(enginePlanHashPath)
@@ -43,10 +56,21 @@ func SyncNativeEnginePlan(ctx context.Context, uciPath string) {
 	engineSyncMu.Lock()
 	defer engineSyncMu.Unlock()
 
+	if uciPath == "" {
+		uciPath = paths.UCIConfig
+	}
+	fp, err := uciConfigFingerprint(uciPath)
+	if err == nil && fp == lastUCIConfigFP {
+		return
+	}
+
 	_, hash, err := compileEnginePlan(uciPath)
 	if err != nil {
 		log.Printf("hybrid-failover engine sync: compile: %v", err)
 		return
+	}
+	if fp != "" {
+		lastUCIConfigFP = fp
 	}
 	if hash == "" || hash == lastEnginePlanHash {
 		return
