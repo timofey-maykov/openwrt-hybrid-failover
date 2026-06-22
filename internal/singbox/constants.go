@@ -55,10 +55,6 @@ var SubnetListURLs = map[string]string{
 	"cloudfront":    GitHubRawURL + "/Subnets/IPv4/cloudfront.lst",
 }
 
-func CommunityServiceDomainURL(service string) string {
-	return GitHubRawURL + "/Services/" + service + ".lst"
-}
-
 func CommunitySRSURL(service string) string {
 	return SRSMainURL + "/" + service + ".srs"
 }

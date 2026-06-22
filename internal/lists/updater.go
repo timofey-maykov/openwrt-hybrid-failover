@@ -134,14 +134,32 @@ func (u *Updater) UpdateOnce() (UpdateResult, error) {
 	return result, nil
 }
 
-// HasValidCache reports whether all configured subnet lists exist locally with entries.
+// HasValidCache reports whether configured community lists have usable local cache.
 func (u *Updater) HasValidCache() bool {
-	for _, svc := range u.configuredServices() {
-		if _, ok := subnetListURL(svc); !ok {
+	pkg, err := uci.Load(u.UCIPath)
+	if err != nil {
+		return false
+	}
+	for _, name := range pkg.SectionNames("section") {
+		sec := pkg.Section(name)
+		if sec == nil || !singbox.SectionHasEnabledLists(sec) {
 			continue
 		}
-		if !u.cachedListValid(svc + ".lst") {
-			return false
+		for _, svc := range sec.GetList("community_lists") {
+			svc = strings.TrimSpace(svc)
+			if svc == "" {
+				continue
+			}
+			tag := singbox.RulesetTag(name, svc, "community")
+			path := filepath.Join(u.RulesetDir, tag+".json")
+			if singbox.DomainRulesetEmpty(path) {
+				return false
+			}
+			if url, ok := subnetListURL(svc); ok && url != "" {
+				if !u.cachedListValid(svc + ".lst") {
+					return false
+				}
+			}
 		}
 	}
 	return true
@@ -232,7 +250,7 @@ func (u *Updater) fetchDomainRuleset(url, path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	domains := parseDomainListBody(string(body))
+	domains := singbox.ParseDomainListBody(string(body))
 	if len(domains) == 0 {
 		return false, nil
 	}
@@ -242,19 +260,6 @@ func (u *Updater) fetchDomainRuleset(url, path string) (bool, error) {
 	}
 	next, _ := os.ReadFile(path)
 	return !bytesEqual(prev, next), nil
-}
-
-func parseDomainListBody(raw string) []string {
-	raw = strings.ReplaceAll(raw, "\r\n", "\n")
-	var out []string
-	for _, line := range strings.Split(raw, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		out = append(out, line)
-	}
-	return out
 }
 
 func bytesEqual(a, b []byte) bool {

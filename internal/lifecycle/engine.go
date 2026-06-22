@@ -15,6 +15,7 @@ import (
 )
 
 const enginePlanHashPath = "/var/run/hybrid-failover/engine-plan.sha256"
+const engineSyncRequestPath = "/var/run/hybrid-failover/engine-sync.request"
 
 var (
 	engineSyncMu        sync.Mutex
@@ -43,6 +44,22 @@ func initEnginePlanHashFromDisk() {
 	engineSyncMu.Unlock()
 }
 
+// RequestEngineSync asks the monitor process to reload the engine plan on the next sync tick.
+func RequestEngineSync() error {
+	if err := os.MkdirAll("/var/run/hybrid-failover", 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(engineSyncRequestPath, []byte("1\n"), 0o644)
+}
+
+func consumeEngineSyncRequest() bool {
+	if _, err := os.Stat(engineSyncRequestPath); err != nil {
+		return false
+	}
+	_ = os.Remove(engineSyncRequestPath)
+	return true
+}
+
 // NoteEnginePlanHash records the plan hash already applied in the monitor process.
 func NoteEnginePlanHash(hash string) {
 	engineSyncMu.Lock()
@@ -58,6 +75,10 @@ func SyncNativeEnginePlan(ctx context.Context, uciPath string) {
 
 	if uciPath == "" {
 		uciPath = paths.UCIConfig
+	}
+	if consumeEngineSyncRequest() {
+		lastUCIConfigFP = ""
+		lastEnginePlanHash = ""
 	}
 	fp, err := uciConfigFingerprint(uciPath)
 	if err == nil && fp == lastUCIConfigFP {

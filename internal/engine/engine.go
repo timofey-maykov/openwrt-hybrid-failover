@@ -70,7 +70,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.mu.Lock()
 	if e.running {
 		e.mu.Unlock()
-		if err := e.waitUntilStopped(10 * time.Second); err != nil {
+		if err := e.waitUntilStopped(3 * time.Second); err != nil {
 			return err
 		}
 		e.mu.Lock()
@@ -140,7 +140,7 @@ func (e *Engine) Stop() {
 	if cancel != nil {
 		cancel()
 	}
-	_ = e.waitUntilStopped(10 * time.Second)
+	_ = e.waitUntilStopped(3 * time.Second)
 	markRunningState(false)
 }
 

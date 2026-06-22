@@ -2,7 +2,7 @@ package lifecycle
 
 import (
 	"context"
-	"os/exec"
+	"os"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
@@ -24,7 +24,7 @@ func DefaultWatchdog(uciPath string) *Watchdog {
 			if engine.Alive() {
 				return nil
 			}
-			return exec.ErrNotFound
+			return os.ErrNotExist
 		},
 		Restart: func() error {
 			engine.Default().Stop()
@@ -40,6 +40,8 @@ func (w *Watchdog) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
 	backoff := w.Interval
+	failStreak := 0
+	const failThreshold = 3
 	for {
 		select {
 		case <-ctx.Done():
@@ -48,12 +50,18 @@ func (w *Watchdog) Run(ctx context.Context) {
 			_ = netlink.EnsureIPRules()
 			_ = dnsmasq.EnsureLocalResolv()
 			if err := w.Probe(); err != nil {
+				failStreak++
+				if failStreak < failThreshold {
+					continue
+				}
 				_ = w.Restart()
+				failStreak = 0
 				time.Sleep(backoff)
 				if backoff < 5*time.Minute {
 					backoff *= 2
 				}
 			} else {
+				failStreak = 0
 				backoff = w.Interval
 			}
 		}
