@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/control"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/runtime"
@@ -51,6 +52,11 @@ func (e *Engine) ApplyPlan(p *plan.Plan) error {
 	e.plan = p
 	e.ctrl.BindPlan(p)
 	e.mu.Unlock()
+	keep := make(map[string]struct{}, len(p.Outbounds))
+	for _, ob := range p.Outbounds {
+		keep[ob.Tag] = struct{}{}
+	}
+	_ = delayhistory.Prune(keep)
 	return nil
 }
 

@@ -94,9 +94,6 @@ func (r *Router) loadRuleSet(rs plan.RuleSet) error {
 			return err
 		}
 		r.domainSetsMap[rs.Tag] = domains
-		for _, d := range domains {
-			r.fakeIP.Allocate(d)
-		}
 	case "subnets":
 		nets, err := parseSubnetList(rs.Subnets)
 		if err != nil {

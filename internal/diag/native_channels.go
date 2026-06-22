@@ -55,7 +55,8 @@ func EnrichNativeReport(r Report, mainSection string, sec *uci.Section, states [
 	return r
 }
 
-// ProbeNativeChannels runs live delay probes through the native outbound registry.
+// ProbeNativeChannels refreshes channel delays. Uses the running engine when available
+// to avoid spawning a second outbound registry (large memory spike on small routers).
 func ProbeNativeChannels(r Report, mainSection string, sec *uci.Section) Report {
 	if mainSection == "" || sec == nil {
 		return r
@@ -63,7 +64,64 @@ func ProbeNativeChannels(r Report, mainSection string, sec *uci.Section) Report 
 	if len(r.Channels) == 0 {
 		r = EnrichNativeReport(r, mainSection, sec, nil)
 	}
+	if engine.Alive() {
+		return probeNativeFromEngine(r, mainSection, sec)
+	}
+	return probeNativeWithRegistry(r, mainSection, sec)
+}
 
+func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Report {
+	testURL := sec.Get("urltest_testing_url", "https://www.gstatic.com/generate_204")
+	delays := engineDelays()
+	backend := failoverEngineDelayer{}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	for i := range r.Channels {
+		ch := &r.Channels[i]
+		if ch.Name == singbox.AWGTag(mainSection) {
+			iface := sec.Get("interface", "")
+			pctx, pcancel := context.WithTimeout(ctx, probe.ChannelTimeout)
+			delay, ok, detail := probe.PrimaryVPN(pctx, backend, ch.Name, testURL, iface)
+			pcancel()
+			ch.Probed = true
+			ch.DelayMs = delay
+			ch.Available = ok
+			ch.Detail = detail
+			continue
+		}
+		if ch.Type == "urltest" {
+			if snap, ok := delays[ch.Name]; ok && snap.OK {
+				ch.Probed = true
+				ch.DelayMs = snap.DelayMs
+				ch.Available = true
+			} else {
+				ch.Probed = true
+				ch.Available = len(delays) > 0
+			}
+			continue
+		}
+		if snap, ok := delays[ch.Name]; ok {
+			ch.Probed = true
+			ch.DelayMs = snap.DelayMs
+			ch.Available = snap.OK && snap.DelayMs > 0
+			if !ch.Available && snap.OK {
+				ch.Available = true
+			}
+			continue
+		}
+		ch.Probed = false
+		ch.Detail = "no delay data (engine warming up)"
+	}
+	if r.Failover != nil {
+		if member := engine.URLTestMemberFromSnapshot(mainSection); member != "" {
+			r.Failover.URLTestNow = member
+		}
+	}
+	return r
+}
+
+func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Report {
 	pkg, err := uci.Load(paths.UCIConfig)
 	if err != nil {
 		return r
@@ -116,6 +174,13 @@ func ProbeNativeChannels(r Report, mainSection string, sec *uci.Section) Report 
 
 type registryDelayer struct {
 	reg *outbound.Registry
+}
+
+type failoverEngineDelayer struct{}
+
+func (failoverEngineDelayer) ProxyDelay(ctx context.Context, tag, testURL string) (int, error) {
+	b := failover.NewEngineBackend()
+	return b.ProxyDelay(ctx, tag, testURL)
 }
 
 func (d registryDelayer) ProxyDelay(ctx context.Context, tag, testURL string) (int, error) {

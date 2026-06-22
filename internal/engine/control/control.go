@@ -29,7 +29,26 @@ func New() *Control {
 
 func (c *Control) BindPlan(p *plan.Plan) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.plan = p
+	validSections := make(map[string]struct{}, len(p.Sections))
+	validTags := make(map[string]struct{}, len(p.Outbounds))
+	for _, sec := range p.Sections {
+		validSections[sec.Name] = struct{}{}
+	}
+	for _, ob := range p.Outbounds {
+		validTags[ob.Tag] = struct{}{}
+	}
+	for name := range c.activeOverrides {
+		if _, ok := validSections[name]; !ok {
+			delete(c.activeOverrides, name)
+		}
+	}
+	for tag := range c.delays {
+		if _, ok := validTags[tag]; !ok {
+			delete(c.delays, tag)
+		}
+	}
 	for _, sec := range p.Sections {
 		if sec.SelectorTag != "" {
 			if _, ok := c.activeOverrides[sec.Name]; !ok {
@@ -37,7 +56,6 @@ func (c *Control) BindPlan(p *plan.Plan) {
 			}
 		}
 	}
-	c.mu.Unlock()
 }
 
 func defaultForSection(p *plan.Plan, section string) string {
