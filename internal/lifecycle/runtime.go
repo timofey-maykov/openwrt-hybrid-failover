@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
@@ -38,6 +39,7 @@ func StartBackground(uciPath string) {
 	}
 	go DefaultFailoverController(uciPath).Run(ctx)
 	go DefaultWatchdog(uciPath).Run(ctx)
+	go runMemoryScavengeLoop(ctx)
 	if shouldManageDNSMasq(uciPath) {
 		_ = dnsmasq.EnsureLocalResolv()
 	}
@@ -187,6 +189,19 @@ func sleepOrDone(ctx context.Context, d time.Duration) bool {
 		return false
 	case <-timer.C:
 		return true
+	}
+}
+
+func runMemoryScavengeLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			debug.FreeOSMemory()
+		}
 	}
 }
 

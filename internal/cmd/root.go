@@ -444,6 +444,14 @@ func runListUpdate(args []string) int {
 		fmt.Println("list-update: ok changed=false")
 		return 0
 	}
+	if engine.Alive() {
+		if err := lifecycle.RefreshListsWithMonitor(paths.UCIConfig); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Println("list-update: ok changed=true (monitor refresh)")
+		return 0
+	}
 	res, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
