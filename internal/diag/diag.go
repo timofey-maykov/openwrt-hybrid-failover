@@ -146,9 +146,12 @@ func CheckProxy(testURL string) error {
 
 // CheckFakeIP verifies router DNS reaches fakeip resolver on 127.0.0.42.
 func CheckFakeIP() error {
-	ctx, cancel := context.WithTimeout(context.Background(), fakeipLookupTimeout)
+	if err := waitForEngineDNS(fakeipEngineWait); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), fakeipLookupTimeout+fakeipRetryDelay*time.Duration(fakeipRetryAttempts))
 	defer cancel()
-	result, err := lookupFakeIP(ctx, singbox.DNSInboundAddress, singbox.FAKEIPTestDomain)
+	result, err := lookupFakeIPWithRetry(ctx, singbox.DNSInboundAddress, singbox.FAKEIPTestDomain)
 	if err != nil {
 		return fmt.Errorf("dns @%s: %w", singbox.DNSInboundAddress, err)
 	}

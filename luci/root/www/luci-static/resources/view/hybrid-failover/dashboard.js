@@ -365,9 +365,7 @@ return view.extend({
 			self.renderMonitor();
 			self.updateSectionPicker();
 			self.updateSwitchPanel();
-			if (!self._loadError && !self._healthStarted && self._lastStatus &&
-				hfui.controlOk(self._lastStatus))
-				return self.runHealthProbe();
+			// Live probe only on user action (saves RAM on low-memory routers).
 		}).catch(function(err) {
 			self._loadError = String(err.message || err);
 			self.renderMonitor();

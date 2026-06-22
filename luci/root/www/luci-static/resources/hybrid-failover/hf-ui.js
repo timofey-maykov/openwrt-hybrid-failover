@@ -222,9 +222,13 @@ function visibleErrors(data) {
 function overallState(data) {
 	if (!data || typeof data !== 'object')
 		return 'unknown';
-	var critical = proxyRunning(data) && data.nft_ok && controlOk(data);
+	var engineUp = proxyRunning(data);
+	var critical = engineUp && data.nft_ok && controlOk(data);
 	if (!critical)
 		return 'down';
+	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
+	if (ctrl && ctrl.mode === 'backup' && ctrl.primary_ok === false)
+		return 'degraded';
 	if (data.fakeip_ok === false)
 		return 'degraded';
 	var errs = visibleErrors(data);
@@ -256,7 +260,9 @@ function channelKind(ch) {
 	return 'reserve';
 }
 
-function channelAliveState(ch, probed, ctrl) {
+function channelAliveState(ch, probed, ctrl, data) {
+	if (data && !proxyRunning(data))
+		return 'unknown';
 	var kind = channelKind(ch);
 	if (kind === 'primary' && ctrl) {
 		if (ctrl.primary_ok === true)
@@ -273,8 +279,8 @@ function channelAliveState(ch, probed, ctrl) {
 	return ch.available === false ? 'down' : 'unknown';
 }
 
-function channelStatusBadge(ch, probed, ctrl) {
-	var st = channelAliveState(ch, probed, ctrl);
+function channelStatusBadge(ch, probed, ctrl, data) {
+	var st = channelAliveState(ch, probed, ctrl, data);
 	if (st === 'up')
 		return badge(true, 'UP', 'DOWN');
 	if (st === 'down')
@@ -296,13 +302,15 @@ function channelRoleLabel(ch, ctrl) {
 function channelsReserveSummary(channels, data, probed) {
 	if (!channels || !channels.length)
 		return '';
+	if (!proxyRunning(data))
+		return _('engine down');
 	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
 	var alive = 0, total = 0;
 	for (var i = 0; i < channels.length; i++) {
 		if (channelKind(channels[i]) !== 'reserve')
 			continue;
 		total++;
-		if (channelAliveState(channels[i], probed, ctrl) === 'up')
+		if (channelAliveState(channels[i], probed, ctrl, data) === 'up')
 			alive++;
 	}
 	if (!total)
@@ -310,9 +318,9 @@ function channelsReserveSummary(channels, data, probed) {
 	return alive + '/' + total + ' ' + _('живы');
 }
 
-function buildChannelOverviewCard(ch, probed, ctrl) {
+function buildChannelOverviewCard(ch, probed, ctrl, data) {
 	var kind = channelKind(ch);
-	var alive = channelAliveState(ch, probed, ctrl);
+	var alive = channelAliveState(ch, probed, ctrl, data);
 	var cardCls = 'hf-ent-channel-card hf-ent-channel-card--' + alive;
 	if (ch.selected && kind === 'reserve')
 		cardCls += ' hf-ent-channel-card--active';
@@ -324,7 +332,7 @@ function buildChannelOverviewCard(ch, probed, ctrl) {
 	var body = [
 		E('div', { 'class': 'hf-ent-channel-card__head' }, [
 			E('span', { 'class': 'hf-ent-channel-card__role' }, channelRoleLabel(ch, ctrl)),
-			channelStatusBadge(ch, probed, ctrl)
+			channelStatusBadge(ch, probed, ctrl, data)
 		]),
 		E('div', { 'class': 'hf-ent-channel-card__name' }, ch.display || ch.name),
 		E('div', { 'class': 'hf-ent-channel-card__meta' }, metaParts.join(' · ') || '-')
@@ -384,9 +392,9 @@ function buildChannelsOverview(channels, data, probed, opts) {
 
 	var grid = E('div', { 'class': 'hf-ent-channel-grid' });
 	for (var p = 0; p < primary.length; p++)
-		grid.appendChild(buildChannelOverviewCard(primary[p], probed, ctrl));
+		grid.appendChild(buildChannelOverviewCard(primary[p], probed, ctrl, data));
 	for (var r = 0; r < reserves.length; r++)
-		grid.appendChild(buildChannelOverviewCard(reserves[r], probed, ctrl));
+		grid.appendChild(buildChannelOverviewCard(reserves[r], probed, ctrl, data));
 
 	var footer = '';
 	if (!probed) {
@@ -807,7 +815,7 @@ function buildMetricCards(data, section) {
 				if (channelKind(ch[i]) !== 'reserve')
 					continue;
 				total++;
-				if (channelAliveState(ch[i], false, ctrl) === 'up')
+				if (channelAliveState(ch[i], false, ctrl, data) === 'up')
 					alive++;
 			}
 			if (!total)
@@ -975,8 +983,8 @@ function buildChannelsTable(channels, probed, serverDelayData, nativeEngine, dat
 		var ch = channels[i];
 		var rowCls = ch.selected ? 'hf-mon-row--active' : '';
 		var role = channelRoleLabel(ch, ctrl);
-		var statusCell = channelStatusBadge(ch, probed, ctrl);
-		if (ch.detail && channelAliveState(ch, probed, ctrl) !== 'up') {
+		var statusCell = channelStatusBadge(ch, probed, ctrl, data);
+		if (ch.detail && channelAliveState(ch, probed, ctrl, data) !== 'up') {
 			statusCell = E('div', {}, [
 				statusCell,
 				E('div', { 'style': 'font-size:11px;opacity:.75;margin-top:2px;' }, ch.detail)

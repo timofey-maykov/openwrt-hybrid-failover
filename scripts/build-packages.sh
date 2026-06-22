@@ -193,7 +193,7 @@ build_luci_unified_pkg() {
 	cp "$ROOT_DIR/packages/luci-app-hybrid-failover/CONTROL/postinst" "$pkg_root/CONTROL/"
 
 	write_control "$pkg_root/CONTROL/control" "luci-app-hybrid-failover" "all" \
-		"luci-base luci-compat luci-i18n-hybrid-failover hybrid-failover-core hybrid-failover-bot" \
+		"luci-base luci-compat luci-i18n-hybrid-failover hybrid-failover-core" \
 		"Hybrid Failover LuCI: routing, dashboard, clients, bot" \
 		"64" "$FULL_VERSION"
 

@@ -202,10 +202,19 @@ func (c *Controller) pollSection(ctx context.Context, backend Backend, sec Secti
 	active, err := backend.ActiveOutbound(ctx, sec.SelectorTag)
 	if err != nil {
 		rt.LastError = err.Error()
-		return rt
+		switch {
+		case st.lastActive != "":
+			active = st.lastActive
+		case st.mode == modeBackup:
+			active = sec.URLTestTag
+		default:
+			return rt
+		}
+		rt.Active = active
+	} else {
+		rt.Active = active
+		st.lastActive = active
 	}
-	rt.Active = active
-	st.lastActive = active
 	if engine.Alive() {
 		snap := engine.Default().Snapshot()
 		if snap.Sections != nil {
