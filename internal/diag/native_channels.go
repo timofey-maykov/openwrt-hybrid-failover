@@ -77,6 +77,7 @@ func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Repor
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	var reprobe []int
 	for i := range r.Channels {
 		ch := &r.Channels[i]
 		if ch.Name == singbox.AWGTag(mainSection) {
@@ -91,27 +92,27 @@ func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Repor
 			continue
 		}
 		if ch.Type == "urltest" {
-			if snap, ok := delays[ch.Name]; ok && snap.OK {
+			if snap, ok := delays[ch.Name]; ok && snap.OK && snap.DelayMs > 0 {
 				ch.Probed = true
 				ch.DelayMs = snap.DelayMs
 				ch.Available = true
+				ch.Detail = ""
 			} else {
-				ch.Probed = true
-				ch.Available = len(delays) > 0
+				reprobe = append(reprobe, i)
 			}
 			continue
 		}
-		if snap, ok := delays[ch.Name]; ok {
+		if snap, ok := delays[ch.Name]; ok && snap.OK && snap.DelayMs > 0 {
 			ch.Probed = true
 			ch.DelayMs = snap.DelayMs
-			ch.Available = snap.OK && snap.DelayMs > 0
-			if !ch.Available && snap.OK {
-				ch.Available = true
-			}
+			ch.Available = true
+			ch.Detail = ""
 			continue
 		}
-		ch.Probed = false
-		ch.Detail = "no delay data (engine warming up)"
+		reprobe = append(reprobe, i)
+	}
+	if len(reprobe) > 0 {
+		r = probeNativeChannelsActive(r, mainSection, sec, reprobe)
 	}
 	if r.Failover != nil {
 		if member := engine.URLTestMemberFromSnapshot(mainSection); member != "" {
@@ -121,7 +122,7 @@ func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Repor
 	return r
 }
 
-func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Report {
+func probeNativeChannelsActive(r Report, mainSection string, sec *uci.Section, indices []int) Report {
 	pkg, err := uci.Load(paths.UCIConfig)
 	if err != nil {
 		return r
@@ -141,17 +142,18 @@ func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Rep
 	defer cancel()
 
 	var bestMember string
-	for i := range r.Channels {
+	for _, i := range indices {
 		ch := &r.Channels[i]
 		pctx, pcancel := context.WithTimeout(ctx, probe.ChannelTimeout)
 		var delay int
 		var ok bool
 		var detail string
+		var member string
 		if ch.Name == singbox.AWGTag(mainSection) {
 			iface := sec.Get("interface", "")
 			delay, ok, detail = probe.PrimaryVPN(pctx, registryDelayer{reg: reg}, ch.Name, testURL, iface)
 		} else if ch.Type == "urltest" {
-			delay, ok, detail, bestMember = probeURLTestGroup(pctx, reg, p, ch.Name, testURL)
+			delay, ok, detail, member = probeURLTestGroup(pctx, reg, p, ch.Name, testURL)
 		} else {
 			delay, ok, detail = probeRegistryOutbound(pctx, reg, ch.Name, testURL)
 		}
@@ -160,6 +162,9 @@ func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Rep
 		ch.DelayMs = delay
 		ch.Available = ok
 		ch.Detail = detail
+		if member != "" {
+			bestMember = member
+		}
 	}
 	if bestMember != "" {
 		for i := range r.Channels {
@@ -170,6 +175,14 @@ func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Rep
 		}
 	}
 	return r
+}
+
+func probeNativeWithRegistry(r Report, mainSection string, sec *uci.Section) Report {
+	indices := make([]int, len(r.Channels))
+	for i := range r.Channels {
+		indices[i] = i
+	}
+	return probeNativeChannelsActive(r, mainSection, sec, indices)
 }
 
 type registryDelayer struct {
@@ -341,7 +354,13 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember string, pro
 			}
 		}
 		if !probed && !ch.Available && ch.DelayMs == 0 {
-			ch.Detail = "no delay data (run channel probe)"
+			if !last.Time.IsZero() {
+				ch.Detail = "unavailable"
+			} else if snap, ok := engineDelays()[name]; ok && !snap.OK {
+				ch.Detail = "unavailable"
+			} else {
+				ch.Detail = "no delay data (run channel probe)"
+			}
 		}
 		return ch
 	}
@@ -352,8 +371,14 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember string, pro
 			ch.Available = true
 		}
 	}
-	if !ch.Available && last.DelayMs == 0 && !probed {
-		ch.Detail = "no delay data (run channel probe)"
+	if !ch.Available && last.DelayMs == 0 {
+		if !probed {
+			if last.Time.IsZero() {
+				ch.Detail = "no delay data (run channel probe)"
+			} else {
+				ch.Detail = "unavailable"
+			}
+		}
 	}
 	return ch
 }

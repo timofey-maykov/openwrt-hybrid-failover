@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -53,6 +55,11 @@ func Configure() error {
 	_ = exec.Command("uci", "-q", "delete", "dhcp.@dnsmasq[0].notinterface").Run()
 	_ = exec.Command("uci", "add_list", "dhcp.@dnsmasq[0].notinterface=lo").Run()
 	_ = exec.Command("uci", "add_list", "dhcp.@dnsmasq[0].server="+DNSUpstream).Run()
+	if lanipv6.ShouldDisable(paths.UCIConfig) {
+		_ = exec.Command("uci", "set", "dhcp.@dnsmasq[0].filter_aaaa=1").Run()
+	} else {
+		_ = exec.Command("uci", "-q", "delete", "dhcp.@dnsmasq[0].filter_aaaa").Run()
+	}
 	if err := exec.Command("uci", "commit", "dhcp").Run(); err != nil {
 		return err
 	}

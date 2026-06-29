@@ -47,7 +47,7 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 		client: client,
 		server: parseSocksaddrHostPort(server, strconv.Itoa(int(portF))),
 		tls:    tlsCfg,
-		dialer: newSingDialer(""),
+		dialer: newSingDialer(p.BindIface),
 	}, nil
 }
 

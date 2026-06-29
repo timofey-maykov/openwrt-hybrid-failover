@@ -209,6 +209,11 @@ func (b *Builder) addUserSubnetRuleset(section string, sec *uci.Section, routeRu
 }
 
 func (b *Builder) userDomainItems(sec *uci.Section) []string {
+	return UserDomainItems(sec)
+}
+
+// UserDomainItems returns custom domains configured on a routing section.
+func UserDomainItems(sec *uci.Section) []string {
 	switch sec.Get("user_domain_list_type", "disabled") {
 	case "dynamic":
 		return sec.GetList("user_domains")
@@ -297,6 +302,57 @@ func DomainRulesetEmpty(path string) bool {
 	}
 	for _, rule := range doc.Rules {
 		if len(rule.DomainSuffix) > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// ReadDomainRulesetDomains returns domain_suffix entries from a source ruleset JSON file.
+func ReadDomainRulesetDomains(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		Rules []struct {
+			DomainSuffix []string `json:"domain_suffix"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, rule := range doc.Rules {
+		out = append(out, rule.DomainSuffix...)
+	}
+	return out, nil
+}
+
+// EnsureCommunitySupplements merges service-specific domains into an on-disk ruleset.
+func EnsureCommunitySupplements(service, path string) (bool, error) {
+	existing, err := ReadDomainRulesetDomains(path)
+	if err != nil {
+		return false, err
+	}
+	merged := MergeCommunityDomains(service, existing)
+	if len(merged) == 0 {
+		return false, nil
+	}
+	prev, _ := os.ReadFile(path)
+	if err := WriteDomainRuleset(path, merged); err != nil {
+		return false, err
+	}
+	next, _ := os.ReadFile(path)
+	return !bytesEqualRuleset(prev, next), nil
+}
+
+func bytesEqualRuleset(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
 			return false
 		}
 	}

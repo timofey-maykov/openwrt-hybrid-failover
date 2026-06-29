@@ -164,6 +164,10 @@ return view.extend({
 
 		o = st.option(form.Flag, 'disable_quic', _('Отключить QUIC в маршрутизации'));
 
+		o = st.option(form.Flag, 'disable_lan_ipv6', _('Отключить IPv6 на LAN'));
+		o.default = '1';
+		o.description = _('RA/DHCPv6 off и filter-AAAA в dnsmasq: tproxy только IPv4. Без этого Instagram и другие сервисы могут обходить прокси по IPv6. Private DNS на телефоне всё равно нужно выключить вручную.');
+
 		o = st.option(form.Value, 'dns_rewrite_ttl', _('DNS rewrite TTL (сек)'));
 		o.placeholder = '60';
 

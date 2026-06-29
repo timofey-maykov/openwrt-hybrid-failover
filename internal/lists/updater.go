@@ -221,8 +221,11 @@ func (u *Updater) syncCommunityDomainRulesets() (bool, error) {
 				singbox.EnsureSourceRuleset(path)
 			}
 			url := singbox.CommunityServiceDomainURL(svc)
-			c, err := u.fetchDomainRuleset(url, path)
+			c, err := u.fetchDomainRuleset(svc, url, path)
 			if err != nil {
+				if c2, e2 := singbox.EnsureCommunitySupplements(svc, path); e2 == nil {
+					changed = changed || c2
+				}
 				if singbox.DomainRulesetEmpty(path) {
 					fetchErrs = append(fetchErrs, fmt.Sprintf("%s: %v", tag, err))
 				}
@@ -237,7 +240,7 @@ func (u *Updater) syncCommunityDomainRulesets() (bool, error) {
 	return changed, nil
 }
 
-func (u *Updater) fetchDomainRuleset(url, path string) (bool, error) {
+func (u *Updater) fetchDomainRuleset(service, url, path string) (bool, error) {
 	resp, err := u.HTTP.Get(url)
 	if err != nil {
 		return false, err
@@ -250,7 +253,7 @@ func (u *Updater) fetchDomainRuleset(url, path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	domains := singbox.ParseDomainListBody(string(body))
+	domains := singbox.MergeCommunityDomains(service, singbox.ParseDomainListBody(string(body)))
 	if len(domains) == 0 {
 		return false, nil
 	}
