@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
@@ -131,6 +132,9 @@ func configureDNSMasqWhenReady(ctx context.Context, uciPath string) {
 		case <-ticker.C:
 			if !engine.DNSReady() {
 				continue
+			}
+			if err := lanipv6.ApplyFromUCI(uciPath); err != nil {
+				fmt.Fprintf(os.Stderr, "hybrid-failover engine: lan ipv6: %v\n", err)
 			}
 			if err := dnsmasq.Configure(); err != nil {
 				fmt.Fprintf(os.Stderr, "hybrid-failover engine: dnsmasq configure: %v\n", err)

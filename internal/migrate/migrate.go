@@ -12,7 +12,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
-const targetSchema = 4
+const targetSchema = 5
 
 // MigrationChange is a uci CLI command without the "uci" prefix.
 type MigrationChange struct {
@@ -55,6 +55,9 @@ func PlanMigration(pkg *uci.Package) []MigrationChange {
 	}
 	if schema < 4 {
 		changes = append(changes, planSchemaV4NativeEngine(pkg, pkgName)...)
+	}
+	if schema < 5 {
+		changes = append(changes, planSchemaV5DisableLANIPv6(pkg, pkgName)...)
 	}
 	changes = append(changes, MigrationChange{fmt.Sprintf("set %s.settings.config_schema_version=%d", pkgName, targetSchema)})
 	return changes
@@ -132,6 +135,16 @@ func planSchemaV4NativeEngine(pkg *uci.Package, pkgName string) []MigrationChang
 	}
 	return []MigrationChange{
 		MigrationChange{fmt.Sprintf("set %s.settings.engine_mode=native", pkgName)},
+	}
+}
+
+func planSchemaV5DisableLANIPv6(pkg *uci.Package, pkgName string) []MigrationChange {
+	settings := pkg.Section("settings")
+	if settings != nil && settings.Get("disable_lan_ipv6", "") != "" {
+		return nil
+	}
+	return []MigrationChange{
+		MigrationChange{fmt.Sprintf("set %s.settings.disable_lan_ipv6=1", pkgName)},
 	}
 }
 

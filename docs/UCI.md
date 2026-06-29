@@ -21,6 +21,7 @@
 | `cache_path` | string | `/etc/sing-box/cache.db` | Путь cache sing-box (не `/tmp/…`) |
 | `config_schema_version` | int | `3` | Версия схемы после `migrate` |
 | `disable_quic` | `0` / `1` | `0` | Отключить QUIC в маршрутизации |
+| `disable_lan_ipv6` | `0` / `1` | `1` | Отключить IPv6 на LAN (RA/DHCPv6) и `filter_aaaa` в dnsmasq: tproxy только IPv4, иначе Meta/Telegram могут обходить прокси |
 | `dont_touch_dhcp` | `0` / `1` | `0` | Не менять dnsmasq (не перенаправлять DNS на `127.0.0.42`) |
 | `clash_api_listen` | string | `127.0.0.1:9090` | Адрес Clash API (LuCI/бот; часто LAN IP) |
 | `service_listen_address` | string | *(пусто)* | Legacy fallback для Clash API, если `clash_api_listen` пуст |

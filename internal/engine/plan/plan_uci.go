@@ -256,11 +256,15 @@ func (c *compiler) addProxyLink(section, link string, udpOverTCP bool) (string, 
 	}
 	tag := OutboundTag(section)
 	kind := outboundKindFromURI(link)
-	c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{
+	ob := OutboundPlan{
 		Tag:      tag,
 		Kind:     kind,
 		ProxyURI: link,
-	})
+	}
+	if proxyNeedsWANBind(kind) {
+		ob.BindIface = defaultWANInterface()
+	}
+	c.plan.Outbounds = append(c.plan.Outbounds, ob)
 	_ = udpOverTCP
 	return tag, nil
 }
@@ -403,9 +407,55 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 			}
 		}
 	}
+	if err := c.compileExtraDomainRuleSets(section, sec, &baseRule); err != nil {
+		return err
+	}
 	if len(baseRule.RuleSetTags) > 0 {
 		c.plan.Routes = append(c.plan.Routes, baseRule)
 	}
+	return nil
+}
+
+func (c *compiler) compileExtraDomainRuleSets(section string, sec *uci.Section, baseRule *RouteRule) error {
+	if domains := singbox.UserDomainItems(sec); len(domains) > 0 {
+		if err := c.addDomainRuleSet(section, "user", "domains", domains, baseRule); err != nil {
+			return err
+		}
+	}
+	for i, listPath := range sec.GetList("local_domain_lists") {
+		listPath = strings.TrimSpace(listPath)
+		if listPath == "" {
+			continue
+		}
+		data, err := os.ReadFile(listPath)
+		if err != nil {
+			return fmt.Errorf("local domain list %q: %w", listPath, err)
+		}
+		domains := singbox.ParseDomainListBody(string(data))
+		if len(domains) == 0 {
+			continue
+		}
+		name := fmt.Sprintf("local-%d", i)
+		if err := c.addDomainRuleSet(section, name, "domains", domains, baseRule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *compiler) addDomainRuleSet(section, name, typ string, domains []string, baseRule *RouteRule) error {
+	tag := RulesetTag(section, name, typ)
+	path := filepath.Join(singbox.RulesetDir, tag+".json")
+	if err := singbox.WriteDomainRuleset(path, domains); err != nil {
+		return err
+	}
+	c.plan.RuleSets = append(c.plan.RuleSets, RuleSet{
+		Tag:     tag,
+		Kind:    "domains",
+		Domains: domains,
+		Path:    path,
+	})
+	baseRule.RuleSetTags = append(baseRule.RuleSetTags, tag)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"fmt"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -42,6 +43,10 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 
 	if err := netlink.EnsureDNSBindAddr(); err != nil {
 		return StartResult{}, fmt.Errorf("dns bind addr: %w", err)
+	}
+
+	if err := lanipv6.ApplyFromUCI(opts.UCIPath); err != nil {
+		return StartResult{}, fmt.Errorf("lan ipv6: %w", err)
 	}
 
 	updater := lists.NewFromUCI(opts.UCIPath)

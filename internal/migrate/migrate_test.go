@@ -42,7 +42,7 @@ config section 'glob'
 		"failover_vpn_enabled=1",
 		"urltest_interrupt_exist_connections=0",
 		"cache_path=" + paths.SingboxCache,
-		"config_schema_version=4",
+		"config_schema_version=5",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in changes:\n%s", want, joined)
@@ -76,8 +76,11 @@ config settings 'settings'
 	if !strings.Contains(joined, "engine_mode=native") {
 		t.Fatalf("expected singbox->native migration:\n%s", joined)
 	}
-	if !strings.Contains(joined, "config_schema_version=4") {
-		t.Fatalf("expected schema v4:\n%s", joined)
+	if !strings.Contains(joined, "config_schema_version=5") {
+		t.Fatalf("expected schema v5:\n%s", joined)
+	}
+	if !strings.Contains(joined, "disable_lan_ipv6=1") {
+		t.Fatalf("expected disable_lan_ipv6 migration:\n%s", joined)
 	}
 }
 
@@ -86,7 +89,8 @@ func TestPlanMigrationAlreadyAtSchema(t *testing.T) {
 	cfg := filepath.Join(dir, "hybrid-failover")
 	content := `
 config settings 'settings'
-	option config_schema_version '4'
+	option config_schema_version '5'
+	option disable_lan_ipv6 '1'
 	option cache_path '/etc/sing-box/cache.db'
 `
 	if err := os.WriteFile(cfg, []byte(content), 0o644); err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lifecycle"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
@@ -50,6 +51,8 @@ func Run(args []string) int {
 		return runStart(nil)
 	case "status":
 		return runStatus(args[1:])
+	case "health":
+		return runHealth(args[1:])
 	case "rpc":
 		return runRPC(args[1:])
 	case "pending":
@@ -85,7 +88,7 @@ Usage:
   hybrid-failover migrate [--dry-run]
   hybrid-failover validate [--dry-run]
   hybrid-failover apply [--dry-run]
-  hybrid-failover start|stop|reload|restart|status|monitor
+  hybrid-failover start|stop|reload|restart|status|health|monitor
   hybrid-failover rpc <method> [json args]
   hybrid-failover pending capture|validate|apply|rollback
   hybrid-failover check-nft|check-proxy|check-fakeip|global-check
@@ -221,6 +224,7 @@ func runStop(args []string) int {
 	lists.RemoveCron()
 	lists.ClearPID()
 	_ = dnsmasq.Restore()
+	_ = lanipv6.Restore()
 	_ = netlink.Teardown()
 	lifecycle.StopNativeEngine()
 	fmt.Println("stopped")
@@ -235,6 +239,10 @@ func runReload(args []string) int {
 		return 1
 	}
 	if err := lifecycle.RefreshPerClient(""); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if err := lanipv6.ApplyFromUCI(paths.UCIConfig); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

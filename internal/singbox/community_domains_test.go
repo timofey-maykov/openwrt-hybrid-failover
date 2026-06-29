@@ -11,6 +11,22 @@ func TestCommunityServiceDomainURL(t *testing.T) {
 	}
 }
 
+func TestMergeCommunityDomains(t *testing.T) {
+	got := MergeCommunityDomains("youtube", []string{"youtube.com"})
+	if len(got) < 18 {
+		t.Fatalf("expected supplements merged, got %v", got)
+	}
+	seen := make(map[string]bool)
+	for _, d := range got {
+		seen[d] = true
+	}
+	for _, want := range []string{"youtube.com", "googleapis.com", "gstatic.com", "gemini.google.com", "ai.google.dev"} {
+		if !seen[want] {
+			t.Fatalf("missing %q in %v", want, got)
+		}
+	}
+}
+
 func TestParseDomainListBody(t *testing.T) {
 	raw := "instagram.com\nDOMAIN-SUFFIX,cdninstagram.com\nDOMAIN-SUFFIX,.ua\n# comment\n"
 	got := ParseDomainListBody(raw)

@@ -52,7 +52,7 @@ func newHysteria2Handler(p plan.OutboundPlan) (Handler, error) {
 	}
 	client, err := hysteria2.NewClient(hysteria2.ClientOptions{
 		Context:            context.Background(),
-		Dialer:             newSingDialer(""),
+		Dialer:             newSingDialer(p.BindIface),
 		Logger:             newNopLogger(),
 		ServerAddress:      parseSocksaddrHostPort(server, strconv.Itoa(int(portF))),
 		Password:           password,
