@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
@@ -50,9 +51,9 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 	}
 
 	updater := lists.NewFromUCI(opts.UCIPath)
-	_, listErr := updater.UpdateOnce()
-	if listErr != nil && !updater.HasValidCache() {
-		return StartResult{}, fmt.Errorf("list update: %w", listErr)
+	if _, listErr := updater.UpdateOnce(); listErr != nil {
+		// WAN may be unavailable on cold boot; nft and engine are already up.
+		log.Printf("hybrid-failover start: list update: %v", listErr)
 	}
 
 	if res2, err := ApplyAndReloadIfChanged(applyOpts); err != nil {

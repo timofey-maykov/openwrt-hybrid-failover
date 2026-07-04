@@ -2,25 +2,31 @@ package lifecycle
 
 import (
 	"context"
+	"log"
 	"os"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
 type Watchdog struct {
+	UCIPath  string
 	Interval time.Duration
 	Probe    func() error
 	Restart  func() error
 }
 
 func DefaultWatchdog(uciPath string) *Watchdog {
-	_ = uciPath
 	return &Watchdog{
+		UCIPath:  uciPath,
 		Interval: 15 * time.Second,
 		Probe: func() error {
+			if err := netlink.Check(); err != nil {
+				return err
+			}
 			if engine.Alive() {
 				return nil
 			}
@@ -30,6 +36,24 @@ func DefaultWatchdog(uciPath string) *Watchdog {
 			engine.Default().Stop()
 			return nil
 		},
+	}
+}
+
+func (w *Watchdog) restoreNFT() {
+	if err := netlink.Check(); err == nil {
+		return
+	}
+	uciPath := w.UCIPath
+	if uciPath == "" {
+		return
+	}
+	pkg, err := uci.Load(uciPath)
+	if err != nil {
+		log.Printf("hybrid-failover watchdog: load uci: %v", err)
+		return
+	}
+	if err := netlink.ApplyFromUCI(pkg); err != nil {
+		log.Printf("hybrid-failover watchdog: nft restore: %v", err)
 	}
 }
 
@@ -48,6 +72,7 @@ func (w *Watchdog) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			_ = netlink.EnsureIPRules()
+			w.restoreNFT()
 			_ = dnsmasq.EnsureLocalResolv()
 			if err := w.Probe(); err != nil {
 				failStreak++

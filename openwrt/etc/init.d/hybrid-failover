@@ -5,8 +5,35 @@ START=99
 STOP=10
 USE_PROCD=1
 
+boot() {
+	# tproxy needs br-lan and a working nft backend; wait briefly after cold boot.
+	local n=0
+	while [ "$n" -lt 45 ]; do
+		[ -d /sys/class/net/br-lan ] && nft list tables >/dev/null 2>&1 && return 0
+		n=$((n + 1))
+		sleep 1
+	done
+	logger -t hybrid-failover "boot: br-lan or nft not ready after ${n}s"
+}
+
+hf_start_once() {
+	local n=0 max="${HF_START_RETRIES:-5}"
+	while [ "$n" -lt "$max" ]; do
+		if /usr/sbin/hybrid-failover start; then
+			return 0
+		fi
+		n=$((n + 1))
+		logger -t hybrid-failover "start attempt ${n}/${max} failed"
+		[ "$n" -lt "$max" ] && sleep 2
+	done
+	return 1
+}
+
 start_service() {
-	/usr/sbin/hybrid-failover start
+	if ! hf_start_once; then
+		logger -t hybrid-failover "start failed; monitor not started"
+		return 1
+	fi
 
 	lan="$(uci -q get network.lan.ipaddr 2>/dev/null)"
 	if [ -n "$lan" ]; then
@@ -24,6 +51,11 @@ start_service() {
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger hybrid-failover
+	procd_add_interface_trigger "interface.*" /etc/init.d/hybrid-failover reload
 }
 
 stop_service() {
