@@ -37,6 +37,7 @@ func ApplyFromUCI(pkg *uci.Package) error {
 			}
 		}
 	}
+	ifaces = expandSourceIfaces(ifaces)
 
 	steps := []string{
 		"nft add table inet " + NFTTable,
