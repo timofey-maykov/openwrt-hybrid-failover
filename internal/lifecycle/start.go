@@ -50,19 +50,18 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		return StartResult{}, fmt.Errorf("lan ipv6: %w", err)
 	}
 
-	updater := lists.NewFromUCI(opts.UCIPath)
-	if _, listErr := updater.UpdateOnce(); listErr != nil {
-		// WAN may be unavailable on cold boot; nft and engine are already up.
-		log.Printf("hybrid-failover start: list update: %v", listErr)
-	}
-
-	if res2, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
-		return StartResult{}, err
-	} else if res2.Changed {
-		res = res2
-	}
-
 	_ = lists.InstallCron(opts.UCIPath)
+
+	updater := lists.NewFromUCI(opts.UCIPath)
+	go func() {
+		if _, listErr := updater.UpdateOnce(); listErr != nil {
+			log.Printf("hybrid-failover start: list update: %v", listErr)
+			return
+		}
+		if _, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
+			log.Printf("hybrid-failover start: apply after list update: %v", err)
+		}
+	}()
 
 	return StartResult{ConfigHash: res.ConfigHash}, nil
 }
