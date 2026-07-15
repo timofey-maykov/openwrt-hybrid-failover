@@ -76,12 +76,13 @@ func SyncNativeEnginePlan(ctx context.Context, uciPath string) {
 	if uciPath == "" {
 		uciPath = paths.UCIConfig
 	}
-	if consumeEngineSyncRequest() {
+	force := consumeEngineSyncRequest()
+	if force {
 		lastUCIConfigFP = ""
 		lastEnginePlanHash = ""
 	}
 	fp, err := uciConfigFingerprint(uciPath)
-	if err == nil && fp == lastUCIConfigFP {
+	if !force && err == nil && fp == lastUCIConfigFP {
 		return
 	}
 
@@ -93,18 +94,20 @@ func SyncNativeEnginePlan(ctx context.Context, uciPath string) {
 	if fp != "" {
 		lastUCIConfigFP = fp
 	}
-	if hash == "" || hash == lastEnginePlanHash {
+	// Sync request: reload even when plan hash is identical (runtime needs fresh Path loads).
+	if !force && (hash == "" || hash == lastEnginePlanHash) {
 		return
 	}
-
-	if !engine.Default().Running() {
-		lastEnginePlanHash = hash
-		_ = os.WriteFile(enginePlanHashPath, []byte(hash+"\n"), 0o644)
+	if hash == "" {
 		return
 	}
 
 	lastEnginePlanHash = hash
+	_ = os.MkdirAll("/var/run/hybrid-failover", 0o755)
 	_ = os.WriteFile(enginePlanHashPath, []byte(hash+"\n"), 0o644)
+	// Always Stop so the monitor loop restarts with a freshly compiled plan.
+	// If the engine was already down (stop timeout, failed Start), Stop is a no-op
+	// and the loop's next Apply/Run still uses the updated on-disk hash / UCI.
 	engine.Default().Stop()
 }
 
@@ -156,6 +159,9 @@ func applyNativeEngine(uciPath string) (Result, error) {
 	if p == nil {
 		return Result{}, nil
 	}
+	if err := os.MkdirAll("/var/run/hybrid-failover", 0o755); err != nil {
+		return Result{}, err
+	}
 	oldHash, _ := os.ReadFile(enginePlanHashPath)
 	changed := string(oldHash) != hash+"\n"
 	if err := os.WriteFile(enginePlanHashPath, []byte(hash+"\n"), 0o644); err != nil {
@@ -174,6 +180,9 @@ func reloadNativeEngine(ctx context.Context, uciPath string) error {
 	}
 	if hash == "" {
 		return nil
+	}
+	if err := os.MkdirAll("/var/run/hybrid-failover", 0o755); err != nil {
+		return err
 	}
 	if err := os.WriteFile(enginePlanHashPath, []byte(hash+"\n"), 0o644); err != nil {
 		return err

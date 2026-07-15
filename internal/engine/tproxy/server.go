@@ -19,11 +19,12 @@ type Router interface {
 }
 
 type Server struct {
-	mu       sync.Mutex
-	router   Router
-	listener net.Listener
-	udpConn  *net.UDPConn
-	cancel   context.CancelFunc
+	mu          sync.Mutex
+	router      Router
+	listener    net.Listener
+	udpConn     *net.UDPConn
+	cancel      context.CancelFunc
+	DisableQUIC bool
 }
 
 func NewServer(r Router) *Server {

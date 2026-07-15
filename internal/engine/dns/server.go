@@ -130,6 +130,15 @@ func (s *Server) handle(w mdns.ResponseWriter, r *mdns.Msg) {
 		_ = w.WriteMsg(msg)
 		return
 	}
+	// FakeIP / upstream A answers only for A queries. For AAAA return NODATA so clients use IPv4.
+	if q.Qtype == mdns.TypeAAAA {
+		_ = w.WriteMsg(msg)
+		return
+	}
+	if q.Qtype != mdns.TypeA && q.Qtype != mdns.TypeANY {
+		_ = w.WriteMsg(msg)
+		return
+	}
 	name := strings.TrimSuffix(q.Name, ".")
 	if ip, ok := s.resolve(name); ok {
 		rr := &mdns.A{

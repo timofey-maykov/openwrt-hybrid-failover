@@ -50,6 +50,7 @@ func New(p *plan.Plan, ctrl *control.Control) (*Runtime, error) {
 		tproxy:    tproxy.NewServer(rtr),
 		dnsServer: dns.NewServer(dnsPlan, rtr),
 	}
+	rt.tproxy.DisableQUIC = p.DisableQUIC
 	if p.ListDownload.Enabled && p.ListDownload.Section != "" {
 		rt.listDownload = listdownload.New(p.ListDownload.Section, p.ListDownload.Port, reg, ctrl)
 	}

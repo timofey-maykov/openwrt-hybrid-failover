@@ -40,6 +40,7 @@ type Plan struct {
 	RuleSets     []RuleSet
 	ListDownload ListDownloadPlan
 	OutputIface  string
+	DisableQUIC  bool
 }
 
 type DNSPlan struct {
@@ -89,12 +90,14 @@ type RouteRule struct {
 }
 
 type RuleSet struct {
-	Tag      string
-	Kind     string // domains, subnets
-	Domains  []string
-	Subnets  []string
-	Path     string
+	Tag       string
+	Kind      string // domains, subnets
+	Domains   []string
+	Subnets   []string
+	Path      string
 	RemoteURL string
+	// FileStamp is mtime:size of Path so Hash() changes when list files are filled.
+	FileStamp string
 }
 
 type ListDownloadPlan struct {

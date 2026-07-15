@@ -114,6 +114,10 @@ func (s *Server) serveUDP(ctx context.Context, conn *net.UDPConn) {
 		if err != nil {
 			continue
 		}
+		// Match sing-box disable_quic: drop UDP/443 so apps fall back to TCP.
+		if s.DisableQUIC && origDst.Port == 443 {
+			continue
+		}
 		key := fmt.Sprintf("%s|%d|%s|%d", clientAddr.IP, clientAddr.Port, origDst.IP, origDst.Port)
 		mu.Lock()
 		sess, ok := sessions[key]
