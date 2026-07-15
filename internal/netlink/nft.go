@@ -67,6 +67,14 @@ func ApplyFromUCI(pkg *uci.Package) error {
 		}
 	}
 
+	if pkg != nil {
+		if settings := pkg.Section("settings"); settings != nil && settings.GetBool("disable_quic", false) {
+			// Reject QUIC before mark/tproxy so clients fall back to TCP quickly.
+			steps = append(steps,
+				"nft add rule inet "+NFTTable+" mangle iifname @"+ifaceSetName+" udp dport 443 ip daddr "+singbox.FakeIPInet4Range+" reject",
+			)
+		}
+	}
 	steps = append(steps,
 		mangleMarkRule("iifname @"+ifaceSetName+" ip daddr "+singbox.FakeIPInet4Range),
 	)
@@ -83,6 +91,11 @@ func ApplyFromUCI(pkg *uci.Package) error {
 				}
 				steps = append(steps,
 					"nft add element inet "+NFTTable+" "+proxySubnetsSetName+" '{ "+strings.Join(cidrs[i:end], ", ")+" }'",
+				)
+			}
+			if settings := pkg.Section("settings"); settings != nil && settings.GetBool("disable_quic", false) {
+				steps = append(steps,
+					"nft add rule inet "+NFTTable+" mangle iifname @"+ifaceSetName+" udp dport 443 ip daddr @"+proxySubnetsSetName+" reject",
 				)
 			}
 			steps = append(steps,

@@ -89,6 +89,9 @@ func (c *compiler) compileSettings() error {
 		FakeIPDomains: []string{FakeIPTestDomain, CheckProxyIPDomain},
 		RejectHTTPS:   true,
 	}
+	if settings != nil {
+		c.plan.DisableQUIC = settings.GetBool("disable_quic", false)
+	}
 	c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{Tag: DirectTag, Kind: OutboundDirect})
 	return nil
 }
@@ -383,13 +386,14 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 			continue
 		}
 		domainsPath := filepath.Join(singbox.RulesetDir, RulesetTag(section, svc, "community")+".json")
+		singbox.EnsureSourceRuleset(domainsPath)
 		c.plan.RuleSets = append(c.plan.RuleSets, RuleSet{
 			Tag:       RulesetTag(section, svc, "community"),
 			Kind:      "domains",
 			RemoteURL: singbox.CommunityServiceDomainURL(svc),
 			Path:      domainsPath,
+			FileStamp: rulesetFileStamp(domainsPath),
 		})
-		singbox.EnsureSourceRuleset(domainsPath)
 		baseRule.RuleSetTags = append(baseRule.RuleSetTags, RulesetTag(section, svc, "community"))
 		if url, ok := singbox.SubnetListURLs[svc]; ok {
 			lstPath := filepath.Join(singbox.RulesetDir, svc+".lst")
@@ -450,10 +454,11 @@ func (c *compiler) addDomainRuleSet(section, name, typ string, domains []string,
 		return err
 	}
 	c.plan.RuleSets = append(c.plan.RuleSets, RuleSet{
-		Tag:     tag,
-		Kind:    "domains",
-		Domains: domains,
-		Path:    path,
+		Tag:       tag,
+		Kind:      "domains",
+		Domains:   domains,
+		Path:      path,
+		FileStamp: rulesetFileStamp(path),
 	})
 	baseRule.RuleSetTags = append(baseRule.RuleSetTags, tag)
 	return nil
@@ -507,4 +512,13 @@ func planHashPath() string {
 
 func writePlanMarker() error {
 	return os.MkdirAll(filepath.Dir(planHashPath()), 0o755)
+}
+
+// rulesetFileStamp captures on-disk identity so Hash() changes when stubs are filled.
+func rulesetFileStamp(path string) string {
+	st, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", st.ModTime().UnixNano(), st.Size())
 }

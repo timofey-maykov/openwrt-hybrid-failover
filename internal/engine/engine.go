@@ -140,7 +140,20 @@ func (e *Engine) Stop() {
 	if cancel != nil {
 		cancel()
 	}
-	_ = e.waitUntilStopped(3 * time.Second)
+	if err := e.waitUntilStopped(8 * time.Second); err != nil {
+		// Avoid permanent stall when runtime.Stop hangs past the wait window.
+		e.mu.Lock()
+		if e.rt != nil {
+			rt := e.rt
+			e.rt = nil
+			e.mu.Unlock()
+			rt.Stop()
+			e.mu.Lock()
+		}
+		e.running = false
+		e.cancel = nil
+		e.mu.Unlock()
+	}
 	markRunningState(false)
 }
 

@@ -449,6 +449,9 @@ func runListUpdate(args []string) int {
 		return 1
 	}
 	if !update.Changed {
+		if engine.Alive() && u.HasValidCache() {
+			_ = lifecycle.RequestEngineSync()
+		}
 		fmt.Println("list-update: ok changed=false")
 		return 0
 	}

@@ -38,8 +38,12 @@ func ParseFile(path string) ([]string, error) {
 	return ParseList(data), nil
 }
 
-// EnsureFile downloads url into dest when dest is missing, empty, or outdated vs remote.
+// EnsureFile ensures dest has subnet entries. Prefer an existing local file so start/nft
+// do not block on GitHub; list-update refreshes remotely in the background.
 func EnsureFile(url, dest string) error {
+	if cidrs, err := ParseFile(dest); err == nil && len(cidrs) > 0 {
+		return nil
+	}
 	changed, err := RefreshFileIfChanged(url, dest, nil)
 	if err != nil {
 		if cidrs, err2 := ParseFile(dest); err2 == nil && len(cidrs) > 0 {

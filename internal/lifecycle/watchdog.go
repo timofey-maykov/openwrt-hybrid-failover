@@ -8,6 +8,7 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -17,6 +18,8 @@ type Watchdog struct {
 	Interval time.Duration
 	Probe    func() error
 	Restart  func() error
+
+	lastListRecover time.Time
 }
 
 func DefaultWatchdog(uciPath string) *Watchdog {
@@ -33,6 +36,8 @@ func DefaultWatchdog(uciPath string) *Watchdog {
 			return os.ErrNotExist
 		},
 		Restart: func() error {
+			// Nudge the engine loop to restart even when already stopped.
+			_ = RequestEngineSync()
 			engine.Default().Stop()
 			return nil
 		},
@@ -57,6 +62,34 @@ func (w *Watchdog) restoreNFT() {
 	}
 }
 
+// recoverEmptyLists re-downloads community rulesets and forces monitor reload when stubs are empty.
+func (w *Watchdog) recoverEmptyLists() {
+	if w.UCIPath == "" {
+		return
+	}
+	if time.Since(w.lastListRecover) < 2*time.Minute {
+		return
+	}
+	updater := lists.NewFromUCI(w.UCIPath)
+	if updater.HasValidCache() {
+		return
+	}
+	w.lastListRecover = time.Now()
+	go func() {
+		log.Printf("hybrid-failover watchdog: community lists empty, updating")
+		if _, err := updater.UpdateOnce(); err != nil {
+			log.Printf("hybrid-failover watchdog: list update: %v", err)
+			if !updater.HasValidCache() {
+				return
+			}
+		}
+		if err := RefreshListsWithMonitor(w.UCIPath); err != nil {
+			log.Printf("hybrid-failover watchdog: refresh after list update: %v", err)
+			_ = RequestEngineSync()
+		}
+	}()
+}
+
 func (w *Watchdog) Run(ctx context.Context) {
 	if w.Interval <= 0 {
 		w.Interval = 30 * time.Second
@@ -73,6 +106,7 @@ func (w *Watchdog) Run(ctx context.Context) {
 		case <-ticker.C:
 			_ = netlink.EnsureIPRules()
 			w.restoreNFT()
+			w.recoverEmptyLists()
 			_ = dnsmasq.EnsureLocalResolv()
 			if err := w.Probe(); err != nil {
 				failStreak++

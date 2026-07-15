@@ -10,7 +10,8 @@ const (
 	GitHubRawURL = "https://raw.githubusercontent.com/itdoginfo/allow-domains/main"
 	SRSMainURL   = "https://github.com/itdoginfo/allow-domains/releases/latest/download"
 
-	RulesetDir = "/tmp/hybrid-failover/rulesets"
+	// Persist across reboot; /tmp is wiped and otherwise blocks start on cold downloads.
+	RulesetDir = "/etc/hybrid-failover/rulesets"
 
 	DirectTag           = "direct-out"
 	TPROXYInboundTag    = "tproxy-in"

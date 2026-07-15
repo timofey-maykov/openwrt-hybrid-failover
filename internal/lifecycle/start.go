@@ -30,14 +30,7 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		return StartResult{}, fmt.Errorf("load uci: %w", err)
 	}
 
-	applyOpts := Options{
-		UCIPath: opts.UCIPath,
-	}
-	res, err := Apply(applyOpts)
-	if err != nil {
-		return StartResult{}, err
-	}
-
+	// nft first: LAN keeps tproxy even if plan compile / AWG2 is slow.
 	if err := netlink.ApplyFromUCI(pkg); err != nil {
 		return StartResult{}, fmt.Errorf("nft setup: %w", err)
 	}
@@ -50,16 +43,30 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 		return StartResult{}, fmt.Errorf("lan ipv6: %w", err)
 	}
 
+	applyOpts := Options{
+		UCIPath: opts.UCIPath,
+	}
+	res, err := Apply(applyOpts)
+	if err != nil {
+		return StartResult{}, err
+	}
+
 	_ = lists.InstallCron(opts.UCIPath)
 
 	updater := lists.NewFromUCI(opts.UCIPath)
 	go func() {
+		// Cold boot / empty stubs: download lists, then force monitor to reload
+		// ruleset files (plan hash alone often stays the same).
 		if _, listErr := updater.UpdateOnce(); listErr != nil {
 			log.Printf("hybrid-failover start: list update: %v", listErr)
+			if updater.HasValidCache() {
+				_ = RequestEngineSync()
+			}
 			return
 		}
-		if _, err := ApplyAndReloadIfChanged(applyOpts); err != nil {
-			log.Printf("hybrid-failover start: apply after list update: %v", err)
+		if err := RefreshListsWithMonitor(opts.UCIPath); err != nil {
+			log.Printf("hybrid-failover start: refresh after list update: %v", err)
+			_ = RequestEngineSync()
 		}
 	}()
 
