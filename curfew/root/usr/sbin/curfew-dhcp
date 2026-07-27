@@ -1,0 +1,11 @@
+#!/bin/sh
+# Sourced from dnsmasq dhcp-script. Use return, not exit.
+case "$1" in
+	add|old)
+		i=0
+		while name=$(uci -q get "curfew.@device[$i].name"); do
+			[ "$4" = "$name" ] && /usr/sbin/curfew sync && return 0
+			i=$((i + 1))
+		done
+		;;
+esac

@@ -108,7 +108,8 @@ func (e *Engine) Run(ctx context.Context) error {
 	markRunningState(true)
 
 	<-runCtx.Done()
-	rt.Stop()
+	// DNS Stop force-closes after ~2.5s; wait a bit longer so the next Start can bind.
+	stopRuntime(rt, 5*time.Second)
 	markRunningState(false)
 	e.mu.Lock()
 	e.running = false
@@ -136,25 +137,44 @@ func (e *Engine) SelectorActive(section string) string {
 func (e *Engine) Stop() {
 	e.mu.Lock()
 	cancel := e.cancel
+	rt := e.rt
 	e.mu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
-	if err := e.waitUntilStopped(8 * time.Second); err != nil {
-		// Avoid permanent stall when runtime.Stop hangs past the wait window.
+	if err := e.waitUntilStopped(5 * time.Second); err != nil {
+		// Run() may have timed out before rt.Stop finished; force cleanup with a bound.
+		// Never call rt.Stop synchronously without a timeout (would freeze sync/watchdog).
 		e.mu.Lock()
 		if e.rt != nil {
-			rt := e.rt
-			e.rt = nil
-			e.mu.Unlock()
-			rt.Stop()
-			e.mu.Lock()
+			rt = e.rt
 		}
+		e.rt = nil
 		e.running = false
 		e.cancel = nil
 		e.mu.Unlock()
+		markRunningState(false)
+		if rt != nil {
+			stopRuntime(rt, 3*time.Second)
+		}
+		return
 	}
 	markRunningState(false)
+}
+
+func stopRuntime(rt *runtime.Runtime, timeout time.Duration) {
+	if rt == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		rt.Stop()
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+	}
 }
 
 func (e *Engine) waitUntilStopped(timeout time.Duration) error {

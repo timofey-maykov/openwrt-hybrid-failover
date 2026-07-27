@@ -18,13 +18,25 @@ var communityDomainListPaths = map[string]string{
 // CommunityDomainSupplements adds domains required by apps but missing from upstream .lst files.
 var CommunityDomainSupplements = map[string][]string{
 	"youtube": {
+		"youtube.com",
+		"youtu.be",
+		"yt.be",
+		"youtube-nocookie.com",
+		"youtubekids.com",
+		"ytimg.com",
+		"ggpht.com",
+		"googlevideo.com",
+		// Specific Google hosts for YouTube login / clients (not bare google.com).
+		"accounts.google.com",
+		"play.google.com",
+		"www.google.com",
+		"clients1.google.com",
+		"clients3.google.com",
+		"clients4.google.com",
+		"clients6.google.com",
 		"googleapis.com",
 		"gstatic.com",
 		"googleusercontent.com",
-		"play.google.com",
-		"clients1.google.com",
-		"clients3.google.com",
-		"clients6.google.com",
 		"gvt1.com",
 		"gemini.google.com",
 		"ai.google.dev",
@@ -37,12 +49,66 @@ var CommunityDomainSupplements = map[string][]string{
 		"alkalimakersuite-pa.clients6.google.com",
 		"proactivebackend-pa.googleapis.com",
 	},
+	// russia_inside includes youtube.com but not Google hosts used by YouTube login.
+	"russia_inside": {
+		"accounts.google.com",
+		"play.google.com",
+		"www.google.com",
+		"clients1.google.com",
+		"clients3.google.com",
+		"clients4.google.com",
+		"clients6.google.com",
+		"googleapis.com",
+		"gstatic.com",
+		"googleusercontent.com",
+		"gvt1.com",
+	},
+	// European Xbox in RF: only Microsoft auth through the tunnel (0x80a40401).
+	// Do NOT FakeIP Epic/Psyonix/RL: matchmaking via foreign exit assigns Asia
+	// dedicated servers while game UDP stays direct → join hang / connection lost.
+	// Do NOT suffix-match xboxlive.com / xbox.com (party/Teredo → RL error 71).
+	"rocketleague": {
+		"xsts.auth.xboxlive.com",
+		"user.auth.xboxlive.com",
+		"title.auth.xboxlive.com",
+		"login.live.com",
+		"account.live.com",
+	},
+}
+
+// CommunityDomainRemovals drops domains that must not stay in on-disk rulesets
+// after they were removed from supplements (EnsureCommunitySupplements merges
+// existing files and would otherwise keep them forever).
+var CommunityDomainRemovals = map[string][]string{
+	"rocketleague": {
+		"rocketleague.com",
+		"psyonix.com",
+		"rl-psy.net",
+		"psy.net",
+		"psynet.gg",
+		"datahound.com",
+		"epicgames.com",
+		"epicgames.dev",
+		"unrealengine.com",
+		"gamepass.com",
+		"xbox.com",
+		"xboxlive.com",
+		"xboxservices.com",
+		"xboxab.com",
+		"xboxab.net",
+		"xboxservice.com",
+		"packages.xboxlive.com",
+		"portalservices.xboxlive.com",
+		"titlestorage.xboxlive.com",
+		"accounts.xboxlive.com",
+		"xbl-smooth.xboxlive.com",
+	},
 }
 
 func MergeCommunityDomains(service string, domains []string) []string {
 	extra, ok := CommunityDomainSupplements[service]
 	if !ok || len(extra) == 0 {
-		return domains
+		return filterCommunityRemovals(service, domains)
 	}
 	seen := make(map[string]struct{}, len(domains)+len(extra))
 	out := make([]string, 0, len(domains)+len(extra))
@@ -62,6 +128,25 @@ func MergeCommunityDomains(service string, domains []string) []string {
 	}
 	for _, d := range extra {
 		add(d)
+	}
+	return filterCommunityRemovals(service, out)
+}
+
+func filterCommunityRemovals(service string, domains []string) []string {
+	drop := CommunityDomainRemovals[service]
+	if len(drop) == 0 || len(domains) == 0 {
+		return domains
+	}
+	deny := make(map[string]struct{}, len(drop))
+	for _, d := range drop {
+		deny[strings.ToLower(d)] = struct{}{}
+	}
+	out := make([]string, 0, len(domains))
+	for _, d := range domains {
+		if _, bad := deny[strings.ToLower(d)]; bad {
+			continue
+		}
+		out = append(out, d)
 	}
 	return out
 }

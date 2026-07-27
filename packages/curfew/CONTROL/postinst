@@ -1,0 +1,4 @@
+#!/bin/sh
+[ -x /usr/sbin/curfew-apply ] && /usr/sbin/curfew-apply >/dev/null 2>&1 || true
+/etc/init.d/curfew enable >/dev/null 2>&1 || true
+exit 0

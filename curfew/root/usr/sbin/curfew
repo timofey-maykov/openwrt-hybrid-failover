@@ -1,0 +1,192 @@
+#!/bin/sh
+LAN_IF=$(uci -q get curfew.@curfew[0].lan_if)
+LAN_IF=${LAN_IF:-br-lan}
+RATE=$(uci -q get curfew.@curfew[0].rate_limit)
+RATE=${RATE:-64kbit}
+BURST=$(uci -q get curfew.@curfew[0].burst)
+BURST=${BURST:-16k}
+MARK=/var/run/curfew.active
+
+enabled() {
+	[ "$(uci -q get curfew.@curfew[0].enabled)" = "1" ]
+}
+
+device_ip() {
+	local name=$1 ip idx=$2
+	ip=$(uci -q get "curfew.@device[$idx].ip")
+	[ -n "$ip" ] || ip=$(awk -v n="$name" '$4 == n { print $3; exit }' /tmp/dhcp.leases)
+	echo "$ip"
+}
+
+device_rate() {
+	local idx=$1 r
+	r=$(uci -q get "curfew.@device[$idx].rate_limit")
+	[ -n "$r" ] || r="$RATE"
+	echo "$r"
+}
+
+device_burst() {
+	local idx=$1 b
+	b=$(uci -q get "curfew.@device[$idx].burst")
+	[ -n "$b" ] || b="$BURST"
+	echo "$b"
+}
+
+targets() {
+	local i=0 name ip rate burst
+	while name=$(uci -q get "curfew.@device[$i].name"); do
+		ip=$(device_ip "$name" "$i")
+		rate=$(device_rate "$i")
+		burst=$(device_burst "$i")
+		[ -n "$ip" ] && echo "$name|$ip|$rate|$burst"
+		i=$((i + 1))
+	done
+}
+
+tc_active() {
+	[ -f "$MARK" ]
+}
+
+unload_tc() {
+	tc qdisc del dev "$LAN_IF" root 2>/dev/null
+	tc qdisc del dev "$LAN_IF" ingress 2>/dev/null
+	rm -f "$MARK"
+}
+
+load_tc() {
+	local if="$LAN_IF" pref=100 band=1 bands=1 count=0 i=0 name ip rate burst
+	while name=$(uci -q get "curfew.@device[$i].name"); do
+		ip=$(device_ip "$name" "$i")
+		[ -n "$ip" ] || return 1
+		count=$((count + 1))
+		i=$((i + 1))
+	done
+	[ "$count" -gt 0 ] || return 1
+
+	unload_tc
+	tc qdisc add dev "$if" handle ffff: ingress || return 1
+
+	i=0
+	pref=100
+	while name=$(uci -q get "curfew.@device[$i].name"); do
+		ip=$(device_ip "$name" "$i")
+		rate=$(device_rate "$i")
+		burst=$(device_burst "$i")
+		tc filter add dev "$if" parent ffff: protocol ip prio $pref flower src_ip "$ip/32" \
+			action police rate "$rate" burst "$burst" conform-exceed drop \
+			|| return 1
+		pref=$((pref + 1))
+		i=$((i + 1))
+	done
+
+	bands=$((count + 1))
+	tc qdisc add dev "$if" root handle 1: prio bands "$bands" \
+		priomap 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 0 || return 1
+
+	band=1
+	i=0
+	while name=$(uci -q get "curfew.@device[$i].name"); do
+		ip=$(device_ip "$name" "$i")
+		rate=$(device_rate "$i")
+		burst=$(device_burst "$i")
+		tc qdisc add dev "$if" parent "1:${band}" handle "${band}0:" \
+			tbf rate "$rate" burst "$burst" latency 400ms || return 1
+		tc filter add dev "$if" parent 1: protocol ip prio $band flower dst_ip "$ip/32" \
+			flowid "1:${band}" || return 1
+		band=$((band + 1))
+		i=$((i + 1))
+	done
+
+	tc qdisc add dev "$if" parent "1:${bands}" handle "${bands}0:" \
+		tbf rate 1000mbit burst 64k latency 50ms || return 1
+
+	touch "$MARK"
+}
+
+to_min() {
+	local t=$1 h m
+	h=${t%:*}
+	m=${t#*:}
+	h=$(echo "$h" | sed 's/^0*//')
+	m=$(echo "$m" | sed 's/^0*//')
+	h=${h:-0}
+	m=${m:-0}
+	echo $((h * 60 + m))
+}
+
+in_window() {
+	local block unblock now_min block_min unblock_min
+	block=$(uci -q get curfew.@curfew[0].block_time); block=${block:-00:30}
+	unblock=$(uci -q get curfew.@curfew[0].unblock_time); unblock=${unblock:-08:00}
+	now_min=$(to_min "$(date +%H):$(date +%M)")
+	block_min=$(to_min "$block")
+	unblock_min=$(to_min "$unblock")
+	if [ "$block_min" -lt "$unblock_min" ]; then
+		[ "$now_min" -ge "$block_min" ] && [ "$now_min" -lt "$unblock_min" ]
+	else
+		[ "$now_min" -ge "$block_min" ] || [ "$now_min" -lt "$unblock_min" ]
+	fi
+}
+
+json_escape() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+status_json() {
+	local block unblock active=0 in_win=0
+	local first=1 name ip rate burst lease_mac custom_rate
+	block=$(uci -q get curfew.@curfew[0].block_time); block=${block:-00:30}
+	unblock=$(uci -q get curfew.@curfew[0].unblock_time); unblock=${unblock:-08:00}
+	if tc_active; then active=1; fi
+	if in_window; then in_win=1; fi
+	printf '{'
+	printf '"enabled":%s,' "$(enabled && echo true || echo false)"
+	printf '"active":%s,' "$([ "$active" -eq 1 ] && echo true || echo false)"
+	printf '"in_window":%s,' "$([ "$in_win" -eq 1 ] && echo true || echo false)"
+	printf '"rate_limit":"%s",' "$(json_escape "$RATE")"
+	printf '"burst":"%s",' "$(json_escape "$BURST")"
+	printf '"lan_if":"%s",' "$(json_escape "$LAN_IF")"
+	printf '"block_time":"%s",' "$(json_escape "$block")"
+	printf '"unblock_time":"%s",' "$(json_escape "$unblock")"
+	printf '"timezone":"%s",' "$(json_escape "$(date +%Z)")"
+	printf '"targets":['
+	while IFS='|' read -r name ip rate burst; do
+		[ -n "$name" ] || continue
+		lease_mac=$(awk -v ip="$ip" '$3 == ip { print $2; exit }' /tmp/dhcp.leases)
+		[ "$first" -eq 1 ] || printf ','
+		first=0
+		printf '{"name":"%s","ip":"%s","mac":"%s","online":%s,"rate_limit":"%s","burst":"%s"}' \
+			"$(json_escape "$name")" \
+			"$(json_escape "$ip")" \
+			"$(json_escape "${lease_mac:-}")" \
+			"$([ -n "$lease_mac" ] && echo true || echo false)" \
+			"$(json_escape "$rate")" \
+			"$(json_escape "$burst")"
+	done <<EOF
+$(targets)
+EOF
+	printf ']}'
+}
+
+case "$1" in
+	throttle|block) enabled && load_tc ;;
+	unblock) unload_tc ;;
+	sync)
+		if enabled && in_window; then load_tc; else unload_tc; fi
+		;;
+	status-json) status_json ;;
+	status)
+		if tc_active; then
+			echo "curfew: active (defaults ${RATE}, burst ${BURST})"
+		else
+			echo "curfew: inactive"
+		fi
+		echo "targets:"
+		targets | while IFS='|' read -r name ip rate burst; do
+			lease_mac=$(awk -v ip="$ip" '$3 == ip { print $2; exit }' /tmp/dhcp.leases)
+			echo "  $name $ip rate=$rate burst=$burst mac=${lease_mac:-offline}"
+		done
+		echo "schedule: $(uci -q get curfew.@curfew[0].block_time)-$(uci -q get curfew.@curfew[0].unblock_time) $(date +%Z)"
+		;;
+	*) echo "usage: $0 throttle|unblock|sync|status|status-json" >&2; exit 2 ;;
+esac

@@ -2,7 +2,9 @@ package outbound
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"sync"
@@ -332,7 +334,6 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 	delays := make(map[string]int, len(u.plan.Members))
 	batch := make(map[string]delayhistory.SampleInput, len(u.plan.Members))
 	for _, member := range u.plan.Members {
-		start := time.Now()
 		h, err := u.registry.Handler(member)
 		if err != nil {
 			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
@@ -341,18 +342,13 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		conn, err := h.DialTCP(ctx, "tcp", extractHostPort(testURL))
+		ms, err := probeURLTestHTTP(ctx, h, testURL)
 		cancel()
 		if err != nil {
 			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
 			delays[member] = -1
 			batch[member] = delayhistory.SampleInput{OK: false}
 			continue
-		}
-		_ = conn.Close()
-		ms := int(time.Since(start).Milliseconds())
-		if ms <= 0 {
-			ms = 1
 		}
 		delays[member] = ms
 		ctrl.SetDelay(member, plan.DelaySample{
@@ -366,6 +362,72 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 	u.mu.Lock()
 	u.active = pickURLTestMember(u.plan, delays, u.active)
 	u.mu.Unlock()
+}
+
+// probeURLTestHTTP measures end-to-end latency with TLS (when needed) + HTTP GET.
+// Bare DialTCP is not enough: hysteria2 DialConn returns when the QUIC stream
+// opens (~1ms) before the remote TCP dial finishes, which made urltest always
+// prefer hysteria over slower-looking AWG2.
+func probeURLTestHTTP(ctx context.Context, h Handler, testURL string) (int, error) {
+	start := time.Now()
+	u, err := url.Parse(testURL)
+	if err != nil || u.Host == "" {
+		u, _ = url.Parse("https://www.gstatic.com/generate_204")
+	}
+	port := u.Port()
+	if port == "" {
+		if u.Scheme == "http" {
+			port = "80"
+		} else {
+			port = "443"
+		}
+	}
+	host := u.Hostname()
+	addr := net.JoinHostPort(host, port)
+	conn, err := h.DialTCP(ctx, "tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = conn.SetDeadline(deadline)
+	}
+
+	stream := net.Conn(conn)
+	if u.Scheme != "http" {
+		tlsConn := tls.Client(conn, &tls.Config{
+			ServerName: host,
+			NextProtos: []string{"http/1.1"},
+			MinVersion: tls.VersionTLS12,
+		})
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			return 0, err
+		}
+		defer tlsConn.Close()
+		stream = tlsConn
+	}
+
+	path := u.Path
+	if path == "" {
+		path = "/"
+	}
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	req := "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\nUser-Agent: hybrid-failover-urltest\r\n\r\n"
+	if _, err := io.WriteString(stream, req); err != nil {
+		return 0, err
+	}
+	buf := make([]byte, 64)
+	n, err := stream.Read(buf)
+	if n == 0 && err != nil {
+		return 0, err
+	}
+	ms := int(time.Since(start).Milliseconds())
+	if ms <= 0 {
+		ms = 1
+	}
+	return ms, nil
 }
 
 func pickURLTestMember(p plan.OutboundPlan, delays map[string]int, current string) string {

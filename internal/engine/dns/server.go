@@ -64,16 +64,14 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 	mux := mdns.NewServeMux()
 	mux.HandleFunc(".", s.handle)
-	runCtx, cancel := context.WithCancel(ctx)
+	_, cancel := context.WithCancel(ctx)
 	s.udp = &mdns.Server{Net: "udp", Handler: mux, PacketConn: udpConn}
 	s.tcp = &mdns.Server{Net: "tcp", Handler: mux, Listener: tcpLn}
 	s.cancel = cancel
 	go func() { _ = s.udp.ActivateAndServe() }()
 	go func() { _ = s.tcp.ActivateAndServe() }()
-	go func() {
-		<-runCtx.Done()
-		_ = s.Stop()
-	}()
+	// Engine.Runtime.Stop calls Stop; do not also Stop from ctx.Done (re-entrant
+	// Shutdown under the same mutex can stall forever and freeze sync/watchdog).
 	return waitForListen(addr, 3*time.Second)
 }
 
@@ -97,23 +95,48 @@ func waitForListen(addr string, timeout time.Duration) error {
 
 func (s *Server) Stop() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.cancel != nil {
-		s.cancel()
-		s.cancel = nil
+	udp := s.udp
+	tcp := s.tcp
+	cancel := s.cancel
+	s.udp = nil
+	s.tcp = nil
+	s.cancel = nil
+	s.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
 	}
-	var err error
-	if s.udp != nil {
-		err = s.udp.Shutdown()
-		s.udp = nil
+	if udp == nil && tcp == nil {
+		return nil
 	}
-	if s.tcp != nil {
-		if e := s.tcp.Shutdown(); e != nil && err == nil {
-			err = e
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if udp != nil {
+			_ = udp.Shutdown()
 		}
-		s.tcp = nil
+		if tcp != nil {
+			_ = tcp.Shutdown()
+		}
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-time.After(2 * time.Second):
+		// Shutdown can block on miekg/dns; release ports so Apply/Run can retry.
+		if udp != nil && udp.PacketConn != nil {
+			_ = udp.PacketConn.Close()
+		}
+		if tcp != nil && tcp.Listener != nil {
+			_ = tcp.Listener.Close()
+		}
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+		}
+		return fmt.Errorf("dns: shutdown timeout")
 	}
-	return err
 }
 
 func (s *Server) handle(w mdns.ResponseWriter, r *mdns.Msg) {

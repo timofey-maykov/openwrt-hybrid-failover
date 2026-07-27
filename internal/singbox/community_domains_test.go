@@ -20,9 +20,47 @@ func TestMergeCommunityDomains(t *testing.T) {
 	for _, d := range got {
 		seen[d] = true
 	}
-	for _, want := range []string{"youtube.com", "googleapis.com", "gstatic.com", "gemini.google.com", "ai.google.dev"} {
+	for _, want := range []string{
+		"youtube.com", "accounts.google.com", "googleapis.com", "gstatic.com",
+		"gemini.google.com", "ai.google.dev",
+	} {
 		if !seen[want] {
 			t.Fatalf("missing %q in %v", want, got)
+		}
+	}
+	if seen["google.com"] {
+		t.Fatalf("bare google.com must not be a youtube supplement: %v", got)
+	}
+	gotRI := MergeCommunityDomains("russia_inside", []string{"youtube.com"})
+	seenRI := make(map[string]bool)
+	for _, d := range gotRI {
+		seenRI[d] = true
+	}
+	if !seenRI["accounts.google.com"] {
+		t.Fatalf("russia_inside missing accounts.google.com in %v", gotRI)
+	}
+	if seenRI["google.com"] {
+		t.Fatalf("bare google.com must not be a russia_inside supplement: %v", gotRI)
+	}
+}
+
+func TestMergeCommunityDomainsRocketLeagueNoXbox(t *testing.T) {
+	got := MergeCommunityDomains("rocketleague", []string{
+		"rocketleague.com", "xboxlive.com", "xbox.com", "gamepass.com", "epicgames.com",
+	})
+	seen := make(map[string]bool)
+	for _, d := range got {
+		seen[d] = true
+	}
+	if !seen["xsts.auth.xboxlive.com"] || !seen["login.live.com"] {
+		t.Fatalf("expected Xbox auth hosts for RF, got %v", got)
+	}
+	for _, bad := range []string{
+		"xboxlive.com", "xbox.com", "gamepass.com", "xboxservices.com",
+		"rocketleague.com", "epicgames.com", "psyonix.com",
+	} {
+		if seen[bad] {
+			t.Fatalf("domain %q must not be FakeIP for RL path, got %v", bad, got)
 		}
 	}
 }

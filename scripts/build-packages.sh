@@ -200,6 +200,60 @@ build_luci_unified_pkg() {
 	pack_pkg "$pkg_root"
 }
 
+build_luci_curfew_pkg() {
+	local pkg_root="$STAGE_DIR/luci-app-curfew"
+	rm -rf "$pkg_root"
+	mkdir -p "$pkg_root/CONTROL"
+
+	local luci_root="$ROOT_DIR/luci-curfew/root"
+	mkdir -p "$pkg_root/www/luci-static/resources/view/curfew"
+	mkdir -p "$pkg_root/usr/share/luci/menu.d"
+	mkdir -p "$pkg_root/usr/share/rpcd/acl.d"
+	mkdir -p "$pkg_root/usr/share/rpcd/ucode"
+
+	cp "$luci_root/www/luci-static/resources/view/curfew/curfew.js" \
+		"$pkg_root/www/luci-static/resources/view/curfew/"
+	cp "$luci_root/usr/share/luci/menu.d/luci-app-curfew.json" \
+		"$pkg_root/usr/share/luci/menu.d/"
+	cp "$luci_root/usr/share/rpcd/acl.d/luci-app-curfew.json" \
+		"$pkg_root/usr/share/rpcd/acl.d/"
+	cp "$luci_root/usr/share/rpcd/ucode/curfew" \
+		"$pkg_root/usr/share/rpcd/ucode/"
+
+	cp "$ROOT_DIR/packages/luci-app-curfew/CONTROL/postinst" "$pkg_root/CONTROL/"
+
+	write_control "$pkg_root/CONTROL/control" "luci-app-curfew" "all" \
+		"luci-base luci-compat curfew" \
+		"Curfew LuCI: night bandwidth limits for LAN devices" \
+		"32" "$FULL_VERSION"
+
+	pack_pkg "$pkg_root"
+}
+
+build_curfew_pkg() {
+	local pkg_root="$STAGE_DIR/curfew"
+	rm -rf "$pkg_root"
+	mkdir -p "$pkg_root/CONTROL"
+
+	local root="$ROOT_DIR/curfew/root"
+	mkdir -p "$pkg_root/usr/sbin" "$pkg_root/etc/init.d" "$pkg_root/etc/config" "$pkg_root/etc/dnsmasq.d"
+	cp "$root/usr/sbin/curfew" "$root/usr/sbin/curfew-apply" "$root/usr/sbin/curfew-dhcp" "$pkg_root/usr/sbin/"
+	chmod 755 "$pkg_root/usr/sbin/"*
+	cp "$root/etc/init.d/curfew" "$pkg_root/etc/init.d/"
+	chmod 755 "$pkg_root/etc/init.d/curfew"
+	cp "$root/etc/config/curfew" "$pkg_root/etc/config/"
+	touch "$pkg_root/etc/dnsmasq.d/curfew.conf"
+	cp "$ROOT_DIR/packages/curfew/CONTROL/postinst" "$pkg_root/CONTROL/"
+	cp "$ROOT_DIR/packages/curfew/CONTROL/conffiles" "$pkg_root/CONTROL/"
+
+	write_control "$pkg_root/CONTROL/control" "curfew" "all" \
+		"uci tc kmod-sched-core kmod-ifb kmod-sched-connmark dnsmasq" \
+		"Night bandwidth limits (tc) for selected LAN devices" \
+		"16" "$FULL_VERSION"
+
+	pack_pkg "$pkg_root"
+}
+
 build_luci_i18n_pkg() {
 	local pkg_root="$STAGE_DIR/luci-i18n-hybrid-failover"
 	rm -rf "$pkg_root"
@@ -240,6 +294,16 @@ if hf_build_luci && [[ -d "$ROOT_DIR/luci/root" ]]; then
 	build_luci_i18n_pkg
 	echo "==> Building luci-app-hybrid-failover (all)"
 	build_luci_unified_pkg
+fi
+
+if [[ -d "$ROOT_DIR/curfew/root" ]]; then
+	echo "==> Building curfew (all)"
+	build_curfew_pkg
+fi
+
+if [[ -d "$ROOT_DIR/luci-curfew/root" ]]; then
+	echo "==> Building luci-app-curfew (all)"
+	build_luci_curfew_pkg
 fi
 
 MANIFEST="$DIST_DIR/manifest.json"
