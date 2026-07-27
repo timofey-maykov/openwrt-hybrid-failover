@@ -1123,12 +1123,24 @@ function parseChecklist(data) {
 		return items;
 	var d = data.data || data;
 	if (typeof d === 'string') {
-		d.split('\n').forEach(function(line) {
-			line = line.trim();
-			if (line)
-				items.push({ ok: !/^fail|error/i.test(line), text: line });
+		try {
+			d = JSON.parse(d);
+		} catch (e) {
+			d.split('\n').forEach(function(line) {
+				line = line.trim();
+				if (line)
+					items.push({ ok: !/^fail|error/i.test(line), text: line });
+			});
+			return items;
+		}
+	}
+	// global-check: { ok, report: { nft_ok, engine_running, ... } }
+	if (d && d.report && typeof d.report === 'object') {
+		d = Object.assign({}, d.report, {
+			ok: d.ok,
+			message: d.message,
+			errors: d.errors || d.report.errors
 		});
-		return items;
 	}
 	if (d.errors && Array.isArray(d.errors)) {
 		d.errors.forEach(function(e) { items.push({ ok: false, text: String(e) }); });
@@ -1145,6 +1157,8 @@ function parseChecklist(data) {
 		items.push({ ok: !!d.fakeip_ok, text: 'fakeip: ' + (d.fakeip_ok ? 'OK' : 'FAIL') });
 	if (!isNativeEngine(d) && d.clash_ok != null)
 		items.push({ ok: !!d.clash_ok, text: 'Clash API: ' + (d.clash_ok ? 'OK' : 'FAIL') });
+	if (d.active_outbound)
+		items.push({ ok: true, text: 'active: ' + d.active_outbound });
 	return items;
 }
 

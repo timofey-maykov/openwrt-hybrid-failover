@@ -46,6 +46,8 @@ return view.extend({
 		}
 		if (this._rawEl)
 			this._rawEl.textContent = title + '\n' + formatResult(res);
+		if (this._rawWrap)
+			this._rawWrap.open = true;
 	},
 
 	handleRpc: function(fn, title) {
@@ -63,7 +65,9 @@ return view.extend({
 
 	render: function() {
 		var self = this;
-		this._checklistEl = E('div', {});
+		this._checklistEl = E('div', {}, [
+			E('p', { 'class': 'hf-mon-empty' }, _('Нажмите Validate или global-check, чтобы запустить проверку.'))
+		]);
 		this._rawEl = E('pre', {
 			'style': 'white-space:pre-wrap;font-size:12px;max-height:320px;overflow:auto;margin:0;padding:12px;background:var(--cbi-section-background-color,rgba(127,127,127,.06));border-radius:8px;'
 		}, '-');
@@ -74,7 +78,7 @@ return view.extend({
 
 		var root = E('div', { 'class': 'cbi-section hf-mon' }, [
 			E('h2', {}, _('Hybrid Failover: диагностика')),
-			E('p', { 'class': 'hint' }, _('Проверки конфигурации и сетевого стека. Результаты — чеклист и raw JSON ниже.')),
+			E('p', { 'class': 'hint' }, _('Проверки конфигурации и сетевого стека. Результаты: чеклист и raw JSON ниже.')),
 			E('h3', {}, _('First-run')),
 			E('p', { 'class': 'hint' }, _('1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip. Для VPN+резервы рекомендуется outage-only.')),
 			E('div', { 'class': 'hf-mon-toolbar' }, [
