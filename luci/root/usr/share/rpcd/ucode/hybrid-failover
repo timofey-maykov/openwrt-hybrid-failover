@@ -32,17 +32,15 @@ function run_rpc(method) {
 }
 
 function parse_json_output(res) {
-	if (!res.ok)
-		return res;
-
 	if (!length(res.output))
-		return { ok: true, data: null };
+		return { ok: res.ok, data: null };
 
 	try {
-		return { ok: true, data: json(res.output) };
+		// Keep CLI exit status: failed checks still return structured JSON.
+		return { ok: res.ok, data: json(res.output) };
 	}
 	catch (err) {
-		return { ok: true, output: res.output };
+		return { ok: res.ok, output: res.output };
 	}
 }
 
