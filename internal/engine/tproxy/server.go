@@ -82,8 +82,10 @@ func (s *Server) serve(ctx context.Context, ln net.Listener) {
 			case <-ctx.Done():
 				return
 			default:
+				// Closed listener or transient error: do not busy-spin.
+				time.Sleep(20 * time.Millisecond)
+				continue
 			}
-			continue
 		}
 		go s.handleConn(conn)
 	}

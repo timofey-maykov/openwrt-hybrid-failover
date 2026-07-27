@@ -40,7 +40,7 @@ var CommunityServices = []string{
 	"russia_inside", "russia_outside", "ukraine_inside", "geoblock", "block", "porn",
 	"news", "anime", "youtube", "hdrezka", "tiktok", "google_ai", "google_play",
 	"hodca", "discord", "meta", "twitter", "cloudflare", "cloudfront", "digitalocean",
-	"hetzner", "ovh", "telegram", "roblox", "netflix",
+	"hetzner", "ovh", "telegram", "roblox", "netflix", "rocketleague",
 }
 
 var SubnetListURLs = map[string]string{

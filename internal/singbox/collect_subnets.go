@@ -11,6 +11,17 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
+// cloudflareSupernetsForNFT are shared Cloudflare ranges pulled in by discord.lst
+// (and similar). api.epicgames.dev sits on the same space; marking it for tproxy
+// sends console matchmaking through the tunnel while game UDP stays direct, so
+// Rocket League lands on Asia dedicated servers and drops. Discord/meta/twitter
+// already use FakeIP domain routing and do not need these IP CIDRs in nft.
+var cloudflareSupernetsForNFT = []string{
+	"104.16.0.0/12",
+	"172.64.0.0/13",
+	"162.158.0.0/15",
+}
+
 // CollectProxySubnets returns IPv4 CIDRs that should enter tproxy from LAN clients.
 func CollectProxySubnets(pkg *uci.Package) []string {
 	if pkg == nil {
@@ -57,6 +68,35 @@ func CollectProxySubnets(pkg *uci.Package) []string {
 		}
 		for _, rawURL := range sec.GetList("remote_subnet_lists") {
 			add(readRemoteSubnetURL(name, rawURL)...)
+		}
+	}
+	return dropCloudflareSupernets(out)
+}
+
+func dropCloudflareSupernets(cidrs []string) []string {
+	var deny []*net.IPNet
+	for _, raw := range cloudflareSupernetsForNFT {
+		_, n, err := net.ParseCIDR(raw)
+		if err == nil {
+			deny = append(deny, n)
+		}
+	}
+	out := make([]string, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		_, n, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		skip := false
+		for _, d := range deny {
+			// Exact supernet from discord.lst, or any more-specific CF piece.
+			if d.String() == n.String() || d.Contains(n.IP) {
+				skip = true
+				break
+			}
+		}
+		if !skip {
+			out = append(out, cidr)
 		}
 	}
 	return out

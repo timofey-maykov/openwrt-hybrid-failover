@@ -83,6 +83,24 @@ func EnsureLocalResolvIfNeeded() error {
 	return ensureLocalResolvPersist()
 }
 
+// EnsureRunning starts dnsmasq when it is not running (LAN DNS must not stay down after engine restarts).
+func EnsureRunning() error {
+	out, err := exec.Command("pidof", "dnsmasq").CombinedOutput()
+	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		return nil
+	}
+	return exec.Command("/etc/init.d/dnsmasq", "start").Run()
+}
+
+// UsesEngineUpstream reports whether dnsmasq is configured to forward to the native engine DNS.
+func UsesEngineUpstream() bool {
+	out, err := exec.Command("uci", "-q", "get", "dhcp.@dnsmasq[0].server").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(out), DNSUpstream)
+}
+
 // Restore reverts dnsmasq UCI from backup.
 func Restore() error {
 	data, err := os.ReadFile(backupPath)

@@ -1,0 +1,25 @@
+{
+	"luci-app-curfew": {
+		"description": "Curfew LuCI access",
+		"read": {
+			"uci": [ "curfew" ],
+			"file": {
+				"/etc/config/curfew": [ "read" ]
+			},
+			"ubus": {
+				"curfew": [ "status", "dhcp_leases" ]
+			}
+		},
+		"write": {
+			"uci": [ "curfew" ],
+			"file": {
+				"/etc/config/curfew": [ "write" ],
+				"/etc/dnsmasq.d/curfew.conf": [ "write" ],
+				"/etc/crontabs/root": [ "write" ]
+			},
+			"ubus": {
+				"curfew": [ "apply", "sync" ]
+			}
+		}
+	}
+}

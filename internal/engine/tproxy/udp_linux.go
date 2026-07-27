@@ -107,6 +107,8 @@ func (s *Server) serveUDP(ctx context.Context, conn *net.UDPConn) {
 			case <-ctx.Done():
 				return
 			default:
+				// Closed socket or transient error: do not busy-spin at 100% CPU.
+				time.Sleep(20 * time.Millisecond)
 				continue
 			}
 		}

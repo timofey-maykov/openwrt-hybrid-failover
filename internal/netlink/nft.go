@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
@@ -12,13 +13,15 @@ import (
 )
 
 const (
-	NFTTable           = "hybrid_failover"
-	FWMark             = "0x105"
-	RouteTable         = "hybrid_failover"
-	ifaceSetName       = "hf_ifaces"
-	localv4SetName     = "hf_localv4"
+	NFTTable            = "hybrid_failover"
+	FWMark              = "0x105"
+	RouteTable          = "hybrid_failover"
+	ifaceSetName        = "hf_ifaces"
+	localv4SetName      = "hf_localv4"
 	proxySubnetsSetName = "hf_proxy_subnets"
 )
+
+var nftMu sync.Mutex
 
 // Setup applies nft tproxy rules for br-lan + fakeip traffic only (legacy alias).
 func Setup() error {
@@ -26,9 +29,32 @@ func Setup() error {
 }
 
 // ApplyFromUCI rebuilds nft rules from UCI (LAN + fakeip scope).
+// Serialized: concurrent start/list-update/watchdog Apply races left a table
+// with sets but no tproxy chains (add steps hit "No such file" after Teardown).
 func ApplyFromUCI(pkg *uci.Package) error {
-	_ = Teardown()
+	nftMu.Lock()
+	defer nftMu.Unlock()
 
+	var last error
+	for attempt := 0; attempt < 2; attempt++ {
+		_ = teardownLocked()
+		if err := applyStepsLocked(pkg); err != nil {
+			last = err
+			continue
+		}
+		if err := checkLocked(); err != nil {
+			last = err
+			continue
+		}
+		return nil
+	}
+	if last != nil {
+		return last
+	}
+	return fmt.Errorf("nft apply failed")
+}
+
+func applyStepsLocked(pkg *uci.Package) error {
 	ifaces := []string{"br-lan"}
 	if pkg != nil {
 		if settings := pkg.Section("settings"); settings != nil {
@@ -46,6 +72,11 @@ func ApplyFromUCI(pkg *uci.Package) error {
 		"nft add element inet " + NFTTable + " " + localv4SetName + " '{ " + localv4Ranges() + " }'",
 		"nft add chain inet " + NFTTable + " mangle '{ type filter hook prerouting priority mangle; policy accept; }'",
 		"nft add chain inet " + NFTTable + " mangle_output '{ type route hook output priority mangle; policy accept; }'",
+		// NAT redirect before tproxy filter: LAN clients that hardcode 8.8.8.8/NextDNS
+		// still hit dnsmasq → 127.0.0.42 so FakeIP community domains work (Xbox RL).
+		"nft add chain inet " + NFTTable + " dns '{ type nat hook prerouting priority dstnat - 5; policy accept; }'",
+		// Drop forwarded DNS that still matches pre-hijack conntrack (UDP "ASSURED" to NextDNS).
+		"nft add chain inet " + NFTTable + " dns_forward '{ type filter hook forward priority filter; policy accept; }'",
 		"nft add chain inet " + NFTTable + " proxy '{ type filter hook prerouting priority dstnat; policy accept; }'",
 	}
 
@@ -61,11 +92,37 @@ func ApplyFromUCI(pkg *uci.Package) error {
 		rules := clientrules.ListRules(pkg)
 		for _, ip := range clientrules.ExcludeIPs(rules) {
 			steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
+			// Keep their own resolvers when traffic itself bypasses the proxy.
+			steps = append(steps, "nft add rule inet "+NFTTable+" dns ip saddr "+quoteIP(ip)+" return")
+			steps = append(steps, "nft add rule inet "+NFTTable+" dns_forward ip saddr "+quoteIP(ip)+" return")
 		}
 		for _, ip := range clientrules.IncludeIPs(rules) {
 			steps = append(steps, mangleMarkRule("ip saddr "+quoteIP(ip)))
 		}
+		// UDP-only full tunnel (e.g. console game traffic) without pulling TCP
+		// Xbox Live / Epic HTTPS back into the proxy.
+		for _, secName := range pkg.SectionNames("section") {
+			sec := pkg.Section(secName)
+			if sec == nil {
+				continue
+			}
+			for _, ip := range sec.GetList("udp_routed_ips") {
+				ip = strings.TrimSpace(ip)
+				if ip == "" {
+					continue
+				}
+				steps = append(steps,
+					"nft add rule inet "+NFTTable+" mangle ip saddr "+quoteIP(ip)+
+						" ip daddr != @"+localv4SetName+
+						" meta l4proto udp th dport != 53 meta mark set "+FWMark,
+				)
+			}
+		}
 	}
+	steps = append(steps,
+		"nft add rule inet "+NFTTable+" dns iifname @"+ifaceSetName+" meta l4proto { tcp, udp } th dport 53 redirect to :53",
+		"nft add rule inet "+NFTTable+" dns_forward iifname @"+ifaceSetName+" meta l4proto { tcp, udp } th dport 53 drop",
+	)
 
 	if pkg != nil {
 		if settings := pkg.Section("settings"); settings != nil && settings.GetBool("disable_quic", false) {
@@ -78,6 +135,27 @@ func ApplyFromUCI(pkg *uci.Package) error {
 	steps = append(steps,
 		mangleMarkRule("iifname @"+ifaceSetName+" ip daddr "+singbox.FakeIPInet4Range),
 	)
+	// After FakeIP mark: these sources skip subnet tproxy so console Teredo /
+	// Xbox Live UDP stay on WAN. FakeIP-marked packets keep their mark.
+	if pkg != nil {
+		for _, secName := range pkg.SectionNames("section") {
+			sec := pkg.Section(secName)
+			if sec == nil {
+				continue
+			}
+			for _, ip := range sec.GetList("subnet_bypass_ips") {
+				ip = strings.TrimSpace(ip)
+				if ip == "" {
+					continue
+				}
+				steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
+			}
+		}
+		// Teredo / Xbox NAT traversal must not enter the proxy tunnel.
+		steps = append(steps,
+			"nft add rule inet "+NFTTable+" mangle meta l4proto udp th dport 3544 return",
+		)
+	}
 	if pkg != nil {
 		if cidrs := subnets.NormalizeForNFT(singbox.CollectProxySubnets(pkg)); len(cidrs) > 0 {
 			steps = append(steps,
@@ -114,9 +192,16 @@ func ApplyFromUCI(pkg *uci.Package) error {
 
 	for _, line := range steps {
 		out, err := exec.Command("sh", "-c", line).CombinedOutput()
-		if err != nil && !strings.Contains(string(out), "File exists") && !strings.Contains(string(out), "No such file") {
-			return fmt.Errorf("%s: %w: %s", line, err, strings.TrimSpace(string(out)))
+		if err == nil {
+			continue
 		}
+		msg := strings.TrimSpace(string(out))
+		// Idempotent re-add only. Never ignore missing table/chain: that is how
+		// concurrent Teardown left FakeIP traffic unmarked (apps hang).
+		if strings.Contains(msg, "File exists") {
+			continue
+		}
+		return fmt.Errorf("%s: %w: %s", line, err, msg)
 	}
 	return nil
 }
@@ -147,6 +232,12 @@ func localv4Ranges() string {
 }
 
 func Teardown() error {
+	nftMu.Lock()
+	defer nftMu.Unlock()
+	return teardownLocked()
+}
+
+func teardownLocked() error {
 	_ = exec.Command("nft", "delete", "table", "inet", NFTTable).Run()
 	_ = exec.Command("ip", "rule", "del", "fwmark", FWMark, "table", RouteTable).Run()
 	_ = exec.Command("ip", "route", "flush", "table", RouteTable).Run()
@@ -163,6 +254,8 @@ func ensureIPRulesSteps() []string {
 
 // EnsureIPRules restores fwmark policy routing required for tproxy (idempotent).
 func EnsureIPRules() error {
+	nftMu.Lock()
+	defer nftMu.Unlock()
 	for _, line := range ensureIPRulesSteps() {
 		out, err := exec.Command("sh", "-c", line).CombinedOutput()
 		if err != nil && !strings.Contains(string(out), "File exists") && !strings.Contains(string(out), "No such file") {
@@ -182,23 +275,51 @@ func ipRulesOK() bool {
 }
 
 func Check() error {
+	nftMu.Lock()
+	defer nftMu.Unlock()
+	return checkLocked()
+}
+
+func checkLocked() error {
 	out, err := exec.Command("nft", "list", "table", "inet", NFTTable).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("nft table missing: %w", err)
 	}
 	body := string(out)
+	if !strings.Contains(body, "chain mangle") || !strings.Contains(body, "chain proxy") || !strings.Contains(body, "chain dns") {
+		return fmt.Errorf("nft chains incomplete")
+	}
 	if !strings.Contains(body, "tproxy") {
 		return fmt.Errorf("nft rules incomplete")
+	}
+	if !strings.Contains(body, "redirect to :53") && !strings.Contains(body, "redirect to : 53") {
+		return fmt.Errorf("nft dns hijack missing")
+	}
+	if !strings.Contains(body, "chain dns_forward") {
+		return fmt.Errorf("nft dns forward drop missing")
 	}
 	if !strings.Contains(body, ifaceSetName) {
 		return fmt.Errorf("nft interface set missing")
 	}
+	if !strings.Contains(body, singbox.FakeIPInet4Range) {
+		return fmt.Errorf("nft fakeip mark missing")
+	}
 	if !ipRulesOK() {
-		if err := EnsureIPRules(); err != nil {
+		if err := ensureIPRulesLocked(); err != nil {
 			return fmt.Errorf("tproxy ip rules missing: %w", err)
 		}
 		if !ipRulesOK() {
 			return fmt.Errorf("tproxy ip rules missing")
+		}
+	}
+	return nil
+}
+
+func ensureIPRulesLocked() error {
+	for _, line := range ensureIPRulesSteps() {
+		out, err := exec.Command("sh", "-c", line).CombinedOutput()
+		if err != nil && !strings.Contains(string(out), "File exists") && !strings.Contains(string(out), "No such file") {
+			return fmt.Errorf("%s: %w: %s", line, err, strings.TrimSpace(string(out)))
 		}
 	}
 	return nil

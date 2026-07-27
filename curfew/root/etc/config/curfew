@@ -1,0 +1,14 @@
+
+config curfew
+	option enabled '0'
+	option block_time '01:30'
+	option unblock_time '08:00'
+	option lan_if 'br-lan'
+	option rate_limit '128kbit'
+	option burst '16k'
+
+# config device
+#	option name 'iPhone'
+#	option ip '192.168.1.123'
+#	option rate_limit '64kbit'
+#	option burst '16k'

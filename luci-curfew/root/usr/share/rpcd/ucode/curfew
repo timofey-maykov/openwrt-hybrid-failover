@@ -1,0 +1,108 @@
+'use strict';
+
+import { popen, readfile, access } from 'fs';
+
+const CURFEW_BIN = '/usr/sbin/curfew';
+const CURFEW_APPLY = '/usr/sbin/curfew-apply';
+const LEASE_FILE = '/tmp/dhcp.leases';
+
+function shellquote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+}
+
+function run_cmd(cmd) {
+	let fd = popen(`(${cmd}) 2>&1; echo __CF_EXIT:$?`, 'r');
+	let all = fd ? fd.read('all') : '';
+	if (fd)
+		fd.close();
+
+	let m = match(all, /__CF_EXIT:(\d+)\s*$/);
+	let code = m ? int(m[1]) : 1;
+	let output = trim(replace(all, /__CF_EXIT:\d+\s*$/, ''));
+
+	return { ok: code == 0, code, output };
+}
+
+function run_curfew(args) {
+	if (access(CURFEW_BIN) != true)
+		return { ok: false, code: 127, output: 'curfew binary not found' };
+
+	let cmd = join(' ', map(args, (a) => shellquote(a)));
+	cmd = `${shellquote(CURFEW_BIN)} ${cmd}`;
+	return run_cmd(cmd);
+}
+
+function parse_leases() {
+	if (access(LEASE_FILE) != true)
+		return [];
+
+	let raw = readfile(LEASE_FILE);
+	if (!length(raw))
+		return [];
+
+	let now = time();
+	let out = [];
+	for (let line in split(raw, '\n')) {
+		line = trim(line);
+		if (!length(line))
+			continue;
+
+		let parts = split(line, ' ');
+		if (length(parts) < 5)
+			continue;
+
+		let exp = int(parts[0]);
+		let mac = parts[1];
+		let ip = parts[2];
+		let name = parts[3];
+		if (name == '*')
+			name = '';
+
+		push(out, {
+			expires: exp,
+			mac: mac,
+			ip: ip,
+			name: name,
+			online: exp > now,
+		});
+	}
+
+	return out;
+}
+
+return {
+	'curfew': {
+		status: {
+			call: function() {
+				let res = run_curfew(['status-json']);
+				if (!res.ok)
+					return res;
+
+				try {
+					return { ok: true, data: json(res.output) };
+				}
+				catch (err) {
+					return { ok: false, output: res.output || 'status-json parse error' };
+				}
+			}
+		},
+		apply: {
+			call: function() {
+				if (access(CURFEW_APPLY) != true)
+					return { ok: false, code: 127, output: 'curfew-apply not found' };
+
+				return run_cmd(shellquote(CURFEW_APPLY));
+			}
+		},
+		sync: {
+			call: function() {
+				return run_curfew(['sync']);
+			}
+		},
+		dhcp_leases: {
+			call: function() {
+				return { ok: true, data: { leases: parse_leases(), source: 'dnsmasq' } };
+			}
+		},
+	}
+};

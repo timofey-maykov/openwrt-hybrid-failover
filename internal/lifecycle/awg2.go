@@ -9,6 +9,7 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/probe"
 )
 
 func awg2InterfaceName(section string) string {
@@ -77,7 +78,25 @@ func awg2InterfaceReady(ifname string, params amnezia.AWG2Params) bool {
 		return false
 	}
 	wantEndpoint := fmt.Sprintf("%s:%s", params.Host, params.Port)
-	return endpoint == wantEndpoint && publicKey == params.PublicKey
+	if endpoint != wantEndpoint || publicKey != params.PublicKey {
+		return false
+	}
+	// Stale handshake counts as not ready so SetupAWG2 recreates / setconf again.
+	fresh, _ := probe.WgHandshakeFresh(ifname, probe.DefaultWGHandshakeMaxAge)
+	return fresh
+}
+
+// bounceAWGInterface flaps the link to force a new handshake (keeps addresses/config).
+func bounceAWGInterface(ifname string) error {
+	if ifname == "" {
+		return fmt.Errorf("empty iface")
+	}
+	_ = exec.Command("ip", "link", "set", "dev", ifname, "down").Run()
+	out, err := exec.Command("ip", "link", "set", "dev", ifname, "up").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("link up %s: %w: %s", ifname, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func parseAWGShowPeer(text string) (endpoint, publicKey string, ok bool) {

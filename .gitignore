@@ -14,3 +14,6 @@ upstream-main-patched/
 bot/hybrid-failover-bot-local
 deploy-backups/
 scripts/__pycache__/
+
+# Site-specific router etalons (may contain local topology)
+docs/sites/

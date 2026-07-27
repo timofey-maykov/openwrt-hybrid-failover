@@ -1,0 +1,13 @@
+{
+	"admin/services/curfew": {
+		"title": "Curfew",
+		"order": 65,
+		"action": {
+			"type": "view",
+			"path": "curfew/curfew"
+		},
+		"depends": {
+			"acl": [ "luci-app-curfew" ]
+		}
+	}
+}

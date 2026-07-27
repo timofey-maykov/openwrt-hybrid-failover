@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+START=99
+
+start() {
+	/usr/sbin/curfew-apply
+}
+
+stop() {
+	/usr/sbin/curfew unblock
+}
+
+reload() {
+	/usr/sbin/curfew-apply
+}

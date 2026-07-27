@@ -174,11 +174,12 @@ func applyNativeEngine(uciPath string) (Result, error) {
 }
 
 func reloadNativeEngine(ctx context.Context, uciPath string) error {
+	_ = ctx
 	p, hash, err := compileEnginePlan(uciPath)
 	if err != nil {
 		return err
 	}
-	if hash == "" {
+	if p == nil || hash == "" {
 		return nil
 	}
 	if err := os.MkdirAll("/var/run/hybrid-failover", 0o755); err != nil {
@@ -187,11 +188,13 @@ func reloadNativeEngine(ctx context.Context, uciPath string) error {
 	if err := os.WriteFile(enginePlanHashPath, []byte(hash+"\n"), 0o644); err != nil {
 		return err
 	}
-	// Monitor process picks up hash/plan via SyncNativeEnginePlan.
-	if engine.Default().Running() {
-		return engine.Default().Reload(ctx, p)
-	}
-	return nil
+	// Never Run() in a short-lived CLI/RPC process: only the monitor owns listeners.
+	// Force the monitor sync loop to Stop+restart with the new plan.
+	engineSyncMu.Lock()
+	lastEnginePlanHash = ""
+	lastUCIConfigFP = ""
+	engineSyncMu.Unlock()
+	return RequestEngineSync()
 }
 
 func stopNativeEngine() {
