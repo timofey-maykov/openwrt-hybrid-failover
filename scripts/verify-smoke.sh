@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Basic regression smoke checks for hybrid-failover-core (host or router).
+# Host/router smoke checks for hybrid-failover-core (host or router).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

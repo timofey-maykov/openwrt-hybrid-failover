@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Native engine smoke: compile, unit tests, validate all fixtures.
+# Native engine checks: compile, unit tests, validate all fixtures.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

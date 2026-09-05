@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end regression for OpenWrt QEMU lab (hybrid-failover-core).
+# End-to-end OpenWrt QEMU lab checks (hybrid-failover-core).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,7 +22,7 @@ Steps (default: all):
   lab       Start OpenWrt QEMU lab (installs core packages when dist/apk exists)
   remote    Run hybrid-failover checks over SSH on the lab VM
   luci      Run scripts/luci-ubus-smoke.sh on guest (ubus status/health/history)
-  smoke     Run host regression-smoke.sh
+  smoke     Run host verify-smoke.sh
   failover  URLTest failover scenario (requires running native engine)
 
 Environment:
