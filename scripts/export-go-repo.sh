@@ -41,10 +41,9 @@ copy VERSION VERSION
 
 # Docs (core-focused)
 mkdir -p "$OUT_DIR/docs"
-for f in UCI.md OVERVIEW.md INSTALL.md INSTALL.md; do
+for f in UCI.md OVERVIEW.md INSTALL.md; do
 	copy "docs/$f" "docs/$f"
 done
-# docs: product guides only
 
 # README for core repo
 cat >"$OUT_DIR/README.md" <<'EOF'

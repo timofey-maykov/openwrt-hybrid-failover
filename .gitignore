@@ -10,12 +10,10 @@ dist/.tools/
 work/
 upstream-main/
 upstream-main-patched/
+.local/
 .cursor/
 *.mdc
 AGENTS.md
-CLAUDE.md
-.cursorrules
-.cursorignore
 bot/hybrid-failover-bot-local
 deploy-backups/
 scripts/__pycache__/
