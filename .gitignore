@@ -12,8 +12,6 @@ upstream-main/
 upstream-main-patched/
 .local/
 .cursor/
-*.mdc
-AGENTS.md
 bot/hybrid-failover-bot-local
 deploy-backups/
 scripts/__pycache__/
