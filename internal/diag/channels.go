@@ -42,9 +42,14 @@ func failoverInfoFromSection(section string, sec *uci.Section) *FailoverInfo {
 	if sec == nil {
 		return &FailoverInfo{Section: section}
 	}
+	pol := policy.Normalize(sec.Get("failover_policy", ""))
+	// Pure urltest sections are always managed as fastest (controller ignores failover_policy).
+	if sec.Get("proxy_config_type", "") == "urltest" && len(sec.GetList("urltest_proxy_links")) > 0 {
+		pol = policy.Fastest
+	}
 	info := &FailoverInfo{
 		Section:       section,
-		Policy:        string(policy.Normalize(sec.Get("failover_policy", ""))),
+		Policy:        string(pol),
 		CheckInterval: sec.Get("urltest_check_interval", ""),
 		Tolerance:     sec.Get("urltest_tolerance", ""),
 		IdleTimeout:   sec.Get("urltest_idle_timeout", ""),

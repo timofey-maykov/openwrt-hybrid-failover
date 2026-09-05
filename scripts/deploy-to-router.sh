@@ -121,7 +121,7 @@ install_ipk() {
 	local remote_path="$1"
 	local pkg="$2"
 	log "Install $(basename "$remote_path")" >&2
-	if ! ssh_cmd "opkg install --force-space --force-overwrite '${remote_path}'"; then
+	if ! ssh_cmd "opkg install --force-reinstall --force-space --force-overwrite '${remote_path}'"; then
 		die "opkg install failed for ${remote_path}"
 	fi
 	if ! ssh_cmd "opkg list-installed 2>/dev/null | grep -q '^${pkg} '"; then

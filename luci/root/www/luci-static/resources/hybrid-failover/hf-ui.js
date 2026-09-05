@@ -247,7 +247,7 @@ function overallState(data) {
 	if (!critical)
 		return 'down';
 	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
-	if (ctrl && ctrl.mode === 'backup' && ctrl.primary_ok === false)
+	if (ctrl && primaryProbeApplicable(ctrl) && ctrl.mode === 'backup' && ctrl.primary_ok === false)
 		return 'degraded';
 	if (data.fakeip_ok === false)
 		return 'degraded';
@@ -270,6 +270,23 @@ function badgeInfo(label) {
 	return E('span', { 'class': 'hf-mon-badge hf-mon-badge--info' }, label);
 }
 
+/** Primary VPN probe applies only to outage-only / prefer-primary, not pure urltest. */
+function primaryProbeApplicable(ctrl) {
+	if (!ctrl)
+		return false;
+	if (ctrl.mode === 'urltest' || ctrl.policy === 'fastest')
+		return false;
+	return ctrl.mode === 'primary' || ctrl.mode === 'backup';
+}
+
+function primaryProbeBadge(ctrl) {
+	if (!ctrl)
+		return '-';
+	if (!primaryProbeApplicable(ctrl))
+		return '-';
+	return badge(!!ctrl.primary_ok, 'OK', 'FAIL');
+}
+
 function channelKind(ch) {
 	if (!ch)
 		return 'reserve';
@@ -284,7 +301,7 @@ function channelAliveState(ch, probed, ctrl, data) {
 	if (data && !proxyRunning(data))
 		return 'unknown';
 	var kind = channelKind(ch);
-	if (kind === 'primary' && ctrl) {
+	if (kind === 'primary' && ctrl && primaryProbeApplicable(ctrl)) {
 		if (ctrl.primary_ok === true)
 			return 'up';
 		if (ctrl.primary_ok === false)
@@ -825,7 +842,7 @@ function buildMetricCards(data, section) {
 	var activeTag = activeOutboundTag(data, section);
 	var activeState = activeTag ? 'ok' : 'neutral';
 	var ctrl = controllerForSection(data, section);
-	if (ctrl && ctrl.mode === 'backup' && !ctrl.primary_ok)
+	if (ctrl && primaryProbeApplicable(ctrl) && ctrl.mode === 'backup' && !ctrl.primary_ok)
 		activeState = 'warn';
 	return E('div', { 'class': 'hf-mon-grid' }, [
 		card(engineLabel, engineRunning ? _('работает') : _('остановлен'),
@@ -906,7 +923,7 @@ function buildControllerTable(controllers, sectionFilter, dryRun) {
 			E('td', {}, c.policy ? badgeInfo(c.policy) : '-'),
 			E('td', {}, c.mode || '-'),
 			E('td', {}, E('span', { 'class': 'hf-mon-tag' }, c.active || '-')),
-			E('td', {}, badge(c.primary_ok, 'OK', 'FAIL')),
+			E('td', {}, primaryProbeBadge(c)),
 			E('td', { 'title': c.last_error || '' }, probeInfo.join(' · ') || '-'),
 			E('td', {}, streakText)
 		]));
@@ -948,10 +965,11 @@ function buildFailoverPanels(data, sectionFilter) {
 		if (!ctrl && data.controller.length)
 			ctrl = data.controller[0];
 	}
+	var displayPolicy = (ctrl && ctrl.policy) || (fo && fo.policy) || '';
 	var routeRows = [
 		[_('Секция'), (ctrl && ctrl.section) || (fo && fo.section) || sectionFilter || '-'],
-		[_('Политика'), fo ? fo.policy : (ctrl && ctrl.policy) || '-'],
-		[_('Описание'), fo ? policyHint(fo.policy) : policyHint(ctrl && ctrl.policy)],
+		[_('Политика'), displayPolicy || '-'],
+		[_('Описание'), policyHint(displayPolicy)],
 		[_('Selector'), fo && fo.selector_now ? E('span', { 'class': 'hf-mon-tag' }, fo.selector_now) :
 			(ctrl && ctrl.active ? E('span', { 'class': 'hf-mon-tag' }, ctrl.active) : '-')],
 		[_('URLTest'), (function() {
@@ -969,13 +987,13 @@ function buildFailoverPanels(data, sectionFilter) {
 	];
 	var ctrlRows = [
 		[_('Режим'), ctrl ? ctrl.mode : '-'],
-		[_('Primary probe'), ctrl ? badge(ctrl.primary_ok, 'OK', 'FAIL') : '-'],
-		[_('Задержка primary'), ctrl && ctrl.primary_delay_ms ? (ctrl.primary_delay_ms + ' ms') : '-'],
-		[_('Последний probe'), ctrl && ctrl.last_probe_at ? formatRelativeTime(ctrl.last_probe_at) : '-'],
+		[_('Primary probe'), primaryProbeBadge(ctrl)],
+		[_('Задержка primary'), primaryProbeApplicable(ctrl) && ctrl.primary_delay_ms ? (ctrl.primary_delay_ms + ' ms') : '-'],
+		[_('Последний probe'), primaryProbeApplicable(ctrl) && ctrl.last_probe_at ? formatRelativeTime(ctrl.last_probe_at) : '-'],
 		[_('На канале с'), ctrl && ctrl.active_since ? formatRelativeTime(ctrl.active_since) : '-'],
 		[_('Последнее переключение'), ctrl && ctrl.last_switch_at ? formatRelativeTime(ctrl.last_switch_at) : '-']
 	];
-	if (ctrl && ctrl.last_error)
+	if (primaryProbeApplicable(ctrl) && ctrl.last_error)
 		ctrlRows.push([_('Ошибка probe'), E('span', { 'style': 'color:#c0392b;' }, ctrl.last_error)]);
 	var paramRows = [];
 	if (fo) {
