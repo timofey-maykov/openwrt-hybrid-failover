@@ -131,6 +131,7 @@ func TestParseAWG2URIAWG31Query(t *testing.T) {
 }
 
 func TestDecodeVPNURIAmneziaAWGLink(t *testing.T) {
+	// Synthetic Amnezia export (TEST-NET-1). Do not embed real vpn:// dumps in tests.
 	const raw = "vpn://AAABxnicjVC7bsMwDPwXzbFgu02TGOjQduvQHwgKQVWZhrAtCxLtPAz_e0gjQJYOvoHgkXcEeKNynSeLHmJS1X58UFUp23q4os3s6U-tlNRqVI1NZFh1wJkeu0RftgWWF7tS57rURc7q0EXi2fNusy2YugbBk8EgulxvdaHLxzhEHEwNF16-LccrH0gQB4gm9D93__tyiD-k-m78WA4xttTLK0-bF7nC6WEieaUGCMY2OEgi5ZqXn05ykKZFP78_9_bM_TpX0zR9r9QvJBcxEHYiSRdPRyB0GUGi7IBn6iOw7f-0pxuz1IYv"
 	uri, err := DecodeVPNURI(raw)
 	if err != nil {
@@ -138,6 +139,9 @@ func TestDecodeVPNURIAmneziaAWGLink(t *testing.T) {
 	}
 	if !strings.HasPrefix(uri, "awg2://192.0.2.10:49781?") {
 		t.Fatalf("uri=%q", uri)
+	}
+	if !strings.Contains(uri, "private_key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%3D") {
+		t.Fatalf("missing synthetic private_key in %q", uri)
 	}
 	desc, err := DescribeLink(raw)
 	if err != nil {
