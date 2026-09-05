@@ -1,6 +1,7 @@
 package singbox
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -277,13 +278,31 @@ func (b *Builder) ensureSourceRuleset(path string) {
 	EnsureSourceRuleset(path)
 }
 
-// EnsureSourceRuleset creates an empty sing-box source ruleset file when missing.
+// emptyRulesetJSON is a valid sing-box source ruleset with no domains.
+var emptyRulesetJSON = []byte(`{"version":3,"rules":[]}` + "\n")
+
+// EnsureSourceRuleset writes a valid empty source ruleset when the file is missing,
+// empty, or not JSON. A 0-byte leftover from a killed write must not stay on disk.
 func EnsureSourceRuleset(path string) {
-	if _, err := os.Stat(path); err == nil {
+	if !rulesetFileNeedsStub(path) {
 		return
 	}
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	_ = os.WriteFile(path, []byte(`{"version":3,"rules":[]}`+"\n"), 0o644)
+	_ = writeFileAtomic(path, emptyRulesetJSON)
+}
+
+func rulesetFileNeedsStub(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return true
+	}
+	var doc struct {
+		Rules json.RawMessage `json:"rules"`
+	}
+	return json.Unmarshal(data, &doc) != nil
 }
 
 // DomainRulesetEmpty reports whether a ruleset file is missing or has no domain rules.
@@ -369,7 +388,7 @@ func WriteDomainRuleset(path string, domains []string) error {
 		return err
 	}
 	if len(domains) == 0 {
-		return os.WriteFile(path, []byte(`{"version":3,"rules":[]}`+"\n"), 0o644)
+		return writeFileAtomic(path, emptyRulesetJSON)
 	}
 	body, err := json.Marshal(map[string]any{
 		"version": 3,
@@ -380,7 +399,7 @@ func WriteDomainRuleset(path string, domains []string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o644)
+	return writeFileAtomic(path, append(body, '\n'))
 }
 
 func writeSubnetRuleset(path string, cidrs []string) error {
@@ -393,7 +412,7 @@ func WriteSubnetRuleset(path string, cidrs []string) error {
 		return err
 	}
 	if len(cidrs) == 0 {
-		return os.WriteFile(path, []byte(`{"version":3,"rules":[]}`+"\n"), 0o644)
+		return writeFileAtomic(path, emptyRulesetJSON)
 	}
 	body, err := json.Marshal(map[string]any{
 		"version": 3,
@@ -404,7 +423,35 @@ func WriteSubnetRuleset(path string, cidrs []string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(body, '\n'), 0o644)
+	return writeFileAtomic(path, append(body, '\n'))
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".ruleset-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 func sanitizeInternalTags(cfg *Config) {

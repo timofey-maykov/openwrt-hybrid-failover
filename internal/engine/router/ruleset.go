@@ -1,6 +1,7 @@
 package router
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -13,10 +14,10 @@ import (
 )
 
 type fakeIPStore struct {
-	mu      sync.Mutex
-	network *net.IPNet
-	next    net.IP
-	mapByIP map[string]string
+	mu       sync.Mutex
+	network  *net.IPNet
+	next     net.IP
+	mapByIP  map[string]string
 	mapByDom map[string]string
 }
 
@@ -118,6 +119,10 @@ func loadDomains(rs plan.RuleSet) ([]string, error) {
 		}
 		return nil, err
 	}
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return nil, nil
+	}
 	var doc struct {
 		Rules []struct {
 			Domain       []string `json:"domain"`
@@ -125,7 +130,7 @@ func loadDomains(rs plan.RuleSet) ([]string, error) {
 		} `json:"rules"`
 	}
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, err
+		return nil, nil
 	}
 	var out []string
 	for _, rule := range doc.Rules {

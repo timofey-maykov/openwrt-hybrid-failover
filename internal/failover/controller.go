@@ -118,6 +118,7 @@ func (c *Controller) Run(ctx context.Context) {
 		c.states = make(map[string]*sectionState)
 	}
 	c.hydrateStatesOnStart()
+	go c.runSwitchIPC(ctx)
 	interval := c.Interval
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -132,6 +133,25 @@ func (c *Controller) Run(ctx context.Context) {
 				interval = c.Interval
 				ticker.Reset(interval)
 			}
+		}
+	}
+}
+
+// runSwitchIPC applies LuCI/RPC selector switches without waiting for the poll ticker.
+// SubmitSwitch times out at 15s; the ticker is often 30s.
+func (c *Controller) runSwitchIPC(ctx context.Context) {
+	t := time.NewTicker(100 * time.Millisecond)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			pkg, err := uci.Load(c.UCIPath)
+			if err != nil {
+				continue
+			}
+			c.processEngineIPC(pkg)
 		}
 	}
 }

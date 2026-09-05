@@ -154,13 +154,48 @@ RPC: `CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback`. LuC
 
 ### Amnezia AWG2 (`awg2://`) {#amnezia-awg2-awg2}
 
-`awg2://` **не** отдельный сетевой протокол. Это **служебный формат core** для настройки **AmneziaWG 2.0**:
+`awg2://` **не** отдельный сетевой протокол. Это **служебный формат core** для настройки **AmneziaWG** (включая 3.1):
 
 1. создаётся интерфейс `amneziawg`;
 2. конфиг применяется через `awg setconf`;
 3. в sing-box добавляется direct outbound на этот интерфейс.
 
-Строка `awg2://…` появляется при конвертации `vpn://`, если в контейнере Amnezia указан `amnezia-awg2` или `amnezia-awg`.
+Строка `awg2://…` появляется при конвертации `vpn://`, если в контейнере Amnezia указан `amnezia-awg2` или `amnezia-awg`. В LuCI можно вставлять `vpn://` как есть.
+
+Декодер прокидывает поля 3.1 в query `awg2://`: `header_protection_key`, `content_padding_addition`, `random_trailers`, `disable_cookies`, таймеры (`rekey_after_time`, `rekey_timeout`, `reject_after_time`, `keepalive_timeout`, `max_handshake_attempts`) и `persistent_keepalive` как диапазон (`25-35`).
+
+#### Пакеты на роутере
+
+Core только пишет конфиг. Туннель поднимают **`kmod-amneziawg`** и **`amneziawg-tools`**. Для экспорта Amnezia 3.1 (`protocol_version: 3.1`, `RandomTrailers`) нужны пакеты **3.1+**, собранные под тот же OpenWrt и vermagic ядра, что стоит на роутере (`opkg info kernel`). Готовые `.ipk` часто публикуют в релизах [2Grey/awg-openwrt](https://github.com/2Grey/awg-openwrt) с тегом версии OpenWrt (например `v24.10.6`).
+
+Проверка:
+
+```sh
+awg --version          # должно быть 3.1.…, не 1.0.20260618
+awg set --help | grep random-trailers
+```
+
+Инструменты 3.0 отклонят конфиг: `Line unrecognized: RandomTrailers=on`. Тогда интерфейс не поднимется.
+
+#### Handshake и несовпадение параметров
+
+С сервером **должны совпасть** `S1-S4`, `H1-H4`, `HeaderProtectionKey` и **`RandomTrailers`**. `RandomTrailers=on` двусторонний: сервер 3.1 удлиняет пакеты handshake, клиент 3.0 их не узнаёт и молча отбрасывает. Снаружи это выглядит так: conntrack UDP `ASSURED` (ответы есть), а `awg show` показывает `0 B received` и нет handshake.
+
+`DisableCookies` совпадения не требует. `Jc` / `Jmin` / `Jmax` и `ContentPaddingAddition` тоже.
+
+Старый профиль AWG 2.0 (диапазоны `H1-H4`, `I1`, без `HeaderProtectionKey`) на порт сервера 3.1 handshake не получит. Не оставляйте такие URI в `urltest_proxy_links` рядом с 3.1: watchdog будет крутить endpoint мёртвого пира.
+
+Один `vpn://` нельзя одновременно держать на роутере и в приложении Amnezia на LAN. У AWG один ключ = одна сессия. Телефон заберёт endpoint, роутер останется без handshake.
+
+Проверка туннеля:
+
+```sh
+awg show               # latest handshake, transfer
+```
+
+В режиме **urltest** карточка канала в LuCI сначала смотрит HTTP (`urltest_testing_url`). Для AWG поверх этого накладывается handshake: свежий handshake при провале HTTP даёт текст «handshake есть, HTTP urltest не проходит». Нет handshake или он старше ~3 минут: карточка DOWN с причиной.
+
+Трафик идёт через **selector**. Пока выбран `URLTest`, живой канал = победитель HTTP urltest (часто Hysteria). Handshake AWG сам по себе urltest не переключает. Ручное «Переключить» пинит selector на конкретный outbound. Команда `SwitchProxy` выполняется в процессе monitor; ответ не должен ждать интервал опроса контроллера.
 
 ### Telegram-бот: валидация URI
 
@@ -204,7 +239,7 @@ uci commit hybrid-failover
 | `hybrid-failover-bot` | per-target | Go-бинарник, init.d, JSON/UCI-шаблон |
 | `luci-app-hybrid-failover` | all | Маршрутизация, дашборд, клиенты, бот |
 
-Зависимости core: `curl`. **`check-fakeip` не требует `bind-dig`.** **Без `jq`, `python3-light`, без внешнего sing-box.**
+Зависимости core: `curl`. **`check-fakeip` не требует `bind-dig`.** **Без `jq`, `python3-light`, без внешнего sing-box.** Пакеты **`kmod-amneziawg` / `amneziawg-tools` в релиз HF не входят**; для `vpn://` AWG 3.1 их ставит пользователь, см. [INSTALL.md](INSTALL.md#amneziawg-31).
 
 ---
 

@@ -9,6 +9,8 @@ var (
 	EngineRuntimeFile = "/var/run/hybrid-failover/engine-runtime.json"
 	SwitchRequestFile = "/var/run/hybrid-failover/switch-request.json"
 	SwitchResponseFile = "/var/run/hybrid-failover/switch-response.json"
+	// AWG2EndpointsDir holds per-iface endpoint lists for multi-IP peer failover.
+	AWG2EndpointsDir = "/var/run/hybrid-failover/awg2-endpoints"
 )
 
 // Legacy* are on-disk paths from pre-hybrid-failover installs (used only by migrate).

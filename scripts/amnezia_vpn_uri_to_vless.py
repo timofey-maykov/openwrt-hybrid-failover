@@ -7,9 +7,11 @@ Supported generated schemes:
 - vless://
 - trojan://
 - ss://
-- awg2:// (synthetic URI for hybrid-failover)
+- awg2:// (synthetic URI for hybrid-failover, including AmneziaWG 3.1
+  fields: HeaderProtectionKey, RandomTrailers, DisableCookies, timers)
 
-Output URIs are consumed by hybrid-failover / sing-box builder.
+Output URIs are consumed by hybrid-failover. AWG 3.1 needs kmod-amneziawg
+and amneziawg-tools 3.1+ on the router.
 """
 from __future__ import annotations
 
@@ -180,8 +182,27 @@ def _amnezia_awg2_to_uri(awg: dict) -> str:
         "I5",
     ):
         value = inner.get(key)
+        if value is None:
+            value = awg.get(key)
         if value is not None and str(value) != "":
             q[key.lower()] = str(value)
+
+    for json_key, query_key in (
+        ("HeaderProtectionKey", "header_protection_key"),
+        ("ContentPaddingAddition", "content_padding_addition"),
+        ("RandomTrailers", "random_trailers"),
+        ("DisableCookies", "disable_cookies"),
+        ("RekeyAfterTime", "rekey_after_time"),
+        ("RekeyTimeout", "rekey_timeout"),
+        ("RejectAfterTime", "reject_after_time"),
+        ("KeepaliveTimeout", "keepalive_timeout"),
+        ("MaxHandshakeAttempts", "max_handshake_attempts"),
+    ):
+        value = inner.get(json_key)
+        if value is None:
+            value = awg.get(json_key)
+        if value is not None and str(value) != "":
+            q[query_key] = str(value)
 
     qs = _urlencode_map(q)
     return f"awg2://{host}:{port}?{qs}"

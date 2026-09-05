@@ -143,6 +143,26 @@ var rpcListClients = rpc.declare({ object: 'hybrid-failover', method: 'list_clie
 var rpcDhcpLeases = rpc.declare({ object: 'hybrid-failover', method: 'dhcp_leases' });
 var rpcMetrics = rpc.declare({ object: 'hybrid-failover', method: 'metrics' });
 
+// LuCI default XHR timeout is 20s; health/global-check can need more on slow links.
+function withRpcTimeout(seconds, fn) {
+	var prev = L.env.rpctimeout;
+	L.env.rpctimeout = seconds;
+	return Promise.resolve().then(fn).finally(function() {
+		if (prev == null)
+			delete L.env.rpctimeout;
+		else
+			L.env.rpctimeout = prev;
+	});
+}
+
+function rpcHealthLong() {
+	return withRpcTimeout(60, function() { return rpcHealth(); });
+}
+
+function rpcGlobalCheckLong() {
+	return withRpcTimeout(60, function() { return rpcGlobalCheck(); });
+}
+
 function emptyNode(node) {
 	while (node && node.firstChild)
 		node.removeChild(node.firstChild);
@@ -288,13 +308,26 @@ function channelStatusBadge(ch, probed, ctrl, data) {
 	return badgeWarn(_('н/д'));
 }
 
+function channelIsActiveReserve(ch, ctrl) {
+	if (!ch)
+		return false;
+	if (ch.selected)
+		return true;
+	if (!ctrl || ctrl.urltest_member !== ch.name)
+		return false;
+	var active = ctrl.active || '';
+	if (!active || /-urltest-out$/.test(active) || active === ch.name)
+		return true;
+	return false;
+}
+
 function channelRoleLabel(ch, ctrl) {
 	var kind = channelKind(ch);
 	if (kind === 'primary')
 		return _('Primary VPN');
 	if (kind === 'urltest')
 		return _('URLTest группа');
-	if (ch.selected || (ctrl && ctrl.urltest_member === ch.name))
+	if (channelIsActiveReserve(ch, ctrl))
 		return _('активный резерв');
 	return _('резерв');
 }
@@ -322,13 +355,15 @@ function buildChannelOverviewCard(ch, probed, ctrl, data) {
 	var kind = channelKind(ch);
 	var alive = channelAliveState(ch, probed, ctrl, data);
 	var cardCls = 'hf-ent-channel-card hf-ent-channel-card--' + alive;
-	if (ch.selected && kind === 'reserve')
+	if (channelIsActiveReserve(ch, ctrl) && kind === 'reserve')
 		cardCls += ' hf-ent-channel-card--active';
 	var metaParts = [];
 	if (ch.type)
 		metaParts.push(ch.type);
 	if (ch.delay_ms && ch.delay_ms > 0)
 		metaParts.push(ch.delay_ms + ' ms');
+	else if (ch.detail && alive === 'up')
+		metaParts.push(_('handshake'));
 	var body = [
 		E('div', { 'class': 'hf-ent-channel-card__head' }, [
 			E('span', { 'class': 'hf-ent-channel-card__role' }, channelRoleLabel(ch, ctrl)),
@@ -337,12 +372,15 @@ function buildChannelOverviewCard(ch, probed, ctrl, data) {
 		E('div', { 'class': 'hf-ent-channel-card__name' }, ch.display || ch.name),
 		E('div', { 'class': 'hf-ent-channel-card__meta' }, metaParts.join(' · ') || '-')
 	];
-	if (ch.selected && kind === 'reserve')
+	if (channelIsActiveReserve(ch, ctrl) && kind === 'reserve')
 		body.push(E('div', { 'class': 'hf-ent-channel-card__flag' }, _('активный резерв')));
 	if (kind === 'primary' && ctrl && ctrl.last_error && ctrl.primary_ok === false)
 		body.push(E('div', { 'class': 'hf-ent-channel-card__err' }, ctrl.last_error));
-	else if (ch.detail && alive === 'unknown')
-		body.push(E('div', { 'class': 'hf-ent-channel-card__err', 'style': 'color:#9a6700;' }, ch.detail));
+	else if (ch.detail) {
+		var detailCls = alive === 'up' ? 'hf-ent-channel-card__flag' : 'hf-ent-channel-card__err';
+		var detailStyle = alive === 'unknown' ? 'color:#9a6700;' : '';
+		body.push(E('div', { 'class': detailCls, 'style': detailStyle }, ch.detail));
+	}
 	return E('div', { 'class': cardCls }, body);
 }
 
@@ -400,7 +438,7 @@ function buildChannelsOverview(channels, data, probed, opts) {
 	if (!probed) {
 		footer = E('p', { 'class': 'hint', 'style': 'margin:10px 0 0;font-size:12px;' },
 			isNativeEngine(data)
-				? _('Статус резервов из engine. Live probe обновит проверку всех каналов.')
+				? _('AWG2: handshake. HTTP urltest выбирает канал. Ручное переключение пинит selector, не urltest.')
 				: _('Статус из кэша Clash. Live probe обновит проверку всех каналов.'));
 	}
 
@@ -1195,13 +1233,13 @@ return baseclass.extend({
 	HF_DELAY_MAX: HF_DELAY_MAX,
 	rpc: {
 		status: rpcStatus,
-		health: rpcHealth,
+		health: rpcHealthLong,
 		history: rpcHistory,
 		delayHistory: rpcDelayHistory,
 		checkFakeip: rpcCheckFakeip,
 		exportHistory: rpcExportHistory,
 		switchProxy: rpcSwitchProxy,
-		globalCheck: rpcGlobalCheck,
+		globalCheck: rpcGlobalCheckLong,
 		listClients: rpcListClients,
 		dhcpLeases: rpcDhcpLeases,
 		metrics: rpcMetrics

@@ -36,6 +36,8 @@ HF_UPX=1 ./scripts/build-packages.sh   # UPX по умолчанию в CI; ~60%
 | `luci-app-hybrid-failover` | all | Unified LuCI: routing, dashboard, clients, bot |
 | `luci-app-hybrid-failover-bot` | all | Legacy bot-only LuCI page |
 
+`kmod-amneziawg` и `amneziawg-tools` в эту сборку не входят. Для AmneziaWG 3.1 см. [docs/INSTALL.md](../docs/INSTALL.md#amneziawg-31).
+
 Поддерживаемые GO/OpenWrt arch: `aarch64_cortex-a53`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc`, `x86_64`.
 
 ## Установка на роутере

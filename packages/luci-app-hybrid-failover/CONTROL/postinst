@@ -1,5 +1,15 @@
 #!/bin/sh
 # luci-app-hybrid-failover postinst
+# Live probe / global-check can exceed LuCI's default 20s XHR timeout.
+uci -q get luci.main >/dev/null 2>&1 && {
+	cur="$(uci -q get luci.main.rpctimeout 2>/dev/null || echo '')"
+	case "$cur" in
+		''|1[0-9]|20|2[0-9]|3[0-9]|4[0-9]|50|5[0-9])
+			uci set luci.main.rpctimeout='60'
+			uci commit luci
+			;;
+	esac
+}
 # rpcd loads /usr/share/rpcd/ucode/* only at start
 [ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd restart >/dev/null 2>&1
 rm -rf /tmp/luci-modulecache/* /tmp/luci-indexcache/* 2>/dev/null || true

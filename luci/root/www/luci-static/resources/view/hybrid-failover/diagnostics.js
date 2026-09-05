@@ -11,6 +11,18 @@ function rpcCall(method, params) {
 	return rpc.declare(decl);
 }
 
+// health/global-check can exceed LuCI's default 20s XHR timeout.
+function withRpcTimeout(seconds, fn) {
+	var prev = L.env.rpctimeout;
+	L.env.rpctimeout = seconds;
+	return Promise.resolve().then(fn).finally(function() {
+		if (prev == null)
+			delete L.env.rpctimeout;
+		else
+			L.env.rpctimeout = prev;
+	});
+}
+
 var callValidate = rpcCall('validate');
 var callCheckNft = rpcCall('check_nft');
 var callCheckFakeip = rpcCall('check_fakeip');
@@ -18,6 +30,10 @@ var callGlobalCheck = rpcCall('global_check');
 var callBackupUCI = rpcCall('backup_uci');
 var callBackupDownload = rpcCall('backup_download');
 var callRestoreUCI = rpcCall('restore_uci', [ 'path' ]);
+
+function callGlobalCheckLong() {
+	return withRpcTimeout(60, function() { return callGlobalCheck(); });
+}
 
 function formatResult(res) {
 	if (!res)
@@ -85,7 +101,7 @@ return view.extend({
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callValidate, 'validate'); }) }, _('Validate')),
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callCheckNft, 'nft'); }) }, _('check-nft')),
 				E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callCheckFakeip, 'fakeip'); }) }, _('check-fakeip')),
-				E('button', { 'class': 'btn cbi-button cbi-button-save', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callGlobalCheck, 'global-check'); }) }, _('global-check'))
+				E('button', { 'class': 'btn cbi-button cbi-button-save', 'click': ui.createHandlerFn(self, function() { return self.handleRpc(callGlobalCheckLong, 'global-check'); }) }, _('global-check'))
 			]),
 			E('h3', { 'style': 'margin-top:20px;' }, _('Результат')),
 			E('div', { 'class': 'hf-mon-panel', 'style': 'margin-bottom:16px;' }, this._checklistEl),

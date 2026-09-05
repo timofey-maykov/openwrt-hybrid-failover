@@ -90,8 +90,11 @@ msgstr "Режим"
 msgid "URLTest member"
 msgstr "URLTest member"
 
-msgid "Статус резервов из engine. Live probe обновит проверку всех каналов."
-msgstr "Статус резервов из engine. Live probe обновит проверку всех каналов."
+msgid "AWG2: handshake. HTTP urltest выбирает канал. Ручное переключение пинит selector, не urltest."
+msgstr "AWG2: handshake. HTTP urltest выбирает канал. Ручное переключение пинит selector, не urltest."
+
+msgid "handshake"
+msgstr "handshake"
 
 msgid "Статус из кэша Clash. Live probe обновит проверку всех каналов."
 msgstr "Статус из кэша Clash. Live probe обновит проверку всех каналов."

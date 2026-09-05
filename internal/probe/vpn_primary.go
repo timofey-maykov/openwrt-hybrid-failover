@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
 )
 
 // PrimaryVPN probes a bind-interface VPN primary.
@@ -31,6 +30,7 @@ func PrimaryVPN(ctx context.Context, delayer Delayer, primaryTag, testURL, bindI
 
 type wgHSResult struct {
 	fresh  bool
+	age    time.Duration
 	detail string
 }
 
@@ -49,8 +49,9 @@ func checkWGHandshake(iface string, maxAge time.Duration) (wgHSResult, bool) {
 	age := time.Since(last)
 	if age > maxAge {
 		return wgHSResult{
+			age:    age,
 			detail: fmt.Sprintf("wireguard handshake stale (%s ago)", formatDurationShort(age)),
 		}, true
 	}
-	return wgHSResult{fresh: true}, true
+	return wgHSResult{fresh: true, age: age}, true
 }

@@ -13,8 +13,12 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
-// ChannelTimeout is per-channel budget for live probes.
+// ChannelTimeout is per-channel budget for live probes (CLI / bot).
 const ChannelTimeout = 12 * time.Second
+
+// UIChannelTimeout / UITotalTimeout keep LuCI health under the default XHR limit (20s).
+const UIChannelTimeout = 4 * time.Second
+const UITotalTimeout = 12 * time.Second
 
 // Delayer returns outbound delay in milliseconds (Clash API or native engine control).
 type Delayer interface {

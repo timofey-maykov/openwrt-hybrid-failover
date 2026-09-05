@@ -9,16 +9,16 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
 var (
-	bgCancel              context.CancelFunc
+	bgCancel               context.CancelFunc
 	dnsmasqConfigureCancel context.CancelFunc
 )
 
@@ -101,9 +101,10 @@ func runNativeEngineLoop(ctx context.Context, uciPath string) {
 		}
 
 		if shouldManageDNSMasq(uciPath) {
-			// After Configure, dnsmasq uses notinterface=lo and must stay up for LAN DNS.
-			// Only stop it when it may still own 127.0.0.42:53 (pre-Configure / after Restore).
-			if !dnsmasq.UsesEngineUpstream() {
+			// Stop leftover dnsmasq on 127.0.0.42 only when the engine is not
+			// already the listener. FakeIPPortBusy is also true when the engine
+			// holds the port; killing dnsmasq then drops LAN DNS on restart.
+			if dnsmasq.ShouldStopForFakeIP(dnsmasq.LANForwardingOK(), engine.DNSReady(), dnsmasq.FakeIPPortBusy()) {
 				if err := dnsmasq.StopService(); err != nil {
 					fmt.Fprintf(os.Stderr, "hybrid-failover engine: dnsmasq stop: %v\n", err)
 				}
@@ -171,8 +172,8 @@ func configureDNSMasqWhenReady(ctx context.Context, uciPath string) {
 			if err := lanipv6.ApplyFromUCI(uciPath); err != nil {
 				fmt.Fprintf(os.Stderr, "hybrid-failover engine: lan ipv6: %v\n", err)
 			}
-			// Already forwarding to FakeIP: keep dnsmasq process, do not restart.
-			if dnsmasq.UsesEngineUpstream() {
+			// Already forwarding to FakeIP and not bound on lo: keep dnsmasq, do not restart.
+			if dnsmasq.LANForwardingOK() {
 				_ = dnsmasq.EnsureRunning()
 				_ = dnsmasq.EnsureLocalResolvIfNeeded()
 				return

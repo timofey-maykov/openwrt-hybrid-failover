@@ -91,8 +91,8 @@ func applyStepsLocked(pkg *uci.Package) error {
 	if pkg != nil {
 		rules := clientrules.ListRules(pkg)
 		for _, ip := range clientrules.ExcludeIPs(rules) {
-			steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
-			// Keep their own resolvers when traffic itself bypasses the proxy.
+			// DNS only here. Mangle return is after FakeIP mark: DHCP clients still
+			// resolve via the router and must not blackhole 198.18.0.0/15.
 			steps = append(steps, "nft add rule inet "+NFTTable+" dns ip saddr "+quoteIP(ip)+" return")
 			steps = append(steps, "nft add rule inet "+NFTTable+" dns_forward ip saddr "+quoteIP(ip)+" return")
 		}
@@ -135,9 +135,13 @@ func applyStepsLocked(pkg *uci.Package) error {
 	steps = append(steps,
 		mangleMarkRule("iifname @"+ifaceSetName+" ip daddr "+singbox.FakeIPInet4Range),
 	)
-	// After FakeIP mark: these sources skip subnet tproxy so console Teredo /
-	// Xbox Live UDP stay on WAN. FakeIP-marked packets keep their mark.
+	// After FakeIP mark: skip subnet tproxy for consoles / exclude list.
+	// FakeIP-marked packets keep their mark and still enter tproxy.
 	if pkg != nil {
+		rules := clientrules.ListRules(pkg)
+		for _, ip := range clientrules.ExcludeIPs(rules) {
+			steps = append(steps, mangleReturnRule("ip saddr "+quoteIP(ip)))
+		}
 		for _, secName := range pkg.SectionNames("section") {
 			sec := pkg.Section(secName)
 			if sec == nil {
@@ -171,11 +175,9 @@ func applyStepsLocked(pkg *uci.Package) error {
 					"nft add element inet "+NFTTable+" "+proxySubnetsSetName+" '{ "+strings.Join(cidrs[i:end], ", ")+" }'",
 				)
 			}
-			if settings := pkg.Section("settings"); settings != nil && settings.GetBool("disable_quic", false) {
-				steps = append(steps,
-					"nft add rule inet "+NFTTable+" mangle iifname @"+ifaceSetName+" udp dport 443 ip daddr @"+proxySubnetsSetName+" reject",
-				)
-			}
+			// Do not reject QUIC for proxy_subnets: those CIDRs are huge (CDN/cloud)
+			// and ICMP-port-unreachable there freezes apps that stick to HTTP/3.
+			// FakeIP QUIC is already rejected above when disable_quic=1.
 			steps = append(steps,
 				mangleMarkRule("iifname @"+ifaceSetName+" ip daddr @"+proxySubnetsSetName),
 				"nft add rule inet "+NFTTable+" mangle_output ip daddr @"+proxySubnetsSetName+" meta l4proto { tcp, udp } meta mark set "+FWMark,

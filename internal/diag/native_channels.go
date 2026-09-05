@@ -6,8 +6,10 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/outbound"
@@ -65,30 +67,43 @@ func ProbeNativeChannels(r Report, mainSection string, sec *uci.Section) Report 
 		r = EnrichNativeReport(r, mainSection, sec, nil)
 	}
 	if engine.Alive() {
-		return probeNativeFromEngine(r, mainSection, sec)
+		r = probeNativeFromEngine(r, mainSection, sec)
+	} else {
+		r = probeNativeWithRegistry(r, mainSection, sec)
 	}
-	return probeNativeWithRegistry(r, mainSection, sec)
+	overlayReportAWG2(r.Channels, mainSection, sec)
+	return r
 }
 
 func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Report {
 	testURL := sec.Get("urltest_testing_url", "https://www.gstatic.com/generate_204")
 	delays := engineDelays()
 	backend := failoverEngineDelayer{}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probe.UITotalTimeout)
 	defer cancel()
 
 	var reprobe []int
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 	for i := range r.Channels {
 		ch := &r.Channels[i]
 		if ch.Name == singbox.AWGTag(mainSection) {
+			i := i
+			name := ch.Name
 			iface := sec.Get("interface", "")
-			pctx, pcancel := context.WithTimeout(ctx, probe.ChannelTimeout)
-			delay, ok, detail := probe.PrimaryVPN(pctx, backend, ch.Name, testURL, iface)
-			pcancel()
-			ch.Probed = true
-			ch.DelayMs = delay
-			ch.Available = ok
-			ch.Detail = detail
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				pctx, pcancel := context.WithTimeout(ctx, probe.UIChannelTimeout)
+				delay, ok, detail := probe.PrimaryVPN(pctx, backend, name, testURL, iface)
+				pcancel()
+				mu.Lock()
+				r.Channels[i].Probed = true
+				r.Channels[i].DelayMs = delay
+				r.Channels[i].Available = ok
+				r.Channels[i].Detail = detail
+				mu.Unlock()
+			}()
 			continue
 		}
 		if ch.Type == "urltest" {
@@ -111,6 +126,7 @@ func probeNativeFromEngine(r Report, mainSection string, sec *uci.Section) Repor
 		}
 		reprobe = append(reprobe, i)
 	}
+	wg.Wait()
 	if len(reprobe) > 0 {
 		r = probeNativeChannelsActive(r, mainSection, sec, reprobe)
 	}
@@ -138,37 +154,53 @@ func probeNativeChannelsActive(r Report, mainSection string, sec *uci.Section, i
 	defer reg.Stop()
 
 	testURL := sec.Get("urltest_testing_url", "https://www.gstatic.com/generate_204")
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), probe.UITotalTimeout)
 	defer cancel()
 
-	var bestMember string
+	var (
+		mu         sync.Mutex
+		wg         sync.WaitGroup
+		bestMember string
+		bestDelay  = -1
+	)
 	for _, i := range indices {
-		ch := &r.Channels[i]
-		pctx, pcancel := context.WithTimeout(ctx, probe.ChannelTimeout)
-		var delay int
-		var ok bool
-		var detail string
-		var member string
-		if ch.Name == singbox.AWGTag(mainSection) {
-			iface := sec.Get("interface", "")
-			delay, ok, detail = probe.PrimaryVPN(pctx, registryDelayer{reg: reg}, ch.Name, testURL, iface)
-		} else if ch.Type == "urltest" {
-			delay, ok, detail, member = probeURLTestGroup(pctx, reg, p, ch.Name, testURL)
-		} else {
-			delay, ok, detail = probeRegistryOutbound(pctx, reg, ch.Name, testURL)
-		}
-		pcancel()
-		ch.Probed = true
-		ch.DelayMs = delay
-		ch.Available = ok
-		ch.Detail = detail
-		if member != "" {
-			bestMember = member
-		}
+		i := i
+		name := r.Channels[i].Name
+		chType := r.Channels[i].Type
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pctx, pcancel := context.WithTimeout(ctx, probe.UIChannelTimeout)
+			var delay int
+			var ok bool
+			var detail string
+			var member string
+			if name == singbox.AWGTag(mainSection) {
+				iface := sec.Get("interface", "")
+				delay, ok, detail = probe.PrimaryVPN(pctx, registryDelayer{reg: reg}, name, testURL, iface)
+			} else if chType == "urltest" {
+				delay, ok, detail, member = probeURLTestGroup(pctx, reg, p, name, testURL)
+			} else {
+				delay, ok, detail = probeRegistryOutbound(pctx, reg, name, testURL)
+			}
+			pcancel()
+			mu.Lock()
+			r.Channels[i].Probed = true
+			r.Channels[i].DelayMs = delay
+			r.Channels[i].Available = ok
+			r.Channels[i].Detail = detail
+			if member != "" && (bestDelay < 0 || delay < bestDelay) {
+				bestMember = member
+				bestDelay = delay
+			}
+			mu.Unlock()
+		}()
 	}
+	wg.Wait()
 	if bestMember != "" {
+		urltestGroup := singbox.URLTestTag(mainSection)
 		for i := range r.Channels {
-			r.Channels[i].Selected = channelSelected(r.Channels[i].Name, r.ActiveOutbound, bestMember)
+			r.Channels[i].Selected = channelSelected(r.Channels[i].Name, r.ActiveOutbound, bestMember, urltestGroup)
 		}
 		if r.Failover != nil {
 			r.Failover.URLTestNow = bestMember
@@ -230,19 +262,35 @@ func probeURLTestGroup(ctx context.Context, reg *outbound.Registry, p *engine.Pl
 		if ob.Tag != tag || ob.Kind != engine.OutboundURLTest {
 			continue
 		}
+		type memberResult struct {
+			tag    string
+			ms     int
+			ok     bool
+			detail string
+		}
+		results := make([]memberResult, len(ob.Members))
+		var wg sync.WaitGroup
+		for i, member := range ob.Members {
+			i, member := i, member
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ms, memberOK, memberDetail := probeRegistryOutbound(ctx, reg, member, testURL)
+				results[i] = memberResult{tag: member, ms: ms, ok: memberOK, detail: memberDetail}
+			}()
+		}
+		wg.Wait()
 		bestMs := -1
-		for _, member := range ob.Members {
-			ms, memberOK, memberDetail := probeRegistryOutbound(ctx, reg, member, testURL)
-			if !memberOK {
+		for _, res := range results {
+			if !res.ok {
 				continue
 			}
-			if bestMs < 0 || ms < bestMs {
-				bestMs = ms
-				bestMember = member
-				delay = ms
+			if bestMs < 0 || res.ms < bestMs {
+				bestMs = res.ms
+				bestMember = res.tag
+				delay = res.ms
 				ok = true
 				detail = ""
-				_ = memberDetail
 			}
 		}
 		if !ok {
@@ -299,41 +347,70 @@ func buildNativeChannels(section string, sec *uci.Section, activeOutbound, urlte
 
 func nativeVPNChannels(section string, sec *uci.Section, activeOutbound, urltestMember string, probed bool, delays map[string]delayhistory.Sample) []ChannelStatus {
 	var channels []ChannelStatus
+	urltestGroup := singbox.URLTestTag(section)
 	awgTag := singbox.AWGTag(section)
 	iface := sec.Get("interface", awgTag)
-	channels = append(channels, nativeChannel(awgTag, iface+" (primary VPN)", "direct", activeOutbound, urltestMember, probed, delays[awgTag]))
+	channels = append(channels, nativeChannel(awgTag, iface+" (primary VPN)", "direct", activeOutbound, urltestMember, urltestGroup, probed, delays[awgTag]))
 
-	urltestTag := singbox.URLTestTag(section)
-	channels = append(channels, nativeChannel(urltestTag, "URLTest (резервы)", "urltest", activeOutbound, urltestMember, probed, delays[urltestTag]))
+	channels = append(channels, nativeChannel(urltestGroup, "URLTest (резервы)", "urltest", activeOutbound, urltestMember, urltestGroup, probed, delays[urltestGroup]))
 
+	seenAWG := make(map[string]struct{})
 	links := sec.GetList("failover_proxy_links")
 	for i, link := range links {
+		if skipDuplicateAWG2Link(seenAWG, link) {
+			continue
+		}
 		tag := singbox.PeerTag(section, i+1)
 		display := shortProxyLabel(link) + " (" + tag + ")"
-		channels = append(channels, nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, probed, delays[tag]))
+		ch := nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
+		applyAWG2ChannelOverlay(&ch, section, sec, tag)
+		channels = append(channels, ch)
 	}
 	return channels
 }
 
 func nativeProxyURLTestChannels(section string, sec *uci.Section, activeOutbound, urltestMember string, probed bool, delays map[string]delayhistory.Sample) []ChannelStatus {
 	var channels []ChannelStatus
-	urltestTag := singbox.URLTestTag(section)
-	channels = append(channels, nativeChannel(urltestTag, "URLTest", "urltest", activeOutbound, urltestMember, probed, delays[urltestTag]))
+	urltestGroup := singbox.URLTestTag(section)
+	channels = append(channels, nativeChannel(urltestGroup, "URLTest", "urltest", activeOutbound, urltestMember, urltestGroup, probed, delays[urltestGroup]))
+	seenAWG := make(map[string]struct{})
 	links := sec.GetList("urltest_proxy_links")
 	for i, link := range links {
+		if skipDuplicateAWG2Link(seenAWG, link) {
+			continue
+		}
 		tag := singbox.PeerTag(section, i+1)
 		display := shortProxyLabel(link) + " (" + tag + ")"
-		channels = append(channels, nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, probed, delays[tag]))
+		ch := nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
+		applyAWG2ChannelOverlay(&ch, section, sec, tag)
+		channels = append(channels, ch)
 	}
 	return channels
 }
 
-func nativeChannel(name, display, typ, activeOutbound, urltestMember string, probed bool, last delayhistory.Sample) ChannelStatus {
+func overlayReportAWG2(channels []ChannelStatus, section string, sec *uci.Section) {
+	for i := range channels {
+		applyAWG2ChannelOverlay(&channels[i], section, sec, channels[i].Name)
+	}
+}
+
+func applyAWG2ChannelOverlay(ch *ChannelStatus, section string, sec *uci.Section, tag string) {
+	if ch == nil || ch.Type != "awg2" {
+		return
+	}
+	iface := probe.BindIfaceForChannel(section, sec, tag)
+	ok, delay, detail := probe.OverlayAWG2Health(ch.DelayMs, probe.ReadAWGHandshake(iface))
+	ch.Available = ok
+	ch.DelayMs = delay
+	ch.Detail = detail
+}
+
+func nativeChannel(name, display, typ, activeOutbound, urltestMember, urltestGroup string, probed bool, last delayhistory.Sample) ChannelStatus {
 	ch := ChannelStatus{
 		Name:     name,
 		Display:  display,
 		Type:     typ,
-		Selected: channelSelected(name, activeOutbound, urltestMember),
+		Selected: channelSelected(name, activeOutbound, urltestMember, urltestGroup),
 		Probed:   probed,
 	}
 	if !engine.Alive() && !probed {
@@ -383,11 +460,16 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember string, pro
 	return ch
 }
 
-func channelSelected(name, activeOutbound, urltestMember string) bool {
+func channelSelected(name, activeOutbound, urltestMember, urltestGroup string) bool {
 	if activeOutbound != "" && name == activeOutbound {
 		return true
 	}
-	if urltestMember != "" && name == urltestMember {
+	if urltestMember == "" || name != urltestMember {
+		return false
+	}
+	// Traffic follows the selector. The urltest winner is "active" only while
+	// the selector is the urltest group (or already that member).
+	if activeOutbound == "" || activeOutbound == urltestGroup || activeOutbound == urltestMember {
 		return true
 	}
 	return false
@@ -432,6 +514,31 @@ func proxyScheme(raw string) string {
 		return raw[:i]
 	}
 	return "proxy"
+}
+
+// skipDuplicateAWG2Link returns true when link is awg2:// with a public_key already seen.
+// Alternate Host:Port of the same peer share one outbound (endpoint rotation).
+func skipDuplicateAWG2Link(seen map[string]struct{}, link string) bool {
+	link = strings.TrimSpace(link)
+	if strings.HasPrefix(link, "vpn://") {
+		decoded, err := amnezia.DecodeVPNURI(link)
+		if err != nil {
+			return false
+		}
+		link = decoded
+	}
+	if !strings.HasPrefix(link, "awg2://") {
+		return false
+	}
+	params, err := amnezia.ParseAWG2URI(link)
+	if err != nil || params.PublicKey == "" {
+		return false
+	}
+	if _, ok := seen[params.PublicKey]; ok {
+		return true
+	}
+	seen[params.PublicKey] = struct{}{}
+	return false
 }
 
 func hostPortFromURL(rawURL string) string {

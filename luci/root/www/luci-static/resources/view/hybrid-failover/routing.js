@@ -269,7 +269,7 @@ return view.extend({
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
 		o = s.option(form.DynamicList, 'failover_proxy_links', _('Резервные URI'));
-		o.description = _('Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются.');
+		o.description = _('Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются. AmneziaWG 3.1: на роутере kmod-amneziawg и amneziawg-tools 3.1+.');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
 		o = s.option(form.Value, 'failover_fail_threshold', _('Порог сбоев primary (fail)'));

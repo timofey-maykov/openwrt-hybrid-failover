@@ -57,7 +57,7 @@ ash /tmp/install.sh
 | `vpn://` (Amnezia) | да (Go-декодер) | да |
 | `awg2://` | да (служебный URI)* | нет* |
 
-\*`awg2://`: внутренняя ссылка для настройки **AmneziaWG 2.0** (direct outbound). Подробнее: [docs/OVERVIEW.md](docs/OVERVIEW.md).
+\*`awg2://`: внутренняя ссылка для настройки **AmneziaWG** включая 3.1 (direct outbound). На роутере нужны `kmod-amneziawg` и `amneziawg-tools` **3.1+**, иначе `RandomTrailers` ломает handshake. Подробнее: [docs/OVERVIEW.md](docs/OVERVIEW.md#amnezia-awg2-awg2), [docs/INSTALL.md](docs/INSTALL.md#amneziawg-31).
 
 \*В боте при добавлении URI проверяются `vless`, `trojan`, `ss`, `vpn`; остальное: через UCI/LuCI.
 
