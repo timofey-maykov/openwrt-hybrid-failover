@@ -42,6 +42,9 @@ func EnrichNativeReport(r Report, mainSection string, sec *uci.Section, states [
 	}
 
 	r.Failover = failoverInfoFromSection(mainSection, sec)
+	if pol := policyFromController(states, mainSection); pol != "" {
+		r.Failover.Policy = pol
+	}
 	if active != "" {
 		r.Failover.SelectorNow = active
 		if urltestMember != "" {
@@ -316,6 +319,15 @@ func activeFromController(states []failover.SectionRuntime, section string) stri
 	}
 	if len(states) == 1 && states[0].Active != "" {
 		return states[0].Active
+	}
+	return ""
+}
+
+func policyFromController(states []failover.SectionRuntime, section string) string {
+	for _, st := range states {
+		if st.Section == section && st.Policy != "" {
+			return st.Policy
+		}
 	}
 	return ""
 }

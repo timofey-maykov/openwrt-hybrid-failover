@@ -64,3 +64,41 @@ config section 'glob'
 		t.Fatalf("channels: %d", len(r.Channels))
 	}
 }
+
+func TestFailoverInfoURLTestPolicyIsFastest(t *testing.T) {
+	pkg, err := uci.Parse(`
+config section 'main'
+	option connection_type 'proxy'
+	option proxy_config_type 'urltest'
+	list urltest_proxy_links 'hy2://user:pass@1.2.3.4:443'
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info := failoverInfoFromSection("main", pkg.Section("main"))
+	if info.Policy != "fastest" {
+		t.Fatalf("policy=%q want fastest", info.Policy)
+	}
+}
+
+func TestEnrichNativeReportPrefersControllerPolicy(t *testing.T) {
+	pkg, err := uci.Parse(`
+config section 'main'
+	option connection_type 'proxy'
+	option proxy_config_type 'urltest'
+	list urltest_proxy_links 'hy2://user:pass@1.2.3.4:443'
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	states := []failover.SectionRuntime{{
+		Section: "main",
+		Policy:  "fastest",
+		Mode:    "urltest",
+		Active:  singbox.URLTestTag("main"),
+	}}
+	r := EnrichNativeReport(Report{EngineMode: "native"}, "main", pkg.Section("main"), states)
+	if r.Failover == nil || r.Failover.Policy != "fastest" {
+		t.Fatalf("failover policy: %+v", r.Failover)
+	}
+}

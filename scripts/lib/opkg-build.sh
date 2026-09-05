@@ -2,6 +2,24 @@
 # Build OpenWrt 24.x compatible .ipk (gzip-wrapped tar, not ar).
 set -euo pipefail
 
+# macOS bsdtar defaults to pax + AppleDouble (._* / PaxHeader); OpenWrt opkg cannot extract those.
+_opkg_tar() {
+	local -a opts=(--numeric-owner --owner=0 --group=0)
+	# Prefer ustar when available (GNU tar / bsdtar).
+	if tar --format=ustar -cf - -T /dev/null >/dev/null 2>&1; then
+		opts+=(--format=ustar)
+	fi
+	# bsdtar-only flags; GNU tar in CI has neither.
+	if tar --help 2>&1 | grep -q -- '--no-xattrs'; then
+		opts+=(--no-xattrs)
+	fi
+	if tar --help 2>&1 | grep -q -- '--no-mac-metadata'; then
+		opts+=(--no-mac-metadata)
+	fi
+	# COPYFILE_DISABLE skips AppleDouble sibling files from tar on macOS.
+	COPYFILE_DISABLE=1 tar "${opts[@]}" "$@"
+}
+
 opkg_build() {
 	local pkg_root="$1"
 	local out_dir="$2"
@@ -39,19 +57,18 @@ opkg_build() {
 
 	(
 		cd "$work/CONTROL"
-		tar --numeric-owner --owner=0 --group=0 -czf "$work/control.tar.gz" .
+		_opkg_tar -czf "$work/control.tar.gz" .
 	)
 	(
 		cd "$pkg_root"
-		tar --numeric-owner --owner=0 --group=0 -czf "$work/data.tar.gz" \
-			--exclude=CONTROL .
+		_opkg_tar -czf "$work/data.tar.gz" --exclude=CONTROL .
 	)
 
 	printf '2.0\n' >"$work/debian-binary"
 	rm -f "$out_dir/$ipk_name"
 	(
 		cd "$work"
-		tar --numeric-owner --owner=0 --group=0 -czf "$out_dir/$ipk_name" \
+		_opkg_tar -czf "$out_dir/$ipk_name" \
 			debian-binary control.tar.gz data.tar.gz
 	)
 
