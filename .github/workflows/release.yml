@@ -8,6 +8,11 @@ on:
       - main
   workflow_dispatch:
 
+# One release job per ref: parallel tag rebuilds race on softprops/gh-release uploads.
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -45,6 +50,7 @@ jobs:
             dist/apk/*
             dist/manifest.json
           generate_release_notes: true
+          overwrite_files: true
 
       - name: Upload artifacts (manual run)
         if: "!startsWith(github.ref, 'refs/tags/')"
