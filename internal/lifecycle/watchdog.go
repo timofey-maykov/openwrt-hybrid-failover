@@ -19,10 +19,12 @@ type Watchdog struct {
 	Probe    func() error
 	Restart  func() error
 
-	lastListRecover time.Time
+	lastListRecover   time.Time
 	lastTunnelRecover time.Time
-	dnsDownSince    time.Time
-	dnsFailsafeOn   bool
+	dnsDownSince      time.Time
+	dnsFailsafeOn     bool
+	wgBounceFail      map[string]int
+	wgBounceCooldown  map[string]time.Time
 }
 
 func DefaultWatchdog(uciPath string) *Watchdog {
@@ -44,6 +46,19 @@ func DefaultWatchdog(uciPath string) *Watchdog {
 			engine.Default().Stop()
 			return nil
 		},
+	}
+}
+
+func (w *Watchdog) ensureDefaultRoute() {
+	restored, err := netlink.EnsureIPv4DefaultRoute()
+	if err != nil {
+		if !netlink.HasIPv4DefaultRoute() {
+			log.Printf("hybrid-failover watchdog: default route missing: %v", err)
+		}
+		return
+	}
+	if restored {
+		log.Printf("hybrid-failover watchdog: restored missing IPv4 default route")
 	}
 }
 
@@ -147,13 +162,14 @@ func (w *Watchdog) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			_ = netlink.EnsureIPRules()
+			w.ensureDefaultRoute()
 			w.restoreNFT()
 			w.restoreDNSFailsafe()
 			w.recoverEmptyLists()
 			w.recoverStaleTunnels()
 			// Only when dnsmasq already forwards to FakeIP (notinterface=lo).
 			// Starting it earlier races the engine for 127.0.0.42:53.
-			if dnsmasq.UsesEngineUpstream() {
+			if dnsmasq.LANForwardingOK() {
 				_ = dnsmasq.EnsureRunning()
 			}
 			_ = dnsmasq.EnsureLocalResolv()

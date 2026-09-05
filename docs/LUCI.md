@@ -45,10 +45,12 @@ Landing page после установки открывает **Обзор**, н
 - **Карточки состояния:** sing-box, nft, Clash API, FakeIP.
 - **Активный outbound:** какой канал выбран для основной секции (например `main-urltest-out`).
 - **Контроллер failover:** политика, streak ошибок, последнее переключение.
-- **Задержки каналов:** sparkline по данным Clash API (`delay_history`).
+- **Задержки каналов:** sparkline по данным Clash API (`delay_history`). У AWG карточка смотрит не только HTTP urltest: свежий WireGuard/AmneziaWG handshake даёт UP с текстом «handshake есть, HTTP urltest не проходит»; нет handshake или он старше ~3 минут: DOWN с причиной («нет handshake», «handshake устарел»).
 - **Журнал:** события из `history.jsonl` (переключения proxy/VPN).
 
-Кнопки **Обновить**, **Health probe**, **Export history**, **Switch proxy** (ручное переключение, если политика не passive urltest).
+Кнопки **Обновить**, **Health probe**, **Export history**, **Switch proxy** (ручное переключение).
+
+В режиме **urltest** HTTP-проверка выбирает member группы; карточка AWG может быть UP по handshake, при этом трафик всё равно идёт через Hysteria, пока selector = `URLTest`. Ручное переключение ставит selector на выбранный outbound. Если видите «switch request timed out», на роутере нужен core **1.7.35+** (запрос больше не ждёт тик контроллера).
 
 Если дашборд пуст или «нет данных», проверьте `/etc/init.d/hybrid-failover status` и **Диагностика → global-check**.
 

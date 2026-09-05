@@ -135,8 +135,13 @@ func awg2ContainerToURI(awg map[string]any) (string, error) {
 		q.Set("persistent_keepalive", v)
 	}
 	for _, key := range []string{"Jc", "Jmin", "Jmax", "S1", "S2", "S3", "S4", "H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5"} {
-		if v := stringField(inner, key); v != "" {
+		if v := awgString(inner, awg, key); v != "" {
 			q.Set(strings.ToLower(key), v)
+		}
+	}
+	for jsonKey, queryKey := range awg31QueryFields {
+		if v := awgOnOffField(inner, awg, jsonKey); v != "" {
+			q.Set(queryKey, v)
 		}
 	}
 	u := &url.URL{
@@ -145,6 +150,41 @@ func awg2ContainerToURI(awg map[string]any) (string, error) {
 		RawQuery: q.Encode(),
 	}
 	return u.String(), nil
+}
+
+// awg31QueryFields maps Amnezia JSON / .conf keys to awg2:// query names.
+var awg31QueryFields = map[string]string{
+	"HeaderProtectionKey":    "header_protection_key",
+	"ContentPaddingAddition": "content_padding_addition",
+	"RandomTrailers":         "random_trailers",
+	"DisableCookies":         "disable_cookies",
+	"RekeyAfterTime":         "rekey_after_time",
+	"RekeyTimeout":           "rekey_timeout",
+	"RejectAfterTime":        "reject_after_time",
+	"KeepaliveTimeout":       "keepalive_timeout",
+	"MaxHandshakeAttempts":   "max_handshake_attempts",
+}
+
+func awgString(inner, awg map[string]any, key string) string {
+	if v := stringField(inner, key); v != "" {
+		return v
+	}
+	return stringField(awg, key)
+}
+
+func awgOnOffField(inner, awg map[string]any, key string) string {
+	return normalizeAWGOnOff(awgString(inner, awg, key))
+}
+
+func normalizeAWGOnOff(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "true", "1", "yes":
+		return "on"
+	case "false", "0", "no":
+		return "off"
+	default:
+		return v
+	}
 }
 
 func stringField(m map[string]any, key string) string {
@@ -158,6 +198,11 @@ func stringField(m map[string]any, key string) string {
 	switch t := v.(type) {
 	case string:
 		return t
+	case bool:
+		if t {
+			return "on"
+		}
+		return "off"
 	case float64:
 		return fmt.Sprintf("%g", t)
 	default:
@@ -297,19 +342,28 @@ func AWG2InterfaceName(section string) string {
 
 // ParseAWG2URI extracts awg2:// parameters for interface setup.
 type AWG2Params struct {
-	Host                string
-	Port                string
-	Address             string
-	PrivateKey          string
-	PublicKey           string
-	MTU                 string
-	AllowedIPs          string
-	PersistentKeepalive string
-	Jc, Jmin, Jmax      string
-	S1, S2, S3, S4      string
-	H1, H2, H3, H4      string
-	I1, I2, I3, I4, I5  string
-	PresharedKey        string
+	Host                   string
+	Port                   string
+	Address                string
+	PrivateKey             string
+	PublicKey              string
+	MTU                    string
+	AllowedIPs             string
+	PersistentKeepalive    string
+	Jc, Jmin, Jmax         string
+	S1, S2, S3, S4         string
+	H1, H2, H3, H4         string
+	I1, I2, I3, I4, I5     string
+	PresharedKey           string
+	HeaderProtectionKey    string
+	ContentPaddingAddition string
+	RandomTrailers         string
+	DisableCookies         string
+	RekeyAfterTime         string
+	RekeyTimeout           string
+	RejectAfterTime        string
+	KeepaliveTimeout       string
+	MaxHandshakeAttempts   string
 }
 
 func ParseAWG2URI(raw string) (AWG2Params, error) {
@@ -334,7 +388,16 @@ func ParseAWG2URI(raw string) (AWG2Params, error) {
 		S1: q.Get("s1"), S2: q.Get("s2"), S3: q.Get("s3"), S4: q.Get("s4"),
 		H1: q.Get("h1"), H2: q.Get("h2"), H3: q.Get("h3"), H4: q.Get("h4"),
 		I1: q.Get("i1"), I2: q.Get("i2"), I3: q.Get("i3"), I4: q.Get("i4"), I5: q.Get("i5"),
-		PresharedKey: q.Get("preshared_key"),
+		PresharedKey:           q.Get("preshared_key"),
+		HeaderProtectionKey:    q.Get("header_protection_key"),
+		ContentPaddingAddition: q.Get("content_padding_addition"),
+		RandomTrailers:         q.Get("random_trailers"),
+		DisableCookies:         q.Get("disable_cookies"),
+		RekeyAfterTime:         q.Get("rekey_after_time"),
+		RekeyTimeout:           q.Get("rekey_timeout"),
+		RejectAfterTime:        q.Get("reject_after_time"),
+		KeepaliveTimeout:       q.Get("keepalive_timeout"),
+		MaxHandshakeAttempts:   q.Get("max_handshake_attempts"),
 	}
 	if p.Address == "" {
 		p.Address = "10.255.255.2/32"

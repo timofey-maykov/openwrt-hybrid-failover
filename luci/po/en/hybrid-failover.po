@@ -748,8 +748,8 @@ msgstr "Recovery threshold"
 msgid "Порог сбоев primary (fail)"
 msgstr "Primary fail threshold"
 
-msgid "Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются."
-msgstr "Порядок в списке = приоритет backupов. vpn:// и awg2:// поддерживаются."
+msgid "Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются. AmneziaWG 3.1: на роутере kmod-amneziawg и amneziawg-tools 3.1+."
+msgstr "List order = backup priority. vpn:// and awg2:// are supported. AmneziaWG 3.1 needs kmod-amneziawg and amneziawg-tools 3.1+ on the router."
 
 msgid "Порядок резервов"
 msgstr "Backup order"

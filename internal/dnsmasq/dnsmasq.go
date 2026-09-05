@@ -2,6 +2,7 @@ package dnsmasq
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -99,6 +100,50 @@ func UsesEngineUpstream() bool {
 		return false
 	}
 	return strings.Contains(string(out), DNSUpstream)
+}
+
+// LANForwardingOK is true when dnsmasq forwards to FakeIP and does not bind 127.0.0.42.
+func LANForwardingOK() bool {
+	server, err := exec.Command("uci", "-q", "get", "dhcp.@dnsmasq[0].server").CombinedOutput()
+	if err != nil {
+		return false
+	}
+	notIface, _ := exec.Command("uci", "-q", "get", "dhcp.@dnsmasq[0].notinterface").CombinedOutput()
+	return lanForwardingOK(string(server), string(notIface))
+}
+
+func lanForwardingOK(server, notinterface string) bool {
+	if !strings.Contains(server, DNSUpstream) {
+		return false
+	}
+	for _, iface := range strings.Fields(notinterface) {
+		if iface == "lo" {
+			return true
+		}
+	}
+	return false
+}
+
+// ShouldStopForFakeIP is true only when leftover dnsmasq may still own 127.0.0.42:53.
+// If the engine already answers there, stopping dnsmasq drops LAN DNS on restart.
+func ShouldStopForFakeIP(lanForwardingOK, engineDNSReady, fakeIPBusy bool) bool {
+	if engineDNSReady {
+		return false
+	}
+	if !lanForwardingOK {
+		return true
+	}
+	return fakeIPBusy
+}
+
+// FakeIPPortBusy reports whether 127.0.0.42:53 is already bound (usually leftover dnsmasq).
+func FakeIPPortBusy() bool {
+	c, err := net.ListenPacket("udp", net.JoinHostPort(DNSUpstream, "53"))
+	if err != nil {
+		return true
+	}
+	_ = c.Close()
+	return false
 }
 
 // Restore reverts dnsmasq UCI from backup.

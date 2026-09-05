@@ -65,7 +65,7 @@ LuCI: **Hybrid Failover → Клиенты**. Пошагово: [LUCI.md](LUCI.m
 | Значение | Смысл | Когда выбирать |
 |----------|--------|----------------|
 | `include` | Трафик клиента через Hybrid Failover (nft mark + tproxy) | Устройство должно идти через VPN/proxy роутера |
-| `exclude` | Клиент минует HF, direct | Исключить одно устройство из прокси (банк, локальные сервисы) |
+| `exclude` | Клиент минует subnet-tproxy; FakeIP community-доменов всё ещё через proxy | Не ставить консоли сюда «для обхода» с DNS роутера: для Xbox/PS используйте `subnet_bypass_ips` |
 | `full_route` | Весь трафик клиента через секцию `section` | Жёстко привязать клиента к конкретной секции |
 | `global_exclude` | Исключение из tproxy без per-section правила | Direct для клиента на уровне маршрутизации sing-box |
 
@@ -128,7 +128,7 @@ LuCI: **Hybrid Failover → Клиенты**. Пошагово: [LUCI.md](LUCI.m
 |--------|-----|----------|
 | `proxy_config_type` | `url` / `urltest` / `outbound` | Тип proxy-конфига |
 | `proxy_string` | string | Одна ссылка (при `proxy_config_type=url`) |
-| `list urltest_proxy_links` | list | Список URI (при `proxy_config_type=urltest`) |
+| `list urltest_proxy_links` | list | Список URI (при `proxy_config_type=urltest`). Несколько `awg2://` с одним `public_key` и разными IP: один интерфейс и ротация endpoint. Amnezia 3.1: нужен kmod/tools 3.1+, иначе `RandomTrailers` ломает handshake. Не смешивайте в списке мёртвый AWG 2.0 и живой 3.1 |
 | `outbound_json` | string | Raw outbound JSON (при `proxy_config_type=outbound`) |
 
 ### `connection_type 'block'`
@@ -143,6 +143,8 @@ LuCI: **Hybrid Failover → Клиенты**. Пошагово: [LUCI.md](LUCI.m
 | `user_domains_text` | string | Домены (при `text`) |
 | `user_subnet_list_type` | `disabled` / `text` / … | Пользовательский список подсетей |
 | `user_subnets_text` | string | Подсети (при `text`) |
+| `list subnet_bypass_ips` | list | IP клиентов (консоли): FakeIP/community через proxy, `hf_proxy_subnets` и Teredo остаются на WAN. Фиксируйте IP DHCP static host |
+| `list udp_routed_ips` | list | IP клиентов: только UDP (кроме DNS) в tproxy, TCP напрямую |
 
 ### Общие опции URLTest
 

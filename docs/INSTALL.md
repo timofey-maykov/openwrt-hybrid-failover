@@ -106,6 +106,21 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 
 В режиме `full` установщик сам ставит недостающие пакеты через `opkg` или `apk`.
 
+## AmneziaWG 3.1
+
+`hybrid-failover-core` **не** ставит `kmod-amneziawg`. Если в urltest или failover есть `vpn://` / `awg2://` с Amnezia 3.1 (`RandomTrailers`, `HeaderProtectionKey`), на роутере должны быть:
+
+| Пакет | Минимум |
+|-------|---------|
+| `kmod-amneziawg` | 3.1+, vermagic = текущее ядро OpenWrt |
+| `amneziawg-tools` | 3.1+ (`awg set --help` содержит `random-trailers`) |
+
+Сборка должна совпадать с `DISTRIB_RELEASE` и `opkg info kernel` (пример: OpenWrt 24.10.6, `ramips/mt7621`, `mipsel_24kc`). Релизы [2Grey/awg-openwrt](https://github.com/2Grey/awg-openwrt) кладут `.ipk` в тег `v24.10.6` и аналоги.
+
+Зависимость `amneziawg-tools` на виртуальный пакет `ip`: на образе с busybox `ip` поставьте `ip-tiny` или `ip-full`, либо установите tools с `--force-depends`.
+
+Подробности handshake и полей URI: [OVERVIEW.md](OVERVIEW.md#amnezia-awg2-awg2).
+
 ## Релизы GitHub
 
 Тег `v*.*.*` запускает [workflow сборки](../.github/workflows/release.yml): в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) публикуются и `.ipk` (24.x), и `.apk` (25.12+).

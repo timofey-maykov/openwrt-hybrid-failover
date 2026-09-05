@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/policy"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
@@ -38,12 +39,16 @@ func CompilePlan(pkg *uci.Package) (*Plan, error) {
 		}
 	}
 	c.compileRoutes()
+	c.compileFullyRoutedRoutes()
 	return c.plan, nil
 }
 
 type compiler struct {
 	pkg  *uci.Package
 	plan *Plan
+	// awg2ByKey maps peer public key → first outbound tag so alternate AWG2
+	// Host:Port links of the same peer do not create a second bind iface.
+	awg2ByKey map[string]string
 }
 
 func (c *compiler) compileSettings() error {
@@ -120,12 +125,13 @@ func (c *compiler) compileSection(section string, sec *uci.Section) error {
 			return fmt.Errorf("unknown connection_type %q", conn)
 		}
 	}
-	c.plan.Sections = append(c.plan.Sections, sp)
 	if singbox.SectionHasEnabledLists(sec) {
+		sp.ListBased = true
 		if err := c.compileListRuleSets(section, sec); err != nil {
 			return err
 		}
 	}
+	c.plan.Sections = append(c.plan.Sections, sp)
 	return nil
 }
 
@@ -157,6 +163,9 @@ func (c *compiler) compileVPN(section string, sec *uci.Section) error {
 		tag, err := c.addProxyLink(peerSection, link, udpOverTCP)
 		if err != nil {
 			return err
+		}
+		if tag == "" {
+			continue
 		}
 		backupTags = append(backupTags, tag)
 	}
@@ -222,7 +231,13 @@ func (c *compiler) compileProxy(section string, sec *uci.Section) error {
 			if err != nil {
 				return err
 			}
+			if tag == "" {
+				continue
+			}
 			candidates = append(candidates, tag)
+		}
+		if len(candidates) == 0 {
+			return fmt.Errorf("urltest_proxy_links produced no outbounds")
 		}
 		return c.addURLTestGroup(section, sec, candidates, OutboundTag(section), URLTestTag(section))
 	case "outbound":
@@ -246,7 +261,19 @@ func (c *compiler) addProxyLink(section, link string, udpOverTCP bool) (string, 
 		link = decoded
 	}
 	if strings.HasPrefix(link, "awg2://") {
+		params, err := amnezia.ParseAWG2URI(link)
+		if err != nil {
+			return "", err
+		}
+		if c.awg2ByKey == nil {
+			c.awg2ByKey = make(map[string]string)
+		}
+		if _, ok := c.awg2ByKey[params.PublicKey]; ok {
+			// Same peer, alternate IP: endpoint list is handled by lifecycle setup.
+			return "", nil
+		}
 		tag := OutboundTag(section)
+		c.awg2ByKey[params.PublicKey] = tag
 		c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{
 			Tag:       tag,
 			Kind:      OutboundAWG2Bind,
@@ -483,6 +510,32 @@ func (c *compiler) compileRoutes() {
 			Section:     name,
 		})
 	}
+}
+
+// compileFullyRoutedRoutes sends all traffic from full_route clients through their section.
+// Must run after list routes: router matches source CIDR before falling through to direct.
+func (c *compiler) compileFullyRoutedRoutes() {
+	bySection := clientrules.FullyRoutedBySection(clientrules.ListRules(c.pkg))
+	if len(bySection) == 0 {
+		return
+	}
+	extra := make([]RouteRule, 0, len(bySection))
+	for section, ips := range bySection {
+		if len(ips) == 0 {
+			continue
+		}
+		extra = append(extra, RouteRule{
+			Action:       "route",
+			OutboundTag:  OutboundTag(section),
+			Section:      section,
+			SourceIPCIDR: append([]string(nil), ips...),
+		})
+	}
+	if len(extra) == 0 {
+		return
+	}
+	// Prefer source full-route before domain lists so these clients always use the section.
+	c.plan.Routes = append(extra, c.plan.Routes...)
 }
 
 // ValidatePlan checks plan consistency.

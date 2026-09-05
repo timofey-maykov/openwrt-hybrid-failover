@@ -8,6 +8,24 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
+func TestChannelSelectedPinnedVsURLTestWinner(t *testing.T) {
+	group := singbox.URLTestTag("main")
+	hy2 := "main-2-out"
+	awg := "main-3-out"
+	if !channelSelected(hy2, group, hy2, group) {
+		t.Fatal("urltest winner selected when selector is the group")
+	}
+	if channelSelected(awg, group, hy2, group) {
+		t.Fatal("other member selected")
+	}
+	if !channelSelected(awg, awg, hy2, group) {
+		t.Fatal("pinned member not selected")
+	}
+	if channelSelected(hy2, awg, hy2, group) {
+		t.Fatal("urltest winner stays highlighted while selector is pinned elsewhere")
+	}
+}
+
 func TestActiveFromController(t *testing.T) {
 	states := []failover.SectionRuntime{{
 		Section: "glob",

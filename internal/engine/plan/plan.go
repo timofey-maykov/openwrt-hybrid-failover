@@ -58,6 +58,8 @@ type SectionPlan struct {
 	ConnectionType string
 	SelectorTag    string
 	Enabled        bool
+	// ListBased means unmatched traffic must stay direct (sing-box final), not catch-all to VPN/proxy.
+	ListBased bool
 }
 
 type OutboundPlan struct {
@@ -79,14 +81,15 @@ type URLTestPlan struct {
 }
 
 type RouteRule struct {
-	Action      string
-	OutboundTag string
-	Section     string
-	RuleSetTags []string
-	Domains     []string
+	Action       string
+	OutboundTag  string
+	Section      string
+	RuleSetTags  []string
+	Domains      []string
 	DomainSuffix []string
-	IPCIDR      []string
-	Reject      bool
+	IPCIDR       []string
+	SourceIPCIDR []string
+	Reject       bool
 }
 
 type RuleSet struct {
