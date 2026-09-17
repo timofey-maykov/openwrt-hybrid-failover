@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -355,9 +356,7 @@ func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) {
 			log.Printf("hybrid-failover urltest %s: %v", member, err)
 			continue
 		}
-		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
-		ms, err := probeURLTestHTTP(ctx, h, testURL)
-		cancel()
+		ms, err := probeMemberWithRetry(parent, h, testURL)
 		if err != nil {
 			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false, Error: err.Error()})
 			delays[member] = -1
@@ -382,6 +381,44 @@ func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) {
 // Kept internal for existing callers; diagnostics use the exact same HTTP probe.
 func probeURLTestHTTP(ctx context.Context, h Handler, testURL string) (int, error) {
 	return ProbeHTTP(ctx, h, testURL)
+}
+
+// probeMemberWithRetry retries a member probe when the remote hysteria2/proxy
+// server's own TCPResponse reports a transient local failure on its side
+// (e.g. it briefly ran out of file descriptors resolving the test domain).
+// That failure is unrelated to our link or our host, and a fresh attempt a
+// moment later commonly succeeds once the remote server's condition clears.
+func probeMemberWithRetry(parent context.Context, h Handler, testURL string) (int, error) {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+		ms, err := probeURLTestHTTP(ctx, h, testURL)
+		cancel()
+		if err == nil {
+			return ms, nil
+		}
+		lastErr = err
+		if !isTransientRemoteProbeError(err) {
+			return 0, err
+		}
+		if attempt == 2 {
+			break
+		}
+		select {
+		case <-parent.Done():
+			return 0, parent.Err()
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
+	return 0, lastErr
+}
+
+// isTransientRemoteProbeError reports whether err is the remote server's own
+// "TCPResponse" error text (sent back over the tunnel, see sing-quic/
+// hysteria2's clientConn.Read) rather than a local dial/TLS failure.
+func isTransientRemoteProbeError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "remote error") && strings.Contains(msg, "too many open files")
 }
 
 func pickURLTestMember(p plan.OutboundPlan, delays map[string]int, current string) string {
