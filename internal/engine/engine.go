@@ -86,7 +86,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	planCopy := e.plan
 	e.mu.Unlock()
 
-	rt, err := runtime.New(planCopy, e.ctrl)
+	rt, err := runtime.New(runCtx, planCopy, e.ctrl)
 	if err != nil {
 		e.mu.Lock()
 		e.running = false

@@ -148,15 +148,15 @@ func probeNativeChannelsActive(r Report, mainSection string, sec *uci.Section, i
 	if err != nil {
 		return r
 	}
-	reg, err := outbound.NewRegistry(p.Outbounds)
+	ctx, cancel := context.WithTimeout(context.Background(), probe.UITotalTimeout)
+	defer cancel()
+	reg, err := outbound.NewRegistry(ctx, p.Outbounds)
 	if err != nil {
 		return r
 	}
 	defer reg.Stop()
 
 	testURL := sec.Get("urltest_testing_url", "https://www.gstatic.com/generate_204")
-	ctx, cancel := context.WithTimeout(context.Background(), probe.UITotalTimeout)
-	defer cancel()
 
 	var (
 		mu         sync.Mutex

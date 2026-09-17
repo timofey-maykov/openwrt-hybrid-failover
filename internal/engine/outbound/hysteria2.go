@@ -18,7 +18,7 @@ type hysteria2Client struct {
 	client *hysteria2.Client
 }
 
-func newHysteria2Handler(p plan.OutboundPlan) (Handler, error) {
+func newHysteria2Handler(ctx context.Context, p plan.OutboundPlan) (Handler, error) {
 	ob, err := uri.ParseProxy(p.ProxyURI, p.Tag, false)
 	if err != nil {
 		return nil, err
@@ -50,8 +50,11 @@ func newHysteria2Handler(p plan.OutboundPlan) (Handler, error) {
 	if v := numericField(ob.Fields["down_mbps"]); v > 0 {
 		recvBPS = uint64(v) * hysteria.MbpsToBps
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	client, err := hysteria2.NewClient(hysteria2.ClientOptions{
-		Context:            context.Background(),
+		Context:            ctx,
 		Dialer:             newSingDialer(p.BindIface),
 		Logger:             newNopLogger(),
 		ServerAddress:      parseSocksaddrHostPort(server, strconv.Itoa(port)),
