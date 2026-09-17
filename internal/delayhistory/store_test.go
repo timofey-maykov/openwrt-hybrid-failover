@@ -13,7 +13,7 @@ func TestStoreRecordBatchAndPrune(t *testing.T) {
 
 	if err := s.RecordBatch(map[string]SampleInput{
 		"ch-a": {DelayMs: 100, OK: true},
-		"ch-b": {DelayMs: 200, OK: true},
+		"ch-b": {OK: false, Error: "HTTP status 503"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -27,6 +27,11 @@ func TestStoreRecordBatchAndPrune(t *testing.T) {
 	}
 	if len(data) != 2 {
 		t.Fatalf("channels: %d", len(data))
+	}
+	for _, channel := range data {
+		if channel.Channel == "ch-b" && (len(channel.Samples) != 1 || channel.Samples[0].Error != "HTTP status 503") {
+			t.Fatalf("failure reason was not persisted: %+v", channel.Samples)
+		}
 	}
 
 	if err := s.Prune(map[string]struct{}{"ch-a": {}}); err != nil {

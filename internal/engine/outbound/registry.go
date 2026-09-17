@@ -2,9 +2,8 @@ package outbound
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"io"
+	"log"
 	"net"
 	"net/url"
 	"sync"
@@ -37,14 +36,15 @@ func NewRegistry(plans []plan.OutboundPlan) (*Registry, error) {
 	for _, p := range plans {
 		h, err := newHandler(p)
 		if err != nil {
+			r.Stop()
 			return nil, fmt.Errorf("outbound %q: %w", p.Tag, err)
 		}
 		switch p.Kind {
 		case plan.OutboundSelector:
 			sh := &selectorHandler{
-				tag:     p.Tag,
-				members: p.Members,
-				active:  p.Default,
+				tag:      p.Tag,
+				members:  p.Members,
+				active:   p.Default,
 				registry: r,
 			}
 			if sh.active == "" && len(p.Members) > 0 {
@@ -188,7 +188,11 @@ func (d *directHandler) DialTCP(ctx context.Context, network, address string) (n
 }
 
 func (d *directHandler) DialUDP(ctx context.Context, network, address string) (net.PacketConn, error) {
-	return nil, fmt.Errorf("udp dial not implemented")
+	c, err := outboundDialer(d.bindIface).DialContext(ctx, "udp", address)
+	if err != nil {
+		return nil, err
+	}
+	return &connectedPacketConn{Conn: c}, nil
 }
 
 func (d *directHandler) Close() error { return nil }
@@ -247,6 +251,7 @@ type urlTestRunner struct {
 	plan     plan.OutboundPlan
 	registry *Registry
 	cancel   context.CancelFunc
+	done     chan struct{}
 	mu       sync.RWMutex
 	active   string
 }
@@ -302,13 +307,15 @@ func (u *urlTestRunner) Start(ctx context.Context, ctrl *control.Control) error 
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	u.cancel = cancel
-	go u.loop(runCtx, ctrl)
+	u.done = make(chan struct{})
+	go func() { defer close(u.done); u.loop(runCtx, ctrl) }()
 	return nil
 }
 
 func (u *urlTestRunner) Stop() {
 	if u.cancel != nil {
 		u.cancel()
+		<-u.done
 	}
 }
 
@@ -317,7 +324,10 @@ func (u *urlTestRunner) loop(ctx context.Context, ctrl *control.Control) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		u.probe(ctrl)
+		if ctx.Err() != nil {
+			return
+		}
+		u.probe(ctx, ctrl)
 		select {
 		case <-ctx.Done():
 			return
@@ -326,7 +336,7 @@ func (u *urlTestRunner) loop(ctx context.Context, ctrl *control.Control) {
 	}
 }
 
-func (u *urlTestRunner) probe(ctrl *control.Control) {
+func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) {
 	if u.plan.URLTest == nil {
 		return
 	}
@@ -334,20 +344,25 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 	delays := make(map[string]int, len(u.plan.Members))
 	batch := make(map[string]delayhistory.SampleInput, len(u.plan.Members))
 	for _, member := range u.plan.Members {
+		if parent.Err() != nil {
+			return
+		}
 		h, err := u.registry.Handler(member)
 		if err != nil {
-			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
+			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false, Error: err.Error()})
 			delays[member] = -1
-			batch[member] = delayhistory.SampleInput{OK: false}
+			batch[member] = delayhistory.SampleInput{OK: false, Error: err.Error()}
+			log.Printf("hybrid-failover urltest %s: %v", member, err)
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 		ms, err := probeURLTestHTTP(ctx, h, testURL)
 		cancel()
 		if err != nil {
-			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false})
+			ctrl.SetDelay(member, plan.DelaySample{Tag: member, OK: false, Error: err.Error()})
 			delays[member] = -1
-			batch[member] = delayhistory.SampleInput{OK: false}
+			batch[member] = delayhistory.SampleInput{OK: false, Error: err.Error()}
+			log.Printf("hybrid-failover urltest %s: %v", member, err)
 			continue
 		}
 		delays[member] = ms
@@ -364,70 +379,9 @@ func (u *urlTestRunner) probe(ctrl *control.Control) {
 	u.mu.Unlock()
 }
 
-// probeURLTestHTTP measures end-to-end latency with TLS (when needed) + HTTP GET.
-// Bare DialTCP is not enough: hysteria2 DialConn returns when the QUIC stream
-// opens (~1ms) before the remote TCP dial finishes, which made urltest always
-// prefer hysteria over slower-looking AWG2.
+// Kept internal for existing callers; diagnostics use the exact same HTTP probe.
 func probeURLTestHTTP(ctx context.Context, h Handler, testURL string) (int, error) {
-	start := time.Now()
-	u, err := url.Parse(testURL)
-	if err != nil || u.Host == "" {
-		u, _ = url.Parse("https://www.gstatic.com/generate_204")
-	}
-	port := u.Port()
-	if port == "" {
-		if u.Scheme == "http" {
-			port = "80"
-		} else {
-			port = "443"
-		}
-	}
-	host := u.Hostname()
-	addr := net.JoinHostPort(host, port)
-	conn, err := h.DialTCP(ctx, "tcp", addr)
-	if err != nil {
-		return 0, err
-	}
-	defer conn.Close()
-	if deadline, ok := ctx.Deadline(); ok {
-		_ = conn.SetDeadline(deadline)
-	}
-
-	stream := net.Conn(conn)
-	if u.Scheme != "http" {
-		tlsConn := tls.Client(conn, &tls.Config{
-			ServerName: host,
-			NextProtos: []string{"http/1.1"},
-			MinVersion: tls.VersionTLS12,
-		})
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
-			return 0, err
-		}
-		defer tlsConn.Close()
-		stream = tlsConn
-	}
-
-	path := u.Path
-	if path == "" {
-		path = "/"
-	}
-	if u.RawQuery != "" {
-		path += "?" + u.RawQuery
-	}
-	req := "GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\nConnection: close\r\nUser-Agent: hybrid-failover-urltest\r\n\r\n"
-	if _, err := io.WriteString(stream, req); err != nil {
-		return 0, err
-	}
-	buf := make([]byte, 64)
-	n, err := stream.Read(buf)
-	if n == 0 && err != nil {
-		return 0, err
-	}
-	ms := int(time.Since(start).Milliseconds())
-	if ms <= 0 {
-		ms = 1
-	}
-	return ms, nil
+	return ProbeHTTP(ctx, h, testURL)
 }
 
 func pickURLTestMember(p plan.OutboundPlan, delays map[string]int, current string) string {
