@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type ProxyOutbound struct {
@@ -131,9 +133,11 @@ func parseSocks(u *url.URL, tag, scheme string, udpOverTCP bool) (ProxyOutbound,
 		"version":     version,
 	}
 	if u.User != nil {
-		if pass, ok := u.User.Password(); ok {
-			ob["username"] = u.User.Username()
-			ob["password"] = pass
+		if username := u.User.Username(); username != "" {
+			ob["username"] = username
+			if pass, ok := u.User.Password(); ok {
+				ob["password"] = pass
+			}
 		}
 	}
 	if udpOverTCP {
@@ -267,22 +271,35 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 	}
 	switch netType {
 	case "ws":
-		ob["transport"] = map[string]any{
+		transport := map[string]any{
 			"type": "ws",
 			"path": q.Get("path"),
-			"headers": map[string]string{
-				"Host": q.Get("host"),
-			},
 		}
+		if host := q.Get("host"); host != "" {
+			transport["headers"] = map[string]string{"Host": host}
+		}
+		ob["transport"] = transport
 	case "grpc":
 		ob["transport"] = map[string]any{
-			"type":                       "grpc",
-			"service_name":               q.Get("serviceName"),
-			"idle_timeout":               q.Get("idle_timeout"),
-			"ping_timeout":               q.Get("ping_timeout"),
-			"permit_without_stream":      q.Get("permit_without_stream") == "1",
+			"type":                  "grpc",
+			"service_name":          q.Get("serviceName"),
+			"idle_timeout":          normalizeGRPCDuration(q.Get("idle_timeout")),
+			"ping_timeout":          normalizeGRPCDuration(q.Get("ping_timeout")),
+			"permit_without_stream": q.Get("permit_without_stream") == "1",
 		}
 	}
+}
+
+// normalizeGRPCDuration ensures a sing-box time unit (bare "15" -> "15s");
+// empty or already-invalid values pass through unchanged for sing-box to reject.
+func normalizeGRPCDuration(v string) string {
+	if v == "" {
+		return v
+	}
+	if norm, err := validation.NormalizeSingboxDuration(v); err == nil {
+		return norm
+	}
+	return v
 }
 
 func firstNonEmpty(vals ...string) string {

@@ -1,6 +1,7 @@
 package historywatch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,7 +50,14 @@ func pollOnce(api *tgbotapi.BotAPI, adminIDs []int64) {
 	if len(chunk) == 0 {
 		return
 	}
-	lines := splitLines(string(chunk))
+	// Only consume complete lines: a trailing line without a newline may still
+	// be mid-write and must be re-read (and not skipped) on the next poll.
+	lastNL := bytes.LastIndexByte(chunk, '\n')
+	if lastNL < 0 {
+		return
+	}
+	consumed := chunk[:lastNL+1]
+	lines := splitLines(string(consumed))
 	for _, line := range lines {
 		line = trimLine(line)
 		if line == "" {
@@ -62,10 +70,12 @@ func pollOnce(api *tgbotapi.BotAPI, adminIDs []int64) {
 		text := formatEvent(ev)
 		for _, id := range adminIDs {
 			msg := tgbotapi.NewMessage(id, text)
-			_, _ = api.Send(msg)
+			if _, err := api.Send(msg); err != nil {
+				fmt.Fprintf(os.Stderr, "historywatch: send failed for admin %d: %v\n", id, err)
+			}
 		}
 	}
-	_ = writeOffset(offset + int64(len(chunk)))
+	_ = writeOffset(offset + int64(len(consumed)))
 }
 
 func formatEvent(ev notify.Event) string {

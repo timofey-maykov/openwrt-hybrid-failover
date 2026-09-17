@@ -1,7 +1,6 @@
 package singbox
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"path"
@@ -10,9 +9,8 @@ import (
 )
 
 func parseIntDefault(s string, def int) int {
-	var n int
-	fmt.Sscanf(s, "%d", &n)
-	if n == 0 {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
 		return def
 	}
 	return n
@@ -28,7 +26,11 @@ func urlHost(raw string) string {
 		return ""
 	}
 	if !strings.Contains(raw, "://") {
-		return strings.Split(raw, "/")[0]
+		hostport := strings.Split(raw, "/")[0]
+		if h, _, err := net.SplitHostPort(hostport); err == nil {
+			return h
+		}
+		return strings.Trim(hostport, "[]")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {

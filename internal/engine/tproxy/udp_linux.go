@@ -90,17 +90,80 @@ func releaseUDPRelayBuf(buf []byte) {
 }
 
 type udpSession struct {
-	remote    net.PacketConn
-	reply     net.Conn
-	last      time.Time // protected by the session map mutex
-	closeOnce sync.Once
+	mu          sync.Mutex
+	remote      net.PacketConn
+	reply       net.Conn
+	established bool
+	failed      bool
+	pending     [][]byte
+	last        time.Time // protected by the session map mutex
+	closeOnce   sync.Once
 }
 
 func (s *udpSession) close() {
 	s.closeOnce.Do(func() {
-		_ = s.remote.Close()
-		_ = s.reply.Close()
+		s.mu.Lock()
+		remote, reply := s.remote, s.reply
+		s.mu.Unlock()
+		if remote != nil {
+			_ = remote.Close()
+		}
+		if reply != nil {
+			_ = reply.Close()
+		}
 	})
+}
+
+// markFailed records that dialing the outbound never completed, so any
+// queued packets are dropped and future writes are no-ops.
+func (s *udpSession) markFailed() {
+	s.mu.Lock()
+	s.failed = true
+	s.pending = nil
+	s.mu.Unlock()
+}
+
+// establish attaches the dialed connections and flushes any packets that
+// arrived on the client socket while the dial was still in flight.
+func (s *udpSession) establish(remote net.PacketConn, reply net.Conn, origDst *net.UDPAddr) {
+	s.mu.Lock()
+	s.remote = remote
+	s.reply = reply
+	pending := s.pending
+	s.pending = nil
+	s.established = true
+	s.mu.Unlock()
+	for _, p := range pending {
+		_ = remote.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if _, err := remote.WriteTo(p, origDst); err != nil {
+			s.close()
+			return
+		}
+	}
+}
+
+// enqueueOrSend writes payload immediately once the session is established,
+// or buffers it (bounded) while the outbound dial is still in progress.
+func (s *udpSession) enqueueOrSend(payload []byte, origDst *net.UDPAddr) {
+	s.mu.Lock()
+	if s.established {
+		remote := s.remote
+		s.mu.Unlock()
+		_ = remote.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		if _, err := remote.WriteTo(payload, origDst); err != nil {
+			s.close()
+		}
+		return
+	}
+	if s.failed {
+		s.mu.Unlock()
+		return
+	}
+	const maxPending = 64
+	if len(s.pending) < maxPending {
+		s.pending = append(s.pending, payload)
+	}
+	s.mu.Unlock()
 }
 
 func (s *Server) serveUDP(ctx context.Context, conn *net.UDPConn) {
@@ -156,42 +219,69 @@ func (s *Server) serveUDP(ctx context.Context, conn *net.UDPConn) {
 			continue
 		}
 		key := clientAddr.String() + "|" + origDst.String()
+		payload := append([]byte(nil), buf[:n]...)
 		mu.Lock()
 		sess := sessions[key]
 		mu.Unlock()
 		if sess == nil {
 			meta := plan.ConnMeta{Inbound: "tproxy-in", Network: "udp", SrcIP: clientAddr.IP.String(), SrcPort: clientAddr.Port, DstIP: origDst.IP.String(), DstPort: origDst.Port}
-			dialCtx, dialCancel := context.WithTimeout(runCtx, 10*time.Second)
-			remote, err := s.router.DialUDP(dialCtx, meta)
-			if err != nil {
-				dialCancel()
-				continue
-			}
-			reply, err := dialUDPReply(dialCtx, origDst, clientAddr)
-			dialCancel()
-			if err != nil {
-				_ = remote.Close()
-				continue
-			}
-			sess = &udpSession{remote: remote, reply: reply, last: time.Now()}
+			sess = &udpSession{last: time.Now(), pending: [][]byte{payload}}
 			mu.Lock()
 			if runCtx.Err() != nil {
 				mu.Unlock()
-				sess.close()
-				return
+				continue
 			}
 			sessions[key] = sess
 			mu.Unlock()
-			go s.relayUDP(runCtx, sess, key, &mu, sessions)
+			// Dialing the outbound (and the reply socket) can block for up to
+			// 10s; doing it off this goroutine keeps unrelated UDP flows
+			// flowing through the shared TPROXY listener while it happens.
+			go s.establishUDPSession(runCtx, sess, meta, origDst, clientAddr, key, &mu, sessions)
+			continue
 		}
 		mu.Lock()
 		sess.last = time.Now()
 		mu.Unlock()
-		_ = sess.remote.SetWriteDeadline(time.Now().Add(10 * time.Second))
-		if _, err := sess.remote.WriteTo(buf[:n], origDst); err != nil {
-			sess.close()
-		}
+		sess.enqueueOrSend(payload, origDst)
 	}
+}
+
+func (s *Server) establishUDPSession(runCtx context.Context, sess *udpSession, meta plan.ConnMeta, origDst, clientAddr *net.UDPAddr, key string, mu *sync.Mutex, sessions map[string]*udpSession) {
+	dialCtx, dialCancel := context.WithTimeout(runCtx, 10*time.Second)
+	defer dialCancel()
+	remote, err := s.router.DialUDP(dialCtx, meta)
+	if err != nil {
+		sess.markFailed()
+		mu.Lock()
+		if sessions[key] == sess {
+			delete(sessions, key)
+		}
+		mu.Unlock()
+		return
+	}
+	reply, err := dialUDPReply(dialCtx, origDst, clientAddr)
+	if err != nil {
+		_ = remote.Close()
+		sess.markFailed()
+		mu.Lock()
+		if sessions[key] == sess {
+			delete(sessions, key)
+		}
+		mu.Unlock()
+		return
+	}
+
+	mu.Lock()
+	stillCurrent := sessions[key] == sess && runCtx.Err() == nil
+	mu.Unlock()
+	if !stillCurrent {
+		_ = remote.Close()
+		_ = reply.Close()
+		return
+	}
+
+	sess.establish(remote, reply, origDst)
+	go s.relayUDP(runCtx, sess, key, mu, sessions)
 }
 
 func (s *Server) relayUDP(ctx context.Context, sess *udpSession, key string, mu *sync.Mutex, sessions map[string]*udpSession) {

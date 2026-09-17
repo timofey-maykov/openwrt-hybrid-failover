@@ -330,6 +330,9 @@ func (s Service) AddFailover(ctx context.Context, uri string) error {
 }
 
 func (s Service) RemoveFailover(ctx context.Context, uri string) error {
+	if err := validation.ValidateProxyURI(uri); err != nil {
+		return err
+	}
 	escaped := strings.ReplaceAll(uri, "'", "'\\''")
 	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", fmt.Sprintf("uci del_list %s='%s'", s.mainKey("failover_proxy_links"), escaped))
 	if err != nil {

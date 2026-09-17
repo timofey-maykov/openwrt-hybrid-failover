@@ -30,7 +30,7 @@ func NormalizeForNFT(cidrs []string) []string {
 			continue
 		}
 		seen[cidr] = struct{}{}
-		nets = append(nets, entry{raw: cidr, ipnet: ipnet})
+		nets = append(nets, entry{raw: ipnet.String(), ipnet: ipnet})
 	}
 	sort.Slice(nets, func(i, j int) bool {
 		li, _ := nets[i].ipnet.Mask.Size()

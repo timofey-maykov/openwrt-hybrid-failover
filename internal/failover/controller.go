@@ -270,9 +270,11 @@ func (c *Controller) pollSection(ctx context.Context, backend Backend, sec Secti
 	}
 
 	// Engine restart resets the selector to primary; restore backup without waiting for fail streak.
+	restoreBackupFailed := false
 	if st.mode == modeBackup && !primaryOK && (active == sec.PrimaryTag || active == sec.SelectorTag) {
 		if err := c.switchTo(ctx, backend, sec, sec.URLTestTag, "restore backup"); err != nil {
 			rt.LastError = err.Error()
+			restoreBackupFailed = true
 		} else {
 			active = sec.URLTestTag
 			rt.Active = active
@@ -283,6 +285,9 @@ func (c *Controller) pollSection(ctx context.Context, backend Backend, sec Secti
 	onBackup := active == sec.URLTestTag || isBackupTag(active, sec)
 
 	switch {
+	case onPrimary && restoreBackupFailed:
+		// Stay in modeBackup so the next poll retries the restore immediately
+		// instead of regressing into a fresh FailThreshold countdown.
 	case onPrimary:
 		st.mode = modePrimary
 		if !primaryOK {

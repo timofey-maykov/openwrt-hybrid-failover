@@ -44,6 +44,14 @@ func SingboxDurationSeconds(s string) (int, error) {
 		}
 		return n, nil
 	}
+	if len(s) >= 3 && strings.EqualFold(s[len(s)-2:], "ms") {
+		numStr := strings.TrimSpace(s[:len(s)-2])
+		n, err := strconv.Atoi(numStr)
+		if err != nil || n <= 0 {
+			return 0, fmt.Errorf("некорректная длительность %q", s)
+		}
+		return n / 1000, nil
+	}
 	unit := s[len(s)-1]
 	numStr := strings.TrimSpace(s[:len(s)-1])
 	n, err := strconv.Atoi(numStr)

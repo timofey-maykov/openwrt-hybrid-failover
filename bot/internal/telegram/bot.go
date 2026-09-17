@@ -21,7 +21,7 @@ type Handler interface {
 type Bot struct {
 	api            *tgbotapi.BotAPI
 	auth           security.Authorizer
-	audit          audit.Logger
+	audit          *audit.Logger
 	h              Handler
 	log            *slog.Logger
 	confirmMu      sync.Mutex
@@ -35,8 +35,8 @@ type pendingConfirm struct {
 	expiresAt time.Time
 }
 
-func New(api *tgbotapi.BotAPI, auth security.Authorizer, auditLogger audit.Logger, h Handler, log *slog.Logger) Bot {
-	return Bot{
+func New(api *tgbotapi.BotAPI, auth security.Authorizer, auditLogger *audit.Logger, h Handler, log *slog.Logger) *Bot {
+	return &Bot{
 		api:            api,
 		auth:           auth,
 		audit:          auditLogger,
@@ -47,7 +47,7 @@ func New(api *tgbotapi.BotAPI, auth security.Authorizer, auditLogger audit.Logge
 	}
 }
 
-func (b Bot) Run(ctx context.Context) error {
+func (b *Bot) Run(ctx context.Context) error {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 50
 	updates := b.api.GetUpdatesChan(u)
@@ -72,7 +72,7 @@ func (b Bot) Run(ctx context.Context) error {
 	}
 }
 
-func (b Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text string) {
+func (b *Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text string) {
 	action := strings.Fields(text)
 	actionName := "unknown"
 	if len(action) > 0 {
@@ -132,19 +132,19 @@ func (b Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text
 	b.reply(chatID, resp)
 }
 
-func (b Bot) reply(chatID int64, text string) {
+func (b *Bot) reply(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) replyWithParamMenu(chatID int64, text string) {
+func (b *Bot) replyWithParamMenu(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	keyboard := paramMenuKeyboard()
 	msg.ReplyMarkup = keyboard
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) replyWithMainPanel(chatID int64, userID int64, text string) {
+func (b *Bot) replyWithMainPanel(chatID int64, userID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	keyboard := mainPanelKeyboard()
 	if ch, ok := b.h.(CommandHandler); ok && ch.mgr != nil && ch.mgr.Multi() {
@@ -154,7 +154,7 @@ func (b Bot) replyWithMainPanel(chatID int64, userID int64, text string) {
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
+func (b *Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	userID := cb.From.ID
 	chatID := cb.Message.Chat.ID
 	actionName := "callback"
@@ -212,7 +212,7 @@ func (b Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	b.runCommandFromCallback(ctx, cb.ID, chatID, cb.Message.MessageID, userID, cmd)
 }
 
-func (b Bot) runCommandFromCallback(ctx context.Context, callbackID string, chatID int64, messageID int, userID int64, cmd string) {
+func (b *Bot) runCommandFromCallback(ctx context.Context, callbackID string, chatID int64, messageID int, userID int64, cmd string) {
 	resp, err := b.h.Handle(ctx, userID, cmd)
 	if err != nil {
 		b.log.Error("callback command failed", "user_id", userID, "cmd", cmd, "err", err)
@@ -227,12 +227,12 @@ func (b Bot) runCommandFromCallback(ctx context.Context, callbackID string, chat
 	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd, b.mainSection(userID)))
 }
 
-func (b Bot) answerCallback(callbackID, text string) {
+func (b *Bot) answerCallback(callbackID, text string) {
 	c := tgbotapi.NewCallback(callbackID, text)
 	_, _ = b.api.Request(c)
 }
 
-func (b Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64) {
+func (b *Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64) {
 	text := "Раздел: " + nav
 	keyboard := mainPanelKeyboard()
 	switch nav {
@@ -275,17 +275,17 @@ func (b Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64)
 	}
 }
 
-func (b Bot) replyWithConfirm(chatID int64, text, cmd string) {
+func (b *Bot) replyWithConfirm(chatID int64, text, cmd string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = confirmKeyboard(cmd)
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) editOrReply(chatID int64, messageID int, text string) {
+func (b *Bot) editOrReply(chatID int64, messageID int, text string) {
 	b.editOrReplyWithKeyboard(chatID, messageID, text, nil)
 }
 
-func (b Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, keyboard *tgbotapi.InlineKeyboardMarkup) {
+func (b *Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, keyboard *tgbotapi.InlineKeyboardMarkup) {
 	if messageID > 0 {
 		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
 		if keyboard != nil {
@@ -302,14 +302,14 @@ func (b Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, k
 	_, _ = b.api.Send(msg)
 }
 
-func (b Bot) mainSection(userID int64) string {
+func (b *Bot) mainSection(userID int64) string {
 	if ch, ok := b.h.(CommandHandler); ok {
 		return ch.MainSectionFor(userID)
 	}
 	return paths.DefaultMainSection
 }
 
-func (b Bot) panelIntro() string {
+func (b *Bot) panelIntro() string {
 	if ch, ok := b.h.(CommandHandler); ok {
 		return mainPanelText(ch.mgr)
 	}
@@ -339,7 +339,7 @@ func keyboardForCmd(cmd, section string) *tgbotapi.InlineKeyboardMarkup {
 	}
 }
 
-func (b Bot) requiresConfirmation(cmd string) bool {
+func (b *Bot) requiresConfirmation(cmd string) bool {
 	switch cmd {
 	case "/param_apply", "/param_rollback", "/failover_apply", "/routing_restart", "/config_apply", "/config_rollback":
 		return true
@@ -348,7 +348,7 @@ func (b Bot) requiresConfirmation(cmd string) bool {
 	}
 }
 
-func (b Bot) setConfirm(userID int64, cmd string) {
+func (b *Bot) setConfirm(userID int64, cmd string) {
 	b.confirmMu.Lock()
 	defer b.confirmMu.Unlock()
 	b.pendingConfirm[userID] = pendingConfirm{
@@ -357,7 +357,7 @@ func (b Bot) setConfirm(userID int64, cmd string) {
 	}
 }
 
-func (b Bot) isConfirmAllowed(userID int64, cmd string) bool {
+func (b *Bot) isConfirmAllowed(userID int64, cmd string) bool {
 	b.confirmMu.Lock()
 	defer b.confirmMu.Unlock()
 	state, ok := b.pendingConfirm[userID]
@@ -371,39 +371,39 @@ func (b Bot) isConfirmAllowed(userID int64, cmd string) bool {
 	return state.cmd == cmd
 }
 
-func (b Bot) clearConfirm(userID int64) {
+func (b *Bot) clearConfirm(userID int64) {
 	b.confirmMu.Lock()
 	defer b.confirmMu.Unlock()
 	delete(b.pendingConfirm, userID)
 }
 
-func (b Bot) setPendingInput(userID int64, kind string) {
+func (b *Bot) setPendingInput(userID int64, kind string) {
 	b.inputMu.Lock()
 	defer b.inputMu.Unlock()
 	b.pendingInput[userID] = kind
 }
 
-func (b Bot) getPendingInput(userID int64) (string, bool) {
+func (b *Bot) getPendingInput(userID int64) (string, bool) {
 	b.inputMu.Lock()
 	defer b.inputMu.Unlock()
 	kind, ok := b.pendingInput[userID]
 	return kind, ok
 }
 
-func (b Bot) clearInput(userID int64) {
+func (b *Bot) clearInput(userID int64) {
 	b.inputMu.Lock()
 	defer b.inputMu.Unlock()
 	delete(b.pendingInput, userID)
 }
 
-func (b Bot) uciExample(option string) string {
+func (b *Bot) uciExample(option string) string {
 	if ch, ok := b.h.(interface{ UCISectionKey(string) string }); ok {
 		return ch.UCISectionKey(option)
 	}
 	return paths.UCIPackage + "." + paths.DefaultMainSection + "." + option
 }
 
-func (b Bot) promptForInput(kind string) string {
+func (b *Bot) promptForInput(kind string) string {
 	switch kind {
 	case "urltest_interval":
 		return "Введите URLTest check_interval (например: 30 или 30s). Для отмены: /cancel"
@@ -426,10 +426,6 @@ func (b Bot) promptForInput(kind string) string {
 	default:
 		return "Введите значение. Для отмены: /cancel"
 	}
-}
-
-func promptForInput(kind string) string {
-	return Bot{}.promptForInput(kind)
 }
 
 func inputToCommand(kind, value string) (string, error) {

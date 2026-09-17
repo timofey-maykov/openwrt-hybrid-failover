@@ -183,7 +183,11 @@ func (w *Watchdog) Run(ctx context.Context) {
 					log.Printf("hybrid-failover watchdog: restart failed: %v", err)
 				}
 				failStreak = 0
-				time.Sleep(backoff)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(backoff):
+				}
 				if backoff < 2*time.Minute {
 					backoff *= 2
 				}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/policy"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -92,7 +93,7 @@ func NoteManualSwitch(section, outbound string) error {
 	found := false
 	pol := ""
 	if sec := pkg.Section(section); sec != nil {
-		pol = sec.Get("failover_policy", "")
+		pol = string(policy.Normalize(sec.Get("failover_policy", "")))
 	}
 	for i := range states {
 		if states[i].Section != section {

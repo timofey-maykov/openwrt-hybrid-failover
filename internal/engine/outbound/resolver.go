@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
@@ -17,22 +18,18 @@ func realDNSResolver() *net.Resolver {
 		net.JoinHostPort(singbox.DefaultDNSServer, "53"),
 		"8.8.8.8:53",
 	}
+	var next atomic.Uint32
 	return &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 			d := net.Dialer{Timeout: 4 * time.Second}
-			var last error
-			for _, dns := range servers {
-				c, err := d.DialContext(ctx, "udp4", dns)
-				if err == nil {
-					return c, nil
-				}
-				last = err
-			}
-			if last != nil {
-				return nil, last
-			}
-			return d.DialContext(ctx, "udp4", servers[0])
+			// A UDP dial only fails on local errors (bad address/routing), never
+			// because the remote server is down, so "first that dials" always
+			// picked the same server. Round-robin across attempts instead, so
+			// the net resolver's own per-query retries actually reach the
+			// other configured servers when one is unreachable.
+			idx := int(next.Add(1)-1) % len(servers)
+			return d.DialContext(ctx, "udp4", servers[idx])
 		},
 	}
 }
