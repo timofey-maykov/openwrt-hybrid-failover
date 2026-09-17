@@ -29,13 +29,19 @@ type Registry struct {
 	urltests  []*urlTestRunner
 }
 
-func NewRegistry(plans []plan.OutboundPlan) (*Registry, error) {
+// NewRegistry builds outbound handlers. ctx bounds the lifetime of any
+// background work a handler starts internally (e.g. a hysteria2/QUIC
+// client's own connection goroutines): without a real, cancellable context
+// here those handlers use context.Background() and never observe the
+// engine stopping, so a slow/stuck first dial leaks their connection and
+// goroutines indefinitely across every engine restart.
+func NewRegistry(ctx context.Context, plans []plan.OutboundPlan) (*Registry, error) {
 	r := &Registry{
 		handlers:  make(map[string]Handler),
 		selectors: make(map[string]*selectorHandler),
 	}
 	for _, p := range plans {
-		h, err := newHandler(p)
+		h, err := newHandler(ctx, p)
 		if err != nil {
 			r.Stop()
 			return nil, fmt.Errorf("outbound %q: %w", p.Tag, err)
@@ -64,14 +70,14 @@ func NewRegistry(plans []plan.OutboundPlan) (*Registry, error) {
 	return r, nil
 }
 
-func newHandler(p plan.OutboundPlan) (Handler, error) {
+func newHandler(ctx context.Context, p plan.OutboundPlan) (Handler, error) {
 	switch p.Kind {
 	case plan.OutboundDirect:
 		return &directHandler{tag: p.Tag}, nil
 	case plan.OutboundDirectBind, plan.OutboundAWG2Bind:
 		return &directHandler{tag: p.Tag, bindIface: p.BindIface}, nil
 	case plan.OutboundHysteria2:
-		return newHysteria2Handler(p)
+		return newHysteria2Handler(ctx, p)
 	case plan.OutboundVLESS:
 		return newVLESSHandler(p)
 	case plan.OutboundTrojan, plan.OutboundShadowsocks, plan.OutboundSocks:
@@ -313,10 +319,18 @@ func (u *urlTestRunner) Start(ctx context.Context, ctrl *control.Control) error 
 	return nil
 }
 
+// Stop cancels the probe loop and waits for it to exit. Bounded: the ctx
+// passed to NewRegistry should make any in-flight dial abort promptly on
+// cancel, but this timeout is a backstop against an unexpected hang leaving
+// Registry.Stop (and its caller) blocked forever.
 func (u *urlTestRunner) Stop() {
-	if u.cancel != nil {
-		u.cancel()
-		<-u.done
+	if u.cancel == nil {
+		return
+	}
+	u.cancel()
+	select {
+	case <-u.done:
+	case <-time.After(10 * time.Second):
 	}
 }
 

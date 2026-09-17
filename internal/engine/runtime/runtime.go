@@ -25,8 +25,8 @@ type Runtime struct {
 	listDownload  *listdownload.Server
 }
 
-func New(p *plan.Plan, ctrl *control.Control) (*Runtime, error) {
-	reg, err := outbound.NewRegistry(p.Outbounds)
+func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, error) {
+	reg, err := outbound.NewRegistry(ctx, p.Outbounds)
 	if err != nil {
 		return nil, err
 	}

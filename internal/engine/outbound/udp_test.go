@@ -23,7 +23,7 @@ func TestDirectUDPExchangeIgnoresFakeIP(t *testing.T) {
 		}
 	}()
 	for _, kind := range []plan.OutboundKind{plan.OutboundAWG2Bind} {
-		reg, err := NewRegistry([]plan.OutboundPlan{{Tag: "udp", Kind: kind}})
+		reg, err := NewRegistry(context.Background(), []plan.OutboundPlan{{Tag: "udp", Kind: kind}})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -25,7 +25,7 @@ func TestHealthRejectsSilentTCPServer(t *testing.T) {
 		defer c.Close()
 		<-done
 	}()
-	reg, err := outbound.NewRegistry([]plan.OutboundPlan{{Tag: "silent", Kind: plan.OutboundDirect}})
+	reg, err := outbound.NewRegistry(context.Background(), []plan.OutboundPlan{{Tag: "silent", Kind: plan.OutboundDirect}})
 	if err != nil {
 		t.Fatal(err)
 	}
