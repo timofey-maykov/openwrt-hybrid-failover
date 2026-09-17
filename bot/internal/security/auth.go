@@ -43,8 +43,11 @@ func (a Authorizer) Allowed(userID int64, cmd string) bool {
 }
 
 func isReadOnlyCommand(cmd string) bool {
-	cmd = strings.Fields(strings.TrimSpace(cmd))[0]
-	switch cmd {
+	fields := strings.Fields(strings.TrimSpace(cmd))
+	if len(fields) == 0 {
+		return false
+	}
+	switch fields[0] {
 	case "/start", "/help", "/panel", "/quick", "/wizard", "/status", "/health",
 		"/channels", "/history", "/failover_history", "/failover_list",
 		"/uci_show", "/uci_sections", "/param_list", "/params", "/logs":

@@ -149,12 +149,12 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /uci_get <hybrid-failover.section.option>")
 		}
-		return h.Handle(ctx, userID, "/param_get "+fields[1])
+		return h.dispatch(ctx, userID, []string{"/param_get", fields[1]})
 	case "/uci_set":
 		if len(fields) < 3 {
 			return "", fmt.Errorf("использование: /uci_set <hybrid-failover.section.option> <value>")
 		}
-		return h.Handle(ctx, userID, "/param_set "+fields[1]+" "+strings.Join(fields[2:], " "))
+		return h.dispatch(ctx, userID, append([]string{"/param_set", fields[1]}, fields[2:]...))
 	case "/uci_add_list":
 		if len(fields) < 3 {
 			return "", fmt.Errorf("использование: /uci_add_list <hybrid-failover.section.option> <value>")
@@ -179,7 +179,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /uci_del <hybrid-failover.section.option>")
 		}
-		return h.Handle(ctx, userID, "/param_del "+fields[1])
+		return h.dispatch(ctx, userID, []string{"/param_del", fields[1]})
 	case "/param_get":
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /param_get <key>\nпример: /param_get disable_quic")

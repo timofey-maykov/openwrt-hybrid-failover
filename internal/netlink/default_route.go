@@ -112,6 +112,6 @@ func scoreDefaultCandidate(l3, name string) int {
 	case strings.HasPrefix(l3, "wan"), name == "wan":
 		return 20
 	default:
-		return 50
+		return 10
 	}
 }

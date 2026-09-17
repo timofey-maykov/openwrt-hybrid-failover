@@ -135,6 +135,8 @@ func applyBackup(vals map[string]string) error {
 			if err := uciSet(key, v); err != nil {
 				return err
 			}
+		} else {
+			_ = exec.Command("uci", "-q", "delete", key).Run()
 		}
 	}
 	_ = exec.Command("uci", "-q", "delete", "dhcp.lan.ra_flags").Run()

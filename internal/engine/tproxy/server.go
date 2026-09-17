@@ -142,6 +142,7 @@ func relay(client *bufio.Reader, conn net.Conn, remote net.Conn) {
 	go copyReaderToConn(remote, client, done)
 	go copyConnToConn(conn, remote, done)
 	<-done
+	<-done
 }
 
 func copyReaderToConn(dst net.Conn, src io.Reader, done chan struct{}) {

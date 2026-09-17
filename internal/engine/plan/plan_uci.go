@@ -398,14 +398,15 @@ func (c *compiler) urlTestPlan(section string, sec *uci.Section, candidates []st
 func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 	conn := sec.Get("connection_type", "")
 	outboundTag := OutboundTag(section)
-	if conn == "block" {
-		c.plan.Routes = append(c.plan.Routes, RouteRule{Action: "reject", Reject: true, Section: section})
-		return nil
-	}
 	baseRule := RouteRule{
 		Action:      "route",
 		OutboundTag: outboundTag,
 		Section:     section,
+	}
+	if conn == "block" {
+		baseRule.Action = "reject"
+		baseRule.Reject = true
+		baseRule.OutboundTag = ""
 	}
 	for _, svc := range sec.GetList("community_lists") {
 		svc = strings.TrimSpace(svc)

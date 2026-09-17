@@ -42,6 +42,12 @@ func setupAWG2Interface(section, rawURI string, updateUCI bool) (string, bool, e
 				}
 				_ = bounceAWGInterface(ifname)
 			}
+			return ifname, adopted, nil
+		}
+		// Config matches but the link is admin-down (e.g. after a crash): bring
+		// it back up instead of leaving it down forever.
+		if out, err := exec.Command("ip", "link", "set", "up", "dev", ifname).CombinedOutput(); err != nil {
+			log.Printf("hybrid-failover: awg2 %s: link up failed: %v: %s", ifname, err, strings.TrimSpace(string(out)))
 		}
 		return ifname, adopted, nil
 	}

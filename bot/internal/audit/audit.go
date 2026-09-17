@@ -20,11 +20,11 @@ type Logger struct {
 	mu   sync.Mutex
 }
 
-func New(path string) Logger {
-	return Logger{path: path}
+func New(path string) *Logger {
+	return &Logger{path: path}
 }
 
-func (l Logger) Write(event Event) error {
+func (l *Logger) Write(event Event) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

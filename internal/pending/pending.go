@@ -127,6 +127,14 @@ func (s *Store) Validate() error {
 			return err
 		}
 		peer := snap.Changes[validation.PeerURLTestUCIKey(key)]
+		switch {
+		case peer == opDelete:
+			peer = ""
+		case strings.HasPrefix(peer, opAddListPrefix):
+			peer = strings.TrimPrefix(peer, opAddListPrefix)
+		case strings.HasPrefix(peer, opDelListPrefix):
+			peer = strings.TrimPrefix(peer, opDelListPrefix)
+		}
 		if err := validation.ValidateURLTestUCISet(key, norm, peer); err != nil {
 			return err
 		}
@@ -276,7 +284,10 @@ func applyPendingChange(key, val string) error {
 			return fmt.Errorf("uci del_list %s: %w: %s", key, err, out)
 		}
 	default:
-		norm, _ := validation.NormalizeUCIOptionValue(key, val)
+		norm, err := validation.NormalizeUCIOptionValue(key, val)
+		if err != nil {
+			return fmt.Errorf("normalize %s: %w", key, err)
+		}
 		if out, err := execUCI("set", key+"="+norm); err != nil {
 			return fmt.Errorf("uci set %s: %w: %s", key, err, out)
 		}
