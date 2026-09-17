@@ -121,10 +121,11 @@ build_core_pkg() {
 	local bin_src="$BIN_DIR/${owrt_arch}/${CORE_BIN}"
 	[[ -x "$bin_src" ]] || { echo "Missing binary: $bin_src" >&2; return 1; }
 
-	mkdir -p "$pkg_root/usr/sbin" "$pkg_root/etc/init.d" "$pkg_root/etc/config"
+	mkdir -p "$pkg_root/usr/sbin" "$pkg_root/etc/init.d" "$pkg_root/etc/config" "$pkg_root/etc/sysctl.d"
 	cp "$bin_src" "$pkg_root/usr/sbin/${CORE_BIN}"
 	cp "$ROOT_DIR/openwrt/etc/init.d/hybrid-failover" "$pkg_root/etc/init.d/"
 	cp "$ROOT_DIR/openwrt/etc/config/hybrid-failover" "$pkg_root/etc/config/"
+	cp "$ROOT_DIR/openwrt/etc/sysctl.d/20-hybrid-failover.conf" "$pkg_root/etc/sysctl.d/"
 	chmod 755 "$pkg_root/etc/init.d/hybrid-failover"
 	cp "$ROOT_DIR/packages/hybrid-failover-core/CONTROL/postinst" "$pkg_root/CONTROL/"
 	cp "$ROOT_DIR/packages/hybrid-failover-core/CONTROL/conffiles" "$pkg_root/CONTROL/"

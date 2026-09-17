@@ -70,7 +70,7 @@ start_service() {
 	procd_set_param command /usr/sbin/hybrid-failover monitor
 	procd_set_param env GOMEMLIMIT=64MiB
 	procd_set_param env GOGC=50
-	procd_set_param env GOMAXPROCS=1
+	procd_set_param env GOMAXPROCS=2
 	procd_set_param env GODEBUG=madvdontneed=1
 	procd_set_param term_timeout 10
 	procd_set_param respawn 3600 15 5
