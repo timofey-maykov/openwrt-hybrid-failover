@@ -6,13 +6,13 @@ import (
 
 type nopLogger struct{}
 
-func (nopLogger) Trace(args ...any)                 {}
-func (nopLogger) Debug(args ...any)                 {}
-func (nopLogger) Info(args ...any)                  {}
-func (nopLogger) Warn(args ...any)                  {}
-func (nopLogger) Error(args ...any)                 {}
-func (nopLogger) Fatal(args ...any)                 {}
-func (nopLogger) Panic(args ...any)                 {}
+func (nopLogger) Trace(args ...any) {}
+func (nopLogger) Debug(args ...any) {}
+func (nopLogger) Info(args ...any)  {}
+func (nopLogger) Warn(args ...any)  {}
+func (nopLogger) Error(args ...any) {}
+func (nopLogger) Fatal(args ...any) {}
+func (nopLogger) Panic(args ...any) {}
 
 func (l nopLogger) TraceContext(ctx any, args ...any) {}
 func (l nopLogger) DebugContext(ctx any, args ...any) {}

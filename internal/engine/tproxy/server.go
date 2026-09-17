@@ -43,13 +43,17 @@ func (s *Server) Start(ctx context.Context) error {
 		return err
 	}
 	runCtx, cancel := context.WithCancel(ctx)
+	udpConn, err := listenUDPTransparent(plan.TPROXYPort)
+	if err != nil {
+		cancel()
+		_ = ln.Close()
+		return fmt.Errorf("tproxy UDP: %w", err)
+	}
 	s.listener = ln
 	s.cancel = cancel
+	s.udpConn = udpConn
 	go s.serve(runCtx, ln)
-	if udpConn, err := listenUDPTransparent(plan.TPROXYPort); err == nil {
-		s.udpConn = udpConn
-		go s.serveUDP(runCtx, udpConn)
-	}
+	go s.serveUDP(runCtx, udpConn)
 	return nil
 }
 

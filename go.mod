@@ -7,6 +7,7 @@ require (
 	github.com/miekg/dns v1.1.62
 	github.com/sagernet/sing v0.6.11
 	github.com/sagernet/sing-quic v0.4.4
+	github.com/sagernet/sing-shadowsocks v0.2.8
 	github.com/sagernet/sing-vmess v0.2.7
 	golang.org/x/crypto v0.33.0
 )
@@ -17,6 +18,7 @@ require (
 	github.com/gofrs/uuid/v5 v5.3.2 // indirect
 	github.com/google/pprof v0.0.0-20231101202521-4ca4178f5c7a // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
+	github.com/klauspost/cpuid/v2 v2.0.12 // indirect
 	github.com/onsi/ginkgo/v2 v2.9.7 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-20 v0.4.1 // indirect
@@ -28,4 +30,5 @@ require (
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
+	lukechampine.com/blake3 v1.3.0 // indirect
 )

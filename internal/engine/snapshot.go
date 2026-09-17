@@ -21,8 +21,9 @@ type SectionRuntime struct {
 }
 
 type DelayChannelState struct {
-	DelayMs int  `json:"delay_ms,omitempty"`
-	OK      bool `json:"ok"`
+	DelayMs int    `json:"delay_ms,omitempty"`
+	OK      bool   `json:"ok"`
+	Error   string `json:"error,omitempty"`
 }
 
 // Snapshot exports live urltest member selection and delay samples.
@@ -40,7 +41,7 @@ func (e *Engine) Snapshot() RuntimeSnapshot {
 	if ctrl != nil {
 		for tag, d := range ctrl.AllDelays() {
 			ms := int(d.Delay.Milliseconds())
-			snap.Delays[tag] = DelayChannelState{DelayMs: ms, OK: d.OK && ms > 0}
+			snap.Delays[tag] = DelayChannelState{DelayMs: ms, OK: d.OK && ms > 0, Error: d.Error}
 		}
 	}
 	if rt == nil || p == nil {

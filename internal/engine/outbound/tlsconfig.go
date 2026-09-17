@@ -15,13 +15,13 @@ import (
 )
 
 type tlsOptions struct {
-	enabled    bool
-	serverName string
-	insecure   bool
+	enabled     bool
+	serverName  string
+	insecure    bool
 	fingerprint string
-	reality    bool
-	publicKey  []byte
-	shortID    [8]byte
+	reality     bool
+	publicKey   []byte
+	shortID     [8]byte
 }
 
 func tlsFromFields(fields map[string]any, serverHost string) (tlsOptions, error) {
@@ -90,11 +90,11 @@ func buildTLSConfig(fields map[string]any, serverHost string) (aTLS.Config, erro
 }
 
 type stdTLSConfig struct {
-	cfg tls.Config
+	cfg *tls.Config
 }
 
 func newSTDConfig(opt tlsOptions) aTLS.Config {
-	cfg := tls.Config{
+	cfg := &tls.Config{
 		ServerName:         opt.serverName,
 		InsecureSkipVerify: opt.insecure,
 		NextProtos:         []string{"h2", "http/1.1"},
@@ -102,17 +102,16 @@ func newSTDConfig(opt tlsOptions) aTLS.Config {
 	return &stdTLSConfig{cfg: cfg}
 }
 
-func (c *stdTLSConfig) ServerName() string                     { return c.cfg.ServerName }
-func (c *stdTLSConfig) SetServerName(serverName string)        { c.cfg.ServerName = serverName }
-func (c *stdTLSConfig) NextProtos() []string                   { return c.cfg.NextProtos }
-func (c *stdTLSConfig) SetNextProtos(nextProto []string)       { c.cfg.NextProtos = nextProto }
-func (c *stdTLSConfig) Config() (*aTLS.STDConfig, error)       { return &c.cfg, nil }
+func (c *stdTLSConfig) ServerName() string               { return c.cfg.ServerName }
+func (c *stdTLSConfig) SetServerName(serverName string)  { c.cfg.ServerName = serverName }
+func (c *stdTLSConfig) NextProtos() []string             { return c.cfg.NextProtos }
+func (c *stdTLSConfig) SetNextProtos(nextProto []string) { c.cfg.NextProtos = nextProto }
+func (c *stdTLSConfig) Config() (*aTLS.STDConfig, error) { return c.cfg, nil }
 func (c *stdTLSConfig) Client(conn net.Conn) (aTLS.Conn, error) {
-	return tls.Client(conn, &c.cfg), nil
+	return tls.Client(conn, c.cfg), nil
 }
 func (c *stdTLSConfig) Clone() aTLS.Config {
-	clone := c.cfg
-	return &stdTLSConfig{cfg: clone}
+	return &stdTLSConfig{cfg: c.cfg.Clone()}
 }
 
 type utlsConfig struct {
@@ -139,7 +138,9 @@ func (c *utlsConfig) NextProtos() []string            { return c.cfg.NextProtos 
 func (c *utlsConfig) SetNextProtos(nextProto []string) {
 	c.cfg.NextProtos = nextProto
 }
-func (c *utlsConfig) Config() (*aTLS.STDConfig, error) { return nil, fmt.Errorf("utls has no std config") }
+func (c *utlsConfig) Config() (*aTLS.STDConfig, error) {
+	return nil, fmt.Errorf("utls has no std config")
+}
 func (c *utlsConfig) Client(conn net.Conn) (aTLS.Conn, error) {
 	return &utlsConnWrap{UConn: utls.UClient(conn, c.cfg.Clone(), c.id)}, nil
 }

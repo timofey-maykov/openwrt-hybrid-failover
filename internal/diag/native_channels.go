@@ -3,8 +3,6 @@ package diag
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -247,15 +245,9 @@ func probeRegistryOutbound(ctx context.Context, reg *outbound.Registry, tag, tes
 	if err != nil {
 		return 0, false, err.Error()
 	}
-	start := time.Now()
-	conn, err := h.DialTCP(ctx, "tcp", hostPortFromURL(testURL))
+	ms, err := outbound.ProbeHTTP(ctx, h, testURL)
 	if err != nil {
 		return 0, false, err.Error()
-	}
-	_ = conn.Close()
-	ms := int(time.Since(start).Milliseconds())
-	if ms <= 0 {
-		ms = 1
 	}
 	return ms, true, ""
 }
@@ -433,6 +425,7 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember, urltestGro
 		if snap, ok := engineDelays()[name]; ok {
 			ch.DelayMs = snap.DelayMs
 			ch.Available = snap.OK && snap.DelayMs > 0
+			ch.Detail = snap.Error
 		}
 		if typ == "urltest" && urltestMember != "" {
 			if snap, ok := engineDelays()[urltestMember]; ok && snap.OK {
@@ -442,7 +435,7 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember, urltestGro
 				}
 			}
 		}
-		if !probed && !ch.Available && ch.DelayMs == 0 {
+		if !probed && !ch.Available && ch.DelayMs == 0 && ch.Detail == "" {
 			if !last.Time.IsZero() {
 				ch.Detail = "unavailable"
 			} else if snap, ok := engineDelays()[name]; ok && !snap.OK {
@@ -455,12 +448,13 @@ func nativeChannel(name, display, typ, activeOutbound, urltestMember, urltestGro
 	}
 	ch.DelayMs = last.DelayMs
 	ch.Available = last.OK && last.DelayMs > 0
+	ch.Detail = last.Error
 	if typ == "urltest" && urltestMember != "" {
 		if snap, ok := engineDelays()[urltestMember]; ok && snap.OK {
 			ch.Available = true
 		}
 	}
-	if !ch.Available && last.DelayMs == 0 {
+	if !ch.Available && last.DelayMs == 0 && ch.Detail == "" {
 		if !probed {
 			if last.Time.IsZero() {
 				ch.Detail = "no delay data (run channel probe)"
@@ -514,6 +508,7 @@ func mergeEngineDelayCache(base map[string]delayhistory.Sample) map[string]delay
 		base[tag] = delayhistory.Sample{
 			DelayMs: st.DelayMs,
 			OK:      st.OK,
+			Error:   st.Error,
 			Time:    time.Now().UTC(),
 		}
 	}
@@ -551,23 +546,4 @@ func skipDuplicateAWG2Link(seen map[string]struct{}, link string) bool {
 	}
 	seen[params.PublicKey] = struct{}{}
 	return false
-}
-
-func hostPortFromURL(rawURL string) string {
-	if rawURL == "" {
-		return "www.gstatic.com:443"
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
-		return "www.gstatic.com:443"
-	}
-	port := u.Port()
-	if port == "" {
-		if u.Scheme == "http" {
-			port = "80"
-		} else {
-			port = "443"
-		}
-	}
-	return net.JoinHostPort(u.Hostname(), port)
 }

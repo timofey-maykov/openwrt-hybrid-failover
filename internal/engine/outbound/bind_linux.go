@@ -9,9 +9,13 @@ import (
 
 func bindToDevice(iface string) func(network, address string, c syscall.RawConn) error {
 	return func(network, address string, c syscall.RawConn) error {
-		return c.Control(func(fd uintptr) {
-			_ = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, iface)
-		})
+		var bindErr error
+		if err := c.Control(func(fd uintptr) {
+			bindErr = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, iface)
+		}); err != nil {
+			return err
+		}
+		return bindErr
 	}
 }
 

@@ -24,10 +24,10 @@ func newHysteria2Handler(p plan.OutboundPlan) (Handler, error) {
 		return nil, err
 	}
 	server, _ := ob.Fields["server"].(string)
-	portF, _ := ob.Fields["server_port"].(float64)
+	port := numericField(ob.Fields["server_port"])
 	password, _ := ob.Fields["password"].(string)
-	if server == "" || password == "" {
-		return nil, fmt.Errorf("hysteria2: missing server or password")
+	if server == "" || port < 1 || port > 65535 || password == "" {
+		return nil, fmt.Errorf("hysteria2: invalid server, port, or password")
 	}
 	tlsCfg, err := buildTLSConfig(ob.Fields, server)
 	if err != nil {
@@ -44,17 +44,17 @@ func newHysteria2Handler(p plan.OutboundPlan) (Handler, error) {
 	}
 	sendBPS := uint64(0)
 	recvBPS := uint64(0)
-	if v, ok := ob.Fields["up_mbps"].(float64); ok && v > 0 {
+	if v := numericField(ob.Fields["up_mbps"]); v > 0 {
 		sendBPS = uint64(v) * hysteria.MbpsToBps
 	}
-	if v, ok := ob.Fields["down_mbps"].(float64); ok && v > 0 {
+	if v := numericField(ob.Fields["down_mbps"]); v > 0 {
 		recvBPS = uint64(v) * hysteria.MbpsToBps
 	}
 	client, err := hysteria2.NewClient(hysteria2.ClientOptions{
 		Context:            context.Background(),
 		Dialer:             newSingDialer(p.BindIface),
 		Logger:             newNopLogger(),
-		ServerAddress:      parseSocksaddrHostPort(server, strconv.Itoa(int(portF))),
+		ServerAddress:      parseSocksaddrHostPort(server, strconv.Itoa(port)),
 		Password:           password,
 		SalamanderPassword: salamander,
 		SendBPS:            sendBPS,
@@ -80,7 +80,7 @@ func (h *hysteria2Client) DialUDP(ctx context.Context, network, address string) 
 		return nil, err
 	}
 	dest := parseDestAddr(address)
-	return &boundPacketConn{conn: pc, dest: dest.UDPAddr()}, nil
+	return &boundPacketConn{conn: pc, dest: dest}, nil
 }
 
 func (h *hysteria2Client) Close() error {

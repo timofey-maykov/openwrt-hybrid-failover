@@ -44,7 +44,7 @@ func parseDestAddr(address string) M.Socksaddr {
 
 type boundPacketConn struct {
 	conn net.PacketConn
-	dest *net.UDPAddr
+	dest net.Addr
 }
 
 func (c *boundPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
@@ -61,3 +61,16 @@ func (c *boundPacketConn) LocalAddr() net.Addr                { return c.conn.Lo
 func (c *boundPacketConn) SetDeadline(t time.Time) error      { return c.conn.SetDeadline(t) }
 func (c *boundPacketConn) SetReadDeadline(t time.Time) error  { return c.conn.SetReadDeadline(t) }
 func (c *boundPacketConn) SetWriteDeadline(t time.Time) error { return c.conn.SetWriteDeadline(t) }
+
+// connectedPacketConn keeps the resolved destination and interface selected by
+// the dialer. In particular WriteTo must not send a FakeIP supplied by tproxy.
+type connectedPacketConn struct{ net.Conn }
+
+func (c *connectedPacketConn) ReadFrom(p []byte) (int, net.Addr, error) {
+	n, err := c.Read(p)
+	return n, c.RemoteAddr(), err
+}
+
+func (c *connectedPacketConn) WriteTo(p []byte, _ net.Addr) (int, error) {
+	return c.Write(p)
+}

@@ -44,13 +44,13 @@ type Plan struct {
 }
 
 type DNSPlan struct {
-	Type         string
-	Server       string
-	Bootstrap    string
-	RewriteTTL   int
-	FakeIPRange  string
+	Type          string
+	Server        string
+	Bootstrap     string
+	RewriteTTL    int
+	FakeIPRange   string
 	FakeIPDomains []string
-	RejectHTTPS  bool
+	RejectHTTPS   bool
 }
 
 type SectionPlan struct {
@@ -63,13 +63,13 @@ type SectionPlan struct {
 }
 
 type OutboundPlan struct {
-	Tag      string
-	Kind     OutboundKind
+	Tag       string
+	Kind      OutboundKind
 	BindIface string
-	ProxyURI string
-	Members  []string
-	Default  string
-	URLTest  *URLTestPlan
+	ProxyURI  string
+	Members   []string
+	Default   string
+	URLTest   *URLTestPlan
 }
 
 type URLTestPlan struct {
@@ -110,19 +110,20 @@ type ListDownloadPlan struct {
 }
 
 type ConnMeta struct {
-	SrcIP    string
-	SrcPort  int
-	DstIP    string
-	DstPort  int
-	Domain   string
-	Network  string
-	Inbound  string
+	SrcIP   string
+	SrcPort int
+	DstIP   string
+	DstPort int
+	Domain  string
+	Network string
+	Inbound string
 }
 
 type DelaySample struct {
 	Tag   string
 	Delay time.Duration
 	OK    bool
+	Error string
 }
 
 // Hash returns a stable SHA256 hex digest of the compiled plan.

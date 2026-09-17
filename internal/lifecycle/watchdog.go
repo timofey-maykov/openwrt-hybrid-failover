@@ -178,8 +178,10 @@ func (w *Watchdog) Run(ctx context.Context) {
 				if failStreak < failThreshold {
 					continue
 				}
-				log.Printf("hybrid-failover watchdog: engine unhealthy, forcing restart")
-				_ = w.Restart()
+				log.Printf("hybrid-failover watchdog: engine unhealthy, forcing restart: %v", err)
+				if err := w.Restart(); err != nil {
+					log.Printf("hybrid-failover watchdog: restart failed: %v", err)
+				}
 				failStreak = 0
 				time.Sleep(backoff)
 				if backoff < 2*time.Minute {

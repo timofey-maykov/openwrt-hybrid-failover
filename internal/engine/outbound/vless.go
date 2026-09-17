@@ -7,9 +7,9 @@ import (
 	"strconv"
 
 	"github.com/sagernet/sing-vmess/vless"
-	aTLS "github.com/sagernet/sing/common/tls"
 	M "github.com/sagernet/sing/common/metadata"
 	N "github.com/sagernet/sing/common/network"
+	aTLS "github.com/sagernet/sing/common/tls"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uri"
 )
@@ -28,9 +28,9 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 		return nil, err
 	}
 	server, _ := ob.Fields["server"].(string)
-	portF, _ := ob.Fields["server_port"].(float64)
-	if server == "" {
-		return nil, fmt.Errorf("vless: missing server")
+	port := numericField(ob.Fields["server_port"])
+	if server == "" || port < 1 || port > 65535 {
+		return nil, fmt.Errorf("vless: invalid server or port")
 	}
 	uuid, _ := ob.Fields["uuid"].(string)
 	flow, _ := ob.Fields["flow"].(string)
@@ -45,7 +45,7 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 	return &vlessHandler{
 		tag:    p.Tag,
 		client: client,
-		server: parseSocksaddrHostPort(server, strconv.Itoa(int(portF))),
+		server: parseSocksaddrHostPort(server, strconv.Itoa(port)),
 		tls:    tlsCfg,
 		dialer: newSingDialer(p.BindIface),
 	}, nil

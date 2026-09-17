@@ -19,6 +19,7 @@ type Sample struct {
 	Time    time.Time `json:"time"`
 	DelayMs int       `json:"delay_ms"`
 	OK      bool      `json:"ok"`
+	Error   string    `json:"error,omitempty"`
 }
 
 type ChannelHistory struct {
@@ -30,6 +31,7 @@ type ChannelHistory struct {
 type SampleInput struct {
 	DelayMs int
 	OK      bool
+	Error   string
 }
 
 type Store struct {
@@ -80,7 +82,7 @@ func (s *Store) Record(channel string, delayMs int, ok bool) error {
 	if err := s.ensureLoadedLocked(); err != nil {
 		return err
 	}
-	s.appendSampleLocked(channel, delayMs, ok)
+	s.appendSampleLocked(channel, delayMs, ok, "")
 	return s.maybeFlushLocked(false)
 }
 
@@ -97,7 +99,7 @@ func (s *Store) RecordBatch(samples map[string]SampleInput) error {
 		if channel == "" {
 			continue
 		}
-		s.appendSampleLocked(channel, sample.DelayMs, sample.OK)
+		s.appendSampleLocked(channel, sample.DelayMs, sample.OK, sample.Error)
 	}
 	return s.maybeFlushLocked(true)
 }
@@ -159,7 +161,7 @@ func (s *Store) ensureLoadedLocked() error {
 	return nil
 }
 
-func (s *Store) appendSampleLocked(channel string, delayMs int, ok bool) {
+func (s *Store) appendSampleLocked(channel string, delayMs int, ok bool, detail string) {
 	now := time.Now().UTC()
 	for i := range s.data {
 		if s.data[i].Channel != channel {
@@ -169,6 +171,7 @@ func (s *Store) appendSampleLocked(channel string, delayMs int, ok bool) {
 			Time:    now,
 			DelayMs: delayMs,
 			OK:      ok,
+			Error:   detail,
 		})
 		if len(s.data[i].Samples) > s.maxPts {
 			s.data[i].Samples = s.data[i].Samples[len(s.data[i].Samples)-s.maxPts:]
@@ -178,7 +181,7 @@ func (s *Store) appendSampleLocked(channel string, delayMs int, ok bool) {
 	}
 	s.data = append(s.data, ChannelHistory{
 		Channel: channel,
-		Samples: []Sample{{Time: now, DelayMs: delayMs, OK: ok}},
+		Samples: []Sample{{Time: now, DelayMs: delayMs, OK: ok, Error: detail}},
 	})
 	s.dirty = true
 }
