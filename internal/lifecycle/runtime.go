@@ -76,6 +76,17 @@ func runNativeEngineLoop(ctx context.Context, uciPath string) {
 		log.Printf("hybrid-failover engine: dns bind addr: %v", err)
 	}
 
+	// consecutiveFastFailures counts Run() exits that happen almost
+	// immediately (e.g. a listener port still held by a not-yet-released
+	// socket). A fixed 2s retry forever turns that into a tight bind-fail
+	// spin (observed in production: 24+ minutes, ~2s cadence, never
+	// recovering on its own) instead of giving the port time to actually
+	// free up. Back off exponentially on fast failures; a Run() that stays
+	// up for a while resets it.
+	consecutiveFastFailures := 0
+	const fastFailThreshold = 3 * time.Second
+	const maxBackoff = 30 * time.Second
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,17 +141,31 @@ func runNativeEngineLoop(ctx context.Context, uciPath string) {
 		dnsmasqConfigureCancel = cfgCancel
 		go configureDNSMasqWhenReady(cfgCtx, uciPath)
 
-		if err := eng.Run(ctx); err != nil && ctx.Err() == nil {
-			fmt.Fprintf(os.Stderr, "hybrid-failover engine: run: %v\n", err)
+		runStart := time.Now()
+		runErr := eng.Run(ctx)
+		if runErr != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "hybrid-failover engine: run: %v\n", runErr)
 		}
 		_ = engine.WriteRuntimeSnapshot(eng.Snapshot())
 
 		if ctx.Err() != nil {
 			return
 		}
+
+		delay := 2 * time.Second
+		if runErr != nil && time.Since(runStart) < fastFailThreshold {
+			consecutiveFastFailures++
+			delay = 2 * time.Second * time.Duration(1<<uint(consecutiveFastFailures-1))
+			if delay > maxBackoff {
+				delay = maxBackoff
+			}
+			log.Printf("hybrid-failover engine: run failed quickly (%d in a row), backing off %s", consecutiveFastFailures, delay)
+		} else {
+			consecutiveFastFailures = 0
+		}
 		// Brief FakeIP gap during restart is OK; do not Restore dnsmasq here
 		// (watchdog restores only after sustained DNS outage).
-		if !sleepOrDone(ctx, 2*time.Second) {
+		if !sleepOrDone(ctx, delay) {
 			return
 		}
 	}
