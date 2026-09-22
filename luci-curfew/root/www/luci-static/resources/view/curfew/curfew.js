@@ -155,7 +155,8 @@ return view.extend({
 
 		m = new form.Map('curfew', _('Curfew'), _('Ночной лимит скорости для выбранных LAN-устройств (tc на br-lan).'));
 
-		s = m.section(form.NamedSection, 'curfew', 'curfew', _('Настройки'));
+		s = m.section(form.TypedSection, 'curfew', _('Настройки'));
+		s.anonymous = true;
 		s.addremove = false;
 
 		o = s.option(form.Flag, 'enabled', _('Включено'));
@@ -218,7 +219,7 @@ return view.extend({
 				E('div', { 'class': 'cbi-section-node' }, [
 					E('pre', {
 						'id': 'curfew-status-pre',
-						'style': 'white-space:pre-wrap;margin:0;padding:0.5em;background:#f7f7f7;border:1px solid #ddd;'
+						'style': 'white-space:pre-wrap;margin:0;'
 					}),
 					E('div', { 'class': 'right', 'style': 'margin-top:0.5em;' }, [
 						E('button', {
