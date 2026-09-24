@@ -25,6 +25,7 @@ type Watchdog struct {
 	dnsFailsafeOn     bool
 	wgBounceFail      map[string]int
 	wgBounceCooldown  map[string]time.Time
+	fdPressureLogged  bool
 }
 
 func DefaultWatchdog(uciPath string) *Watchdog {
@@ -156,6 +157,8 @@ func (w *Watchdog) Run(ctx context.Context) {
 	backoff := w.Interval
 	failStreak := 0
 	const failThreshold = 2
+	startedAt := time.Now()
+	fdStreak := 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -173,7 +176,13 @@ func (w *Watchdog) Run(ctx context.Context) {
 				_ = dnsmasq.EnsureRunning()
 			}
 			_ = dnsmasq.EnsureLocalResolv()
+			w.reportFDPressure()
 			if err := w.Probe(); err != nil {
+				if isFDExhausted(err) {
+					w.handleFDExhaustion(err, startedAt, &fdStreak)
+				} else {
+					fdStreak = 0
+				}
 				failStreak++
 				if failStreak < failThreshold {
 					continue
@@ -197,4 +206,44 @@ func (w *Watchdog) Run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// reportFDPressure logs once the process is close to its descriptor ceiling,
+// so a run-up is visible in the log before anything starts failing.
+func (w *Watchdog) reportFDPressure() {
+	open, limit := fdUsage()
+	if limit == 0 {
+		return
+	}
+	if uint64(open)*10 < limit*7 {
+		w.fdPressureLogged = false
+		return
+	}
+	if w.fdPressureLogged {
+		return
+	}
+	w.fdPressureLogged = true
+	log.Printf("hybrid-failover watchdog: %d of %d file descriptors in use", open, limit)
+}
+
+// handleFDExhaustion exits the process so procd respawns it with a fresh
+// descriptor table. Restarting only the engine cannot recover from this, and
+// without the exit the service stays degraded for as long as the pressure
+// lasts.
+//
+// The exit is deliberately conservative: it needs two consecutive checks and
+// a process that has already been up for a while, so a transient spike does
+// not turn into a respawn loop that procd would eventually give up on.
+func (w *Watchdog) handleFDExhaustion(err error, startedAt time.Time, streak *int) {
+	*streak++
+	open, limit := fdUsage()
+	log.Printf("hybrid-failover watchdog: out of file descriptors (%d of %d in use): %v", open, limit, err)
+	if *streak < 2 {
+		return
+	}
+	if time.Since(startedAt) < time.Minute {
+		return
+	}
+	log.Printf("hybrid-failover watchdog: descriptor table exhausted, exiting for procd to respawn")
+	os.Exit(1)
 }
