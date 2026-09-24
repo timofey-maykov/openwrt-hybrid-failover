@@ -276,6 +276,68 @@ function method_dhcp_leases() {
 	};
 }
 
+
+const EXTROOT_BIN = '/usr/sbin/be7000-extroot';
+
+// The overlay wizard is a shell tool rather than an RPC of the daemon: moving
+// /overlay has to work even when the daemon is not running.
+function run_extroot(args) {
+	if (access(EXTROOT_BIN) != true)
+		return { ok: false, code: 127, output: 'be7000-extroot not found' };
+
+	let cmd = join(' ', map(args, (a) => shellquote(a)));
+	cmd = `${shellquote(EXTROOT_BIN)} ${cmd}`;
+
+	let fd = popen(`(${cmd}) 2>&1; echo __HF_EXIT:$?`, 'r');
+	let all = fd ? fd.read('all') : '';
+	if (fd)
+		fd.close();
+
+	let m = match(all, /__HF_EXIT:(\d+)\s*$/);
+	let code = m ? int(m[1]) : 1;
+	let output = trim(replace(all, /__HF_EXIT:\d+\s*$/, ''));
+
+	return { ok: code == 0, code, output };
+}
+
+function method_extroot_query(sub) {
+	return {
+		call: function() {
+			let res = run_extroot([sub, '--json']);
+			if (!res.ok)
+				return { ok: false, output: res.output };
+			try {
+				return { ok: true, data: json(res.output) };
+			}
+			catch (err) {
+				return { ok: false, output: res.output };
+			}
+		}
+	};
+}
+
+function method_extroot_use() {
+	return {
+		args: { device: '' },
+		call: function(req) {
+			let dev = req.args?.device ?? '';
+			if (!length(dev))
+				return { ok: false, output: 'device is required' };
+			let res = run_extroot(['use', dev, '--yes']);
+			return { ok: res.ok, output: res.output };
+		}
+	};
+}
+
+function method_extroot_revert() {
+	return {
+		call: function() {
+			let res = run_extroot(['revert', '--yes']);
+			return { ok: res.ok, output: res.output };
+		}
+	};
+}
+
 	return {
 	'hybrid-failover': {
 		status: method_call('Status', null),
@@ -304,5 +366,9 @@ function method_dhcp_leases() {
 		pending_capture: method_call('CapturePending', null),
 		pending_apply: method_call('PendingApply', null),
 		pending_rollback: method_call('PendingRollback', null),
+		extroot_status: method_extroot_query('status'),
+		extroot_list: method_extroot_query('list'),
+		extroot_use: method_extroot_use(),
+		extroot_revert: method_extroot_revert(),
 	}
 };
