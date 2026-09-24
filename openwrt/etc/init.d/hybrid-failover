@@ -73,6 +73,10 @@ start_service() {
 	procd_set_param env GOMAXPROCS=2
 	procd_set_param env GODEBUG=madvdontneed=1
 	procd_set_param term_timeout 10
+	# All LAN traffic is proxied through this process, so its descriptor use
+	# scales with the number of concurrent connections, not with the number of
+	# clients. The inherited ceiling of 4096 is reached by a single busy host.
+	procd_set_param limits nofile="65535 65535"
 	procd_set_param respawn 3600 15 5
 	procd_set_param stdout 1
 	procd_set_param stderr 1
