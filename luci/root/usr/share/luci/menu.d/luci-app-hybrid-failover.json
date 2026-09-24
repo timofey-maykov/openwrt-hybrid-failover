@@ -7,7 +7,9 @@
 			"path": "admin/services/hybrid-failover/dashboard"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	},
 	"admin/services/hybrid-failover/dashboard": {
@@ -18,7 +20,9 @@
 			"path": "hybrid-failover/dashboard"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	},
 	"admin/services/hybrid-failover/routing": {
@@ -29,7 +33,9 @@
 			"path": "hybrid-failover/routing"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	},
 	"admin/services/hybrid-failover/diagnostics": {
@@ -40,7 +46,9 @@
 			"path": "hybrid-failover/diagnostics"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	},
 	"admin/services/hybrid-failover/clients": {
@@ -51,7 +59,9 @@
 			"path": "hybrid-failover/clients"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	},
 	"admin/services/hybrid-failover/bot": {
@@ -62,7 +72,22 @@
 			"path": "hybrid-failover/bot"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
+		}
+	},
+	"admin/services/hybrid-failover/storage": {
+		"title": "Накопитель",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/storage"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-hybrid-failover"
+			]
 		}
 	}
 }
