@@ -170,9 +170,12 @@ func (w *Watchdog) Run(ctx context.Context) {
 			w.restoreDNSFailsafe()
 			w.recoverEmptyLists()
 			w.recoverStaleTunnels()
-			// Only when dnsmasq already forwards to FakeIP (notinterface=lo).
-			// Starting it earlier races the engine for 127.0.0.42:53.
-			if dnsmasq.LANForwardingOK() {
+			// Only when dnsmasq already forwards to FakeIP (notinterface=lo)
+			// AND the engine already answers there. Starting it earlier races
+			// the engine for 127.0.0.42:53: with bind-dynamic dnsmasq grabs the
+			// address the moment it appears on lo, except-interface or not,
+			// and the engine then fails its bind on every restart.
+			if dnsmasq.LANForwardingOK() && engine.DNSReady() {
 				_ = dnsmasq.EnsureRunning()
 			}
 			_ = dnsmasq.EnsureLocalResolv()

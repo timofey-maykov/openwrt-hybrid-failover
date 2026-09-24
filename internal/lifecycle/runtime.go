@@ -2,10 +2,12 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
@@ -86,6 +88,9 @@ func runNativeEngineLoop(ctx context.Context, uciPath string) {
 	consecutiveFastFailures := 0
 	const fastFailThreshold = 3 * time.Second
 	const maxBackoff = 30 * time.Second
+	// bindFailExitAfter is how many consecutive fast failures on an address
+	// already in use we tolerate before letting procd respawn the process.
+	const bindFailExitAfter = 8
 
 	for {
 		select {
@@ -155,11 +160,16 @@ func runNativeEngineLoop(ctx context.Context, uciPath string) {
 		delay := 2 * time.Second
 		if runErr != nil && time.Since(runStart) < fastFailThreshold {
 			consecutiveFastFailures++
-			delay = 2 * time.Second * time.Duration(1<<uint(consecutiveFastFailures-1))
-			if delay > maxBackoff {
-				delay = maxBackoff
-			}
+			delay = fastFailBackoff(consecutiveFastFailures, maxBackoff)
 			log.Printf("hybrid-failover engine: run failed quickly (%d in a row), backing off %s", consecutiveFastFailures, delay)
+			// A bind that keeps failing against our own address is a leaked
+			// listener from an earlier iteration: nothing inside this process
+			// can free it, so hand the fd table back to procd. Same idea as
+			// handleFDExhaustion.
+			if consecutiveFastFailures >= bindFailExitAfter && errors.Is(runErr, syscall.EADDRINUSE) {
+				log.Printf("hybrid-failover engine: %d bind failures in a row, exiting for a clean respawn", consecutiveFastFailures)
+				os.Exit(1)
+			}
 		} else {
 			consecutiveFastFailures = 0
 		}
@@ -291,4 +301,23 @@ func nativeModeFromUCI(uciPath string) bool {
 		return plan.LoadEngineMode() == plan.ModeNative
 	}
 	return engine.NativeEnabled(pkg)
+}
+
+// fastFailBackoff doubles the restart delay per consecutive fast failure and
+// caps it. The exponent is capped too: shifting by the raw failure count
+// overflows after 63 and yields a zero delay, which is how a stuck bind turned
+// into a restart every few milliseconds.
+func fastFailBackoff(failures int, maxBackoff time.Duration) time.Duration {
+	if failures < 1 {
+		failures = 1
+	}
+	exp := failures - 1
+	if exp > 5 {
+		exp = 5
+	}
+	delay := 2 * time.Second * time.Duration(1<<uint(exp))
+	if delay > maxBackoff {
+		delay = maxBackoff
+	}
+	return delay
 }
