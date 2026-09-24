@@ -2,10 +2,12 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	mdns "github.com/miekg/dns"
@@ -15,12 +17,12 @@ const defaultListenAddr = "127.0.0.42"
 const defaultListenPort = 53
 
 type Plan struct {
-	RewriteTTL      int
-	Bootstrap       string
-	RejectHTTPS     bool
-	FakeIPDomains   []string
-	ListenAddr      string
-	ListenPort      int
+	RewriteTTL    int
+	Bootstrap     string
+	RejectHTTPS   bool
+	FakeIPDomains []string
+	ListenAddr    string
+	ListenPort    int
 }
 
 type Resolver interface {
@@ -53,14 +55,9 @@ func (s *Server) Start(ctx context.Context) error {
 		return nil
 	}
 	addr := net.JoinHostPort(s.plan.ListenAddr, fmt.Sprintf("%d", s.plan.ListenPort))
-	udpConn, err := net.ListenPacket("udp", addr)
+	udpConn, tcpLn, err := listenWithRetry(addr)
 	if err != nil {
-		return fmt.Errorf("dns udp listen: %w", err)
-	}
-	tcpLn, err := net.Listen("tcp", addr)
-	if err != nil {
-		_ = udpConn.Close()
-		return fmt.Errorf("dns tcp listen: %w", err)
+		return err
 	}
 	mux := mdns.NewServeMux()
 	mux.HandleFunc(".", s.handle)
@@ -73,6 +70,42 @@ func (s *Server) Start(ctx context.Context) error {
 	// Engine.Runtime.Stop calls Stop; do not also Stop from ctx.Done (re-entrant
 	// Shutdown under the same mutex can stall forever and freeze sync/watchdog).
 	return waitForListen(addr, 3*time.Second)
+}
+
+// bindRetryWindow bounds how long listenWithRetry keeps trying while the
+// address is still in use.
+var bindRetryWindow = 5 * time.Second
+
+// listenWithRetry opens the DNS listeners, retrying for a few seconds while the
+// address is still in use.
+//
+// Stop can return while the previous sockets are still closing: it force-closes
+// them after a timeout and does not wait for the kernel to release the port. A
+// hard failure on the first attempt therefore turns a momentary overlap with
+// our own previous instance into a restart loop that never recovers, which is
+// what "dns udp listen: address already in use" repeating every 30s was.
+//
+// A different owner (dnsmasq holding the FakeIP address) still fails, just
+// after the retry window rather than immediately.
+func listenWithRetry(addr string) (net.PacketConn, net.Listener, error) {
+	deadline := time.Now().Add(bindRetryWindow)
+	for {
+		udpConn, err := net.ListenPacket("udp", addr)
+		if err == nil {
+			tcpLn, tcpErr := net.Listen("tcp", addr)
+			if tcpErr == nil {
+				return udpConn, tcpLn, nil
+			}
+			_ = udpConn.Close()
+			err = fmt.Errorf("dns tcp listen: %w", tcpErr)
+		} else {
+			err = fmt.Errorf("dns udp listen: %w", err)
+		}
+		if !errors.Is(err, syscall.EADDRINUSE) || !time.Now().Before(deadline) {
+			return nil, nil, err
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 func waitForListen(addr string, timeout time.Duration) error {
@@ -228,4 +261,12 @@ func mdnsMsg(name string) *mdns.Msg {
 	m := new(mdns.Msg)
 	m.SetQuestion(mdns.Fqdn(name), mdns.TypeA)
 	return m
+}
+
+// bindRetryForTest shortens the retry window and returns a function restoring
+// it. Only used by tests.
+func bindRetryForTest(d time.Duration) func() {
+	prev := bindRetryWindow
+	bindRetryWindow = d
+	return func() { bindRetryWindow = prev }
 }
