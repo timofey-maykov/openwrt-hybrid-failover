@@ -89,7 +89,9 @@ type RouteRule struct {
 	DomainSuffix []string
 	IPCIDR       []string
 	SourceIPCIDR []string
-	Reject       bool
+	// Network limits the rule to "tcp" or "udp"; empty matches both.
+	Network string
+	Reject  bool
 }
 
 type RuleSet struct {

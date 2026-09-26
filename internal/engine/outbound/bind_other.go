@@ -13,6 +13,13 @@ func bindToDevice(iface string) func(network, address string, c syscall.RawConn)
 	}
 }
 
+func engineSocketControl(iface string) func(network, address string, c syscall.RawConn) error {
+	if iface != "" {
+		return bindToDevice(iface)
+	}
+	return nil
+}
+
 func setReuseAddr(c syscall.RawConn) error {
 	return nil
 }

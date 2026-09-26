@@ -24,7 +24,7 @@ func realDNSResolver() *net.Resolver {
 	return &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 4 * time.Second}
+			d := net.Dialer{Timeout: 4 * time.Second, Control: engineSocketControl("")}
 			// A UDP dial only fails on local errors (bad address/routing), never
 			// because the remote server is down, so "first that dials" always
 			// picked the same server. Round-robin across attempts instead, so
@@ -67,12 +67,9 @@ func isTransientDialError(err error) bool {
 }
 
 func outboundDialer(bindIface string) *net.Dialer {
-	d := &net.Dialer{
+	return &net.Dialer{
 		Timeout:  30 * time.Second,
 		Resolver: realDNSResolver(),
+		Control:  engineSocketControl(bindIface),
 	}
-	if bindIface != "" {
-		d.Control = bindToDevice(bindIface)
-	}
-	return d
 }

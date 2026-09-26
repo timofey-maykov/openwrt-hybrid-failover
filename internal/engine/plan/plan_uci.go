@@ -40,6 +40,7 @@ func CompilePlan(pkg *uci.Package) (*Plan, error) {
 	}
 	c.compileRoutes()
 	c.compileFullyRoutedRoutes()
+	c.compileUDPRoutedRoutes()
 	return c.plan, nil
 }
 
@@ -536,6 +537,50 @@ func (c *compiler) compileFullyRoutedRoutes() {
 		return
 	}
 	// Prefer source full-route before domain lists so these clients always use the section.
+	c.plan.Routes = append(extra, c.plan.Routes...)
+}
+
+// compileUDPRoutedRoutes sends the UDP of udp_routed_ips clients through their
+// section. nft marks that UDP into TPROXY (netlink.ApplyNFT), but without a
+// source rule here the router fell through to the list logic and sent it
+// direct, so the option only moved the traffic through the engine and back
+// out the same WAN (console games cut by the ISP stayed cut).
+func (c *compiler) compileUDPRoutedRoutes() {
+	if c.pkg == nil {
+		return
+	}
+	routable := make(map[string]bool, len(c.plan.Sections))
+	for _, sec := range c.plan.Sections {
+		if sec.ConnectionType == "vpn" || sec.ConnectionType == "proxy" {
+			routable[sec.Name] = true
+		}
+	}
+	var extra []RouteRule
+	for _, name := range c.pkg.SectionNames("section") {
+		sec := c.pkg.Section(name)
+		if sec == nil || !routable[name] {
+			continue
+		}
+		var ips []string
+		for _, ip := range sec.GetList("udp_routed_ips") {
+			if ip = strings.TrimSpace(ip); ip != "" {
+				ips = append(ips, ip)
+			}
+		}
+		if len(ips) == 0 {
+			continue
+		}
+		extra = append(extra, RouteRule{
+			Action:       "route",
+			OutboundTag:  OutboundTag(name),
+			Section:      name,
+			SourceIPCIDR: ips,
+			Network:      "udp",
+		})
+	}
+	if len(extra) == 0 {
+		return
+	}
 	c.plan.Routes = append(extra, c.plan.Routes...)
 }
 
