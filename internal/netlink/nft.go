@@ -72,6 +72,9 @@ func applyStepsLocked(pkg *uci.Package) error {
 		"nft add element inet " + NFTTable + " " + localv4SetName + " '{ " + localv4Ranges() + " }'",
 		"nft add chain inet " + NFTTable + " mangle '{ type filter hook prerouting priority mangle; policy accept; }'",
 		"nft add chain inet " + NFTTable + " mangle_output '{ type route hook output priority mangle; policy accept; }'",
+		// The engine's own sockets carry EngineSocketMark and must never be
+		// looped back into TPROXY; this has to stay the first output rule.
+		"nft add rule inet " + NFTTable + " mangle_output meta mark " + singbox.EngineSocketMarkText + " return",
 		// NAT redirect before tproxy filter: LAN clients that hardcode 8.8.8.8/NextDNS
 		// still hit dnsmasq → 127.0.0.42 so FakeIP community domains work (Xbox RL).
 		"nft add chain inet " + NFTTable + " dns '{ type nat hook prerouting priority dstnat - 5; policy accept; }'",

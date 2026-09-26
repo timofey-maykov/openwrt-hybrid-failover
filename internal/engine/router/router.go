@@ -85,6 +85,9 @@ func (r *Router) Route(meta plan.ConnMeta) (string, error) {
 	dstIP := net.ParseIP(meta.DstIP)
 	srcIP := net.ParseIP(meta.SrcIP)
 	for _, cr := range r.rules {
+		if cr.rule.Network != "" && meta.Network != "" && cr.rule.Network != meta.Network {
+			continue
+		}
 		if cr.rule.Reject {
 			if ruleMatches(cr, domain, dstIP, srcIP) {
 				return "", fmt.Errorf("rejected")
