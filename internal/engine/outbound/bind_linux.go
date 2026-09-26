@@ -27,8 +27,13 @@ func engineSocketControl(iface string) func(network, address string, c syscall.R
 	return func(network, address string, c syscall.RawConn) error {
 		var opErr error
 		if err := c.Control(func(fd uintptr) {
-			opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, singbox.EngineSocketMark)
-			if opErr == nil && iface != "" {
+			// SO_MARK needs CAP_NET_ADMIN. The engine runs as root on the
+			// router; unprivileged runs (tests, CI) just go without the mark.
+			if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_MARK, singbox.EngineSocketMark); err != nil && err != syscall.EPERM {
+				opErr = err
+				return
+			}
+			if iface != "" {
 				opErr = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, iface)
 			}
 		}); err != nil {
