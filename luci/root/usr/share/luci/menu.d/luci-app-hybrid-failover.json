@@ -64,5 +64,16 @@
 		"depends": {
 			"acl": [ "luci-app-hybrid-failover" ]
 		}
+	},
+	"admin/services/hybrid-failover/update": {
+		"title": "Обновление",
+		"order": 6,
+		"action": {
+			"type": "view",
+			"path": "hybrid-failover/update"
+		},
+		"depends": {
+			"acl": [ "luci-app-hybrid-failover" ]
+		}
 	}
 }
