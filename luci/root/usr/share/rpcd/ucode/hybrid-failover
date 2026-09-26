@@ -304,5 +304,8 @@ function method_dhcp_leases() {
 		pending_capture: method_call('CapturePending', null),
 		pending_apply: method_call('PendingApply', null),
 		pending_rollback: method_call('PendingRollback', null),
+		update_check: method_call('UpdateCheck', null),
+		update_status: method_call('UpdateStatus', null),
+		update_apply: method_call('UpdateApply', null),
 	}
 };

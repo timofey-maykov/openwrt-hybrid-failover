@@ -12,8 +12,8 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/dnsmasq"
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lifecycle"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/migrate"
@@ -71,6 +71,8 @@ func Run(args []string) int {
 		return runSubscriptionRefresh(args[1:])
 	case "monitor":
 		return runMonitor(args[1:])
+	case "update":
+		return runUpdate(args[1:])
 	case "help", "-h", "--help":
 		printUsage()
 		return 0
@@ -93,6 +95,7 @@ Usage:
   hybrid-failover pending capture|validate|apply|rollback
   hybrid-failover check-nft|check-proxy|check-fakeip|global-check
   hybrid-failover list-update|subscription-refresh
+  hybrid-failover update check|apply|status [--tag vX.Y.Z] [--force]
 
 `)
 }
@@ -325,6 +328,12 @@ func runRPC(args []string) int {
 		enc, _ := json.MarshalIndent(events, "", "  ")
 		fmt.Println(string(enc))
 		return 0
+	case "UpdateCheck", "update_check":
+		return runUpdate([]string{"check"})
+	case "UpdateApply", "update_apply":
+		return runUpdate([]string{"apply"})
+	case "UpdateStatus", "update_status":
+		return runUpdate([]string{"status"})
 	case "CheckNft", "check_nft":
 		return runRPCCheckNFT()
 	case "CheckFakeip", "check_fakeip":

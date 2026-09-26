@@ -125,6 +125,8 @@ apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.0.5-r1.apk
 
 Тег `v*.*.*` запускает [workflow сборки](../.github/workflows/release.yml): в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) публикуются и `.ipk` (24.x), и `.apk` (25.12+).
 
+Уже установленный пакет обновляется сам: `hybrid-failover update apply` или LuCI → Hybrid Failover → **Обновление**. Подробнее: [LUCI.md](LUCI.md#обновление).
+
 ## Мало места на overlay
 
 Сборка core использует UPX; при нехватке места:
