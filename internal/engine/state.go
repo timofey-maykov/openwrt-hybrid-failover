@@ -29,9 +29,23 @@ func probesHealthy() bool {
 	return probeEngineTPROXY() && DNSReady()
 }
 
-// DNSReady reports whether the native engine DNS listener accepts TCP on 127.0.0.42:53.
+// DNSReady reports whether the native engine DNS listener accepts TCP on
+// 127.0.0.42:53.
+//
+// Something answering there is not enough: dnsmasq with bind-dynamic can grab
+// the address when it (re)starts while the engine is down, and then it answers
+// too. Taking that for the engine kept the "stop dnsmasq" path from ever
+// running, and the engine failed its bind every few seconds until someone
+// restarted dnsmasq by hand. So when /proc tells who holds the listener, only
+// the engine counts.
 func DNSReady() bool {
-	return probeTCP(plan.DNSListenAddr, plan.DNSListenPort)
+	if !probeTCP(plan.DNSListenAddr, plan.DNSListenPort) {
+		return false
+	}
+	if comm, ok := dnsListenerOwner(plan.DNSListenAddr, plan.DNSListenPort); ok {
+		return isEngineComm(comm)
+	}
+	return true
 }
 
 // TPROXY listeners do not accept plain TCP connects on 127.0.0.1:1602.
