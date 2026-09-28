@@ -62,7 +62,8 @@
 			"path": "hybrid-failover/bot"
 		},
 		"depends": {
-			"acl": [ "luci-app-hybrid-failover" ]
+			"acl": [ "luci-app-hybrid-failover" ],
+			"fs": { "/usr/bin/hybrid-failover-bot": "executable" }
 		}
 	},
 	"admin/services/hybrid-failover/update": {

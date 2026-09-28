@@ -5,13 +5,16 @@
 #   wget -O /tmp/install.sh https://raw.githubusercontent.com/OWNER/REPO/main/scripts/install-on-router.sh \
 #     && HF_REPO=OWNER/REPO ash /tmp/install.sh
 #
-# Только Telegram-бот:
+# Только сервис и LuCI, без Telegram-бота:
+#   HF_MODE=core ash /tmp/install.sh
+#
+# Только Telegram-бот (управляет core на этом или другом роутере):
 #   HF_MODE=bot ash /tmp/install.sh
 #
 # Переменные:
 #   HF_REPO     : GitHub owner/repo (по умолчанию timofey-maykov/openwrt-hybrid-failover)
 #   HF_VERSION  : тег релиза (v1.0.0) или latest
-#   HF_MODE     : full | bot
+#   HF_MODE     : full | core | bot
 #   HF_BRANCH   : ветка для скачивания исходников (main)
 #   HF_TOKEN    : токен бота (опционально, сразу в JSON)
 #   HF_ADMIN_IDS: ID админов через запятую (опционально)
@@ -342,25 +345,28 @@ install_from_release() {
 	_ver="$(echo "$_tag" | sed 's/^v//')"
 
 	case "$HF_MODE" in
+		full|core)
+			try_install_pkg "$_tag" "hybrid-failover-core" || \
+				die "Не найден hybrid-failover-core для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
+			# luci-app-hybrid-failover depends on the translation package, which
+			# is not in any feed: install it first or the LuCI app fails.
+			try_install_pkg "$_tag" "luci-i18n-hybrid-failover" "all" || \
+				warn "Не найден luci-i18n-hybrid-failover в релизе $_tag"
+			try_install_pkg "$_tag" "luci-app-hybrid-failover" "all" || \
+				die "Не найден luci-app-hybrid-failover в релизе $_tag"
+			if [ "$HF_MODE" = "full" ]; then
+				try_install_pkg "$_tag" "hybrid-failover-bot" || \
+					die "Не найден hybrid-failover-bot для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
+			fi
+			;;
 		bot)
 			try_install_pkg "$_tag" "hybrid-failover-bot" || \
 				die "Не найден hybrid-failover-bot для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
-			try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
-				die "Не найден luci-app-hybrid-failover-bot в релизе $_tag"
 			;;
 		patches)
 			die "HF_MODE=patches удалён: используйте HF_MODE=full (hybrid-failover-core)"
 			;;
-		full)
-			try_install_pkg "$_tag" "hybrid-failover-core" || \
-				die "Не найден hybrid-failover-core для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
-			try_install_pkg "$_tag" "hybrid-failover-bot" || \
-				die "Не найден hybrid-failover-bot для $(arch_candidates | tr '\n' ' ') в релизе $_tag"
-			try_install_pkg "$_tag" "luci-app-hybrid-failover" "all" || \
-				try_install_pkg "$_tag" "luci-app-hybrid-failover-bot" "all" || \
-				die "Не найден luci-app-hybrid-failover в релизе $_tag"
-			;;
-		*) die "Неизвестный HF_MODE=$HF_MODE (full|bot)" ;;
+		*) die "Неизвестный HF_MODE=$HF_MODE (full|core|bot)" ;;
 	esac
 	return 0
 }
@@ -378,18 +384,22 @@ install_from_local_dist() {
 	_dir="${_dist}/${_sub}"
 	log "Установка из локального каталога $_dir (${_pm})"
 	case "$HF_MODE" in
-		bot|full)
-			if [ "$HF_MODE" = "full" ]; then
-				install_local_pkg "$_dir" hybrid-failover-core || \
-					die "Не найден hybrid-failover-core в $_dir (arch: $(arch_candidates | tr '\n' ' '))"
-			fi
-			install_local_pkg "$_dir" hybrid-failover-bot || \
-				warn "hybrid-failover-bot не установлен"
+		full|core)
+			install_local_pkg "$_dir" hybrid-failover-core || \
+				die "Не найден hybrid-failover-core в $_dir (arch: $(arch_candidates | tr '\n' ' '))"
 			install_local_pkg "$_dir" luci-i18n-hybrid-failover || true
 			install_local_pkg "$_dir" luci-app-hybrid-failover || \
-				install_local_pkg "$_dir" luci-app-hybrid-failover-bot || \
 				warn "LuCI app не установлен"
+			if [ "$HF_MODE" = "full" ]; then
+				install_local_pkg "$_dir" hybrid-failover-bot || \
+					warn "hybrid-failover-bot не установлен"
+			fi
 			;;
+		bot)
+			install_local_pkg "$_dir" hybrid-failover-bot || \
+				die "Не найден hybrid-failover-bot в $_dir"
+			;;
+		*) die "Неизвестный HF_MODE=$HF_MODE (full|core|bot)" ;;
 	esac
 	return 0
 }
@@ -419,10 +429,10 @@ post_install() {
 		rm -f /usr/bin/hybrid-failover
 		log "Удалён legacy /usr/bin/hybrid-failover"
 	fi
-	/etc/init.d/hybrid-failover enable 2>/dev/null || true
-	/usr/sbin/hybrid-failover migrate 2>/dev/null || true
-	/etc/init.d/hybrid-failover start 2>/dev/null || true
 	if [ "$HF_MODE" != "bot" ]; then
+		/etc/init.d/hybrid-failover enable 2>/dev/null || true
+		/usr/sbin/hybrid-failover migrate 2>/dev/null || true
+		/etc/init.d/hybrid-failover start 2>/dev/null || true
 		if [ ! -x /usr/sbin/hybrid-failover ]; then
 			die "hybrid-failover-core не установлен (нет /usr/sbin/hybrid-failover)"
 		fi
@@ -432,10 +442,14 @@ post_install() {
 	fi
 
 	log "Готово. Свободно на overlay: $(overlay_free_kb /overlay)K"
-	log "LuCI: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/hybrid-failover"
-	log "Настройте /etc/hybrid-failover-bot.json (token, admin_ids), затем:"
-	log "  uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot"
-	log "  /etc/init.d/hybrid-failover-bot restart"
+	if [ "$HF_MODE" != "bot" ]; then
+		log "LuCI: http://$(uci get network.lan.ipaddr 2>/dev/null || echo ROUTER)/cgi-bin/luci/admin/services/hybrid-failover"
+	fi
+	if [ "$HF_MODE" != "core" ]; then
+		log "Настройте /etc/hybrid-failover-bot.json (token, admin_ids), затем:"
+		log "  uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot"
+		log "  /etc/init.d/hybrid-failover-bot restart"
+	fi
 }
 
 main() {
