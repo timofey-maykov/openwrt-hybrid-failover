@@ -14,7 +14,13 @@ import (
 // realDNSResolver resolves names via public/bootstrap DNS.
 // Never use the engine FakeIP listener (127.0.0.42): bind/VPN outbounds would
 // dial 198.18.x.x through the tunnel and hang.
-func realDNSResolver() *net.Resolver {
+//
+// Queries leave through bindIface, the same interface the connection itself
+// will use. Some ISPs drop the Go resolver's UDP queries to foreign servers
+// (1.1.1.1, 8.8.8.8 time out while 77.88.8.8 answers), so resolving a VPN
+// destination over the WAN cost 5 s per unlucky round-robin pick, and two in a
+// row failed the dial. Through the tunnel all three servers answer.
+func realDNSResolver(bindIface string) *net.Resolver {
 	servers := []string{
 		net.JoinHostPort(singbox.DefaultBootstrapDNS, "53"),
 		net.JoinHostPort(singbox.DefaultDNSServer, "53"),
@@ -24,7 +30,7 @@ func realDNSResolver() *net.Resolver {
 	return &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 4 * time.Second, Control: engineSocketControl("")}
+			d := net.Dialer{Timeout: 4 * time.Second, Control: engineSocketControl(bindIface)}
 			// A UDP dial only fails on local errors (bad address/routing), never
 			// because the remote server is down, so "first that dials" always
 			// picked the same server. Round-robin across attempts instead, so
@@ -69,7 +75,7 @@ func isTransientDialError(err error) bool {
 func outboundDialer(bindIface string) *net.Dialer {
 	return &net.Dialer{
 		Timeout:  30 * time.Second,
-		Resolver: realDNSResolver(),
+		Resolver: realDNSResolver(bindIface),
 		Control:  engineSocketControl(bindIface),
 	}
 }
