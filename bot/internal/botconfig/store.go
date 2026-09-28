@@ -57,12 +57,32 @@ func (s Store) SetPendingKey(key, value string) error {
 		cfg.RoutingInitScript = value
 	case "token":
 		cfg.Token = value
+	case "router_name":
+		cfg.RouterName = strings.TrimSpace(value)
 	case "admin_ids":
 		ids, err := parseAdminIDs(value)
 		if err != nil {
 			return err
 		}
 		cfg.AdminIDs = ids
+	case "viewer_ids":
+		ids, err := parseIDs(value, true)
+		if err != nil {
+			return err
+		}
+		cfg.ViewerIDs = ids
+	case "notify_failover_enabled":
+		on, err := parseBool(value)
+		if err != nil {
+			return err
+		}
+		cfg.NotifyFailoverEnabled = on
+	case "notify_failover_interval_seconds":
+		n, err := strconv.Atoi(strings.TrimSpace(value))
+		if err != nil || n < 10 {
+			return fmt.Errorf("notify_failover_interval_seconds must be an integer >= 10")
+		}
+		cfg.NotifyFailoverIntervalSeconds = n
 	case "probe_timeout_seconds":
 		n, err := strconv.Atoi(strings.TrimSpace(value))
 		if err != nil || n <= 0 {
@@ -132,7 +152,23 @@ func (s Store) writeJSON(path string, cfg config.Config) error {
 	return os.WriteFile(path, raw, 0o600)
 }
 
+func parseBool(raw string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true", "on", "yes":
+		return true, nil
+	case "0", "false", "off", "no", "":
+		return false, nil
+	}
+	return false, fmt.Errorf("expected true/false, got %q", raw)
+}
+
 func parseAdminIDs(raw string) ([]int64, error) {
+	return parseIDs(raw, false)
+}
+
+// parseIDs parses a comma or space separated list of Telegram user IDs.
+func parseIDs(raw string, allowEmpty bool) ([]int64, error) {
+	raw = strings.ReplaceAll(raw, " ", ",")
 	parts := strings.Split(raw, ",")
 	out := make([]int64, 0, len(parts))
 	for _, p := range parts {
@@ -142,11 +178,11 @@ func parseAdminIDs(raw string) ([]int64, error) {
 		}
 		n, err := strconv.ParseInt(trimmed, 10, 64)
 		if err != nil || n <= 0 {
-			return nil, fmt.Errorf("invalid admin id %q", trimmed)
+			return nil, fmt.Errorf("invalid user id %q", trimmed)
 		}
 		out = append(out, n)
 	}
-	if len(out) == 0 {
+	if len(out) == 0 && !allowEmpty {
 		return nil, fmt.Errorf("admin_ids cannot be empty")
 	}
 	return out, nil

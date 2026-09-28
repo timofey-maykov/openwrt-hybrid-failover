@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"sync"
 	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -28,6 +28,15 @@ type Bot struct {
 	pendingConfirm map[int64]pendingConfirm
 	inputMu        sync.Mutex
 	pendingInput   map[int64]string
+	identity       string
+	adminIDs       []int64
+}
+
+// SetIdentity names the router this bot instance runs on; it is shown in
+// failover notices and conflict warnings. adminIDs receive those notices.
+func (b *Bot) SetIdentity(name string, adminIDs []int64) {
+	b.identity = name
+	b.adminIDs = adminIDs
 }
 
 type pendingConfirm struct {
@@ -48,28 +57,21 @@ func New(api *tgbotapi.BotAPI, auth security.Authorizer, auditLogger *audit.Logg
 }
 
 func (b *Bot) Run(ctx context.Context) error {
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 50
-	updates := b.api.GetUpdatesChan(u)
-	for {
-		select {
-		case <-ctx.Done():
-			b.api.StopReceivingUpdates()
-			return ctx.Err()
-		case update, ok := <-updates:
-			if !ok {
-				return fmt.Errorf("telegram updates channel closed")
-			}
-			if update.CallbackQuery != nil && update.CallbackQuery.From != nil && update.CallbackQuery.Message != nil {
-				b.handleCallback(ctx, update.CallbackQuery)
-				continue
-			}
-			if update.Message == nil || update.Message.From == nil {
-				continue
-			}
-			b.handleMessage(ctx, update.Message.Chat.ID, update.Message.From.ID, update.Message.Text)
-		}
+	return b.poll(ctx, b.dispatchUpdate)
+}
+
+func (b *Bot) dispatchUpdate(ctx context.Context, update tgbotapi.Update) {
+	if update.CallbackQuery != nil && update.CallbackQuery.From != nil && update.CallbackQuery.Message != nil {
+		b.handleCallback(ctx, update.CallbackQuery)
+		return
 	}
+	if update.Message == nil || update.Message.From == nil {
+		return
+	}
+	if strings.TrimSpace(update.Message.Text) == "" {
+		return
+	}
+	b.handleMessage(ctx, update.Message.Chat.ID, update.Message.From.ID, update.Message.Text)
 }
 
 func (b *Bot) handleMessage(ctx context.Context, chatID int64, userID int64, text string) {
@@ -95,6 +97,10 @@ func (b *Bot) handleMessage(ctx context.Context, chatID int64, userID int64, tex
 		b.clearInput(userID)
 		b.reply(chatID, "Ввод отменен.")
 		return
+	}
+	// A new slash command abandons the prompt instead of being taken as its value.
+	if strings.HasPrefix(strings.TrimSpace(text), "/") {
+		b.clearInput(userID)
 	}
 	if kind, ok := b.getPendingInput(userID); ok {
 		cmd, err := inputToCommand(kind, text)
@@ -133,25 +139,39 @@ func (b *Bot) handleMessage(ctx context.Context, chatID int64, userID int64, tex
 }
 
 func (b *Bot) reply(chatID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
-	_, _ = b.api.Send(msg)
+	b.sendChunks(chatID, text, nil)
+}
+
+// sendChunks sends text split to Telegram's message limit; the keyboard, if
+// any, goes on the last part.
+func (b *Bot) sendChunks(chatID int64, text string, keyboard *tgbotapi.InlineKeyboardMarkup) {
+	parts := splitMessage(text)
+	for i, part := range parts {
+		msg := tgbotapi.NewMessage(chatID, part)
+		if keyboard != nil && i == len(parts)-1 {
+			msg.ReplyMarkup = *keyboard
+		}
+		if _, err := b.api.Send(msg); err != nil {
+			b.log.Error("send failed", "chat_id", chatID, "err", err)
+		}
+	}
 }
 
 func (b *Bot) replyWithParamMenu(chatID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
 	keyboard := paramMenuKeyboard()
-	msg.ReplyMarkup = keyboard
-	_, _ = b.api.Send(msg)
+	b.sendChunks(chatID, text, &keyboard)
 }
 
 func (b *Bot) replyWithMainPanel(chatID int64, userID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
-	keyboard := mainPanelKeyboard()
+	keyboard := b.mainKeyboard(userID)
+	b.sendChunks(chatID, text, &keyboard)
+}
+
+func (b *Bot) mainKeyboard(userID int64) tgbotapi.InlineKeyboardMarkup {
 	if ch, ok := b.h.(CommandHandler); ok && ch.mgr != nil && ch.mgr.Multi() {
-		keyboard = routersPanelKeyboard(ch.mgr, userID)
+		return routersPanelKeyboard(ch.mgr, userID)
 	}
-	msg.ReplyMarkup = keyboard
-	_, _ = b.api.Send(msg)
+	return mainPanelKeyboard()
 }
 
 func (b *Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
@@ -159,21 +179,31 @@ func (b *Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 	chatID := cb.Message.Chat.ID
 	actionName := "callback"
 
-	if !b.auth.IsAdmin(userID) {
+	isAdmin := b.auth.IsAdmin(userID)
+	if !isAdmin && !b.auth.IsViewer(userID) {
 		_ = b.audit.Write(audit.Event{UserID: userID, Action: actionName, Result: "denied"})
 		b.answerCallback(cb.ID, "Доступ запрещен")
 		return
 	}
+	deny := func(action string) {
+		_ = b.audit.Write(audit.Event{UserID: userID, Action: action, Result: "denied"})
+		b.answerCallback(cb.ID, "Только чтение: действие недоступно")
+	}
 
+	// Navigation is read-only and open to viewers too.
 	if nav, ok := callbackToNav(cb.Data); ok {
 		b.answerCallback(cb.ID, "")
 		b.editNavPanel(chatID, cb.Message.MessageID, nav, userID)
 		return
 	}
 	if confirmCmd, ok := callbackToConfirm(cb.Data); ok {
+		if !isAdmin {
+			deny(confirmCmd)
+			return
+		}
 		if !b.isConfirmAllowed(userID, confirmCmd) {
 			b.answerCallback(cb.ID, "Подтверждение устарело")
-		b.editOrReply(chatID, cb.Message.MessageID, "Подтверждение устарело, повторите действие.")
+			b.editOrReply(chatID, cb.Message.MessageID, "Подтверждение устарело, повторите действие.")
 			return
 		}
 		b.clearConfirm(userID)
@@ -187,20 +217,23 @@ func (b *Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 		return
 	}
 	if inputKind, ok := callbackToInput(cb.Data); ok {
+		if !isAdmin {
+			deny("input:" + inputKind)
+			return
+		}
 		b.setPendingInput(userID, inputKind)
 		b.answerCallback(cb.ID, "")
 		k := inputCancelKeyboard()
-		if strings.HasPrefix(inputKind, "uci_") {
-			uk := inputCancelKeyboard()
-			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, b.promptForInput(inputKind), &uk)
-		} else {
-			b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, b.promptForInput(inputKind), &k)
-		}
+		b.editOrReplyWithKeyboard(chatID, cb.Message.MessageID, b.promptForInput(inputKind), &k)
 		return
 	}
 	cmd, ok := callbackToCommand(cb.Data)
 	if !ok {
 		b.answerCallback(cb.ID, "Неизвестная кнопка")
+		return
+	}
+	if !b.auth.Allowed(userID, cmd) {
+		deny(cmd)
 		return
 	}
 	if b.requiresConfirmation(cmd) {
@@ -213,18 +246,24 @@ func (b *Bot) handleCallback(ctx context.Context, cb *tgbotapi.CallbackQuery) {
 }
 
 func (b *Bot) runCommandFromCallback(ctx context.Context, callbackID string, chatID int64, messageID int, userID int64, cmd string) {
+	// Answer right away: Telegram keeps the button spinning until it gets an
+	// answer, and restart or list-update can take much longer than that.
+	b.answerCallback(callbackID, "Выполняю…")
 	resp, err := b.h.Handle(ctx, userID, cmd)
+	keyboard := keyboardForCmd(cmd, b.mainSection(userID))
+	if strings.HasPrefix(cmd, "/use ") {
+		k := b.mainKeyboard(userID)
+		keyboard = &k
+	}
 	if err != nil {
 		b.log.Error("callback command failed", "user_id", userID, "cmd", cmd, "err", err)
 		_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "error", Details: err.Error()})
-		b.answerCallback(callbackID, "Ошибка")
-		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboardForCmd(cmd, b.mainSection(userID)))
+		b.editOrReplyWithKeyboard(chatID, messageID, "Ошибка: "+err.Error(), keyboard)
 		return
 	}
 
 	_ = b.audit.Write(audit.Event{UserID: userID, Action: cmd, Result: "ok"})
-	b.answerCallback(callbackID, "")
-	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboardForCmd(cmd, b.mainSection(userID)))
+	b.editOrReplyWithKeyboard(chatID, messageID, resp, keyboard)
 }
 
 func (b *Bot) answerCallback(callbackID, text string) {
@@ -233,12 +272,12 @@ func (b *Bot) answerCallback(callbackID, text string) {
 }
 
 func (b *Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64) {
-	text := "Раздел: " + nav
-	keyboard := mainPanelKeyboard()
+	var text string
+	var keyboard tgbotapi.InlineKeyboardMarkup
 	switch nav {
 	case "main":
 		text = b.panelIntro()
-		keyboard = mainPanelKeyboard()
+		keyboard = b.mainKeyboard(userID)
 	case "params":
 		if ch, ok := b.h.(CommandHandler); ok {
 			text = ch.paramMenuText(userID)
@@ -264,7 +303,7 @@ func (b *Bot) editNavPanel(chatID int64, messageID int, nav string, userID int64
 		keyboard = uciKeyboard()
 	default:
 		text = b.panelIntro()
-		keyboard = mainPanelKeyboard()
+		keyboard = b.mainKeyboard(userID)
 	}
 	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
 	edit.ReplyMarkup = &keyboard
@@ -286,6 +325,12 @@ func (b *Bot) editOrReply(chatID int64, messageID int, text string) {
 }
 
 func (b *Bot) editOrReplyWithKeyboard(chatID int64, messageID int, text string, keyboard *tgbotapi.InlineKeyboardMarkup) {
+	if parts := splitMessage(text); len(parts) > 1 {
+		// Too long for one message: put the head in place, the rest below.
+		b.editOrReplyWithKeyboard(chatID, messageID, parts[0], nil)
+		b.sendChunks(chatID, strings.Join(parts[1:], "\n"), keyboard)
+		return
+	}
 	if messageID > 0 {
 		edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
 		if keyboard != nil {

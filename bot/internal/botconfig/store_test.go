@@ -84,3 +84,30 @@ func TestSetPendingEditableBotFields(t *testing.T) {
 		t.Fatalf("unexpected cfg after set: %+v", cfg)
 	}
 }
+
+func TestSetPendingKeysSentByLuCI(t *testing.T) {
+	dir := t.TempDir()
+	active := filepath.Join(dir, "bot.json")
+	if err := os.WriteFile(active, []byte(`{"token":"t","admin_ids":[1]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := NewStore(active)
+	for _, kv := range [][2]string{
+		{"viewer_ids", ""},
+		{"viewer_ids", "11, 22"},
+		{"notify_failover_enabled", "true"},
+		{"notify_failover_interval_seconds", "45"},
+		{"router_name", " ax6000 "},
+	} {
+		if err := s.SetPendingKey(kv[0], kv[1]); err != nil {
+			t.Fatalf("%s=%q: %v", kv[0], kv[1], err)
+		}
+	}
+	cfg, err := s.LoadPending()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.ViewerIDs) != 2 || !cfg.NotifyFailoverEnabled || cfg.NotifyFailoverIntervalSeconds != 45 || cfg.RouterName != "ax6000" {
+		t.Fatalf("unexpected pending config: %+v", cfg)
+	}
+}

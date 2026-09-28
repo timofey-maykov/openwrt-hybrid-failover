@@ -10,21 +10,36 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type Service struct {
-	runner       routerexec.Exec
-	clashAPI     string
-	initScript   string
-	uciPackage   string
-	mainSection  string
-	httpCli      *http.Client
+	runner      routerexec.Exec
+	clashAPI    string
+	initScript  string
+	uciPackage  string
+	mainSection string
+	httpCli     *http.Client
+}
+
+// Budgets for operations that legitimately run longer than a plain command.
+const (
+	restartTimeout      = 2 * time.Minute
+	applyTimeout        = 3 * time.Minute
+	healthTimeout       = time.Minute
+	listUpdateTimeout   = 5 * time.Minute
+	subscriptionTimeout = 3 * time.Minute
+)
+
+func withTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, d)
 }
 
 type ChannelHealth struct {
@@ -53,11 +68,11 @@ func NewService(runner routerexec.Exec, clashAPI, initScript, uciPackage, mainSe
 	}
 }
 
-func (s Service) SettingsKey(option string) string  { return s.settingsKey(option) }
+func (s Service) SettingsKey(option string) string    { return s.settingsKey(option) }
 func (s Service) MainSectionKey(option string) string { return s.mainKey(option) }
 
 func (s Service) UCIPackage() string  { return s.uciPackage }
-func (s Service) MainSection() string  { return s.mainSection }
+func (s Service) MainSection() string { return s.mainSection }
 
 func (s Service) sectionKey(section, option string) string {
 	return s.uciPackage + "." + section + "." + option
@@ -79,21 +94,7 @@ func (s Service) Status(ctx context.Context) (string, error) {
 	if out, err := s.runner.RunCoreRPC(ctx, "Status"); err == nil {
 		var report diag.Report
 		if json.Unmarshal([]byte(out), &report) == nil {
-			lines := formatDiagReport(report)
-			if health, herr := s.ChannelHealth(ctx); herr == nil && len(health) > 0 {
-				var down []string
-				for _, ch := range health {
-					if !ch.Available {
-						down = append(down, ch.Name)
-					}
-				}
-				if len(down) > 0 {
-					lines += "\nwarning: недоступны каналы -> " + strings.Join(down, ", ")
-				} else {
-					lines += "\nканалы: все доступны"
-				}
-			}
-			return lines, nil
+			return formatDiagReport(report), nil
 		}
 		return out, nil
 	}
@@ -110,13 +111,14 @@ func (s Service) Status(ctx context.Context) (string, error) {
 		lines = append(lines, "hybrid-failover init.d: "+out)
 	}
 
-	singboxState := "stopped"
-	if s.isEngineRunning(ctx) {
-		singboxState = "running (native engine)"
-	} else if s.isSingBoxRunning(ctx) {
-		singboxState = "running (legacy sing-box)"
+	// Core RPC did not answer, so the native engine state is unknown here; only
+	// a legacy sing-box process can still be detected.
+	engineRunning := s.isSingBoxRunning(ctx)
+	engineState := "unknown (core rpc unavailable)"
+	if engineRunning {
+		engineState = "running (legacy sing-box)"
 	}
-	lines = append(lines, "engine: "+singboxState)
+	lines = append(lines, "engine: "+engineState)
 
 	proxy, perr := s.CurrentProxy(ctx)
 	if perr == nil && proxy != "" {
@@ -126,29 +128,18 @@ func (s Service) Status(ctx context.Context) (string, error) {
 		lines = append(lines, "clash api: unavailable")
 	}
 
-	if singboxState != "running" && perr != nil {
+	if !engineRunning && perr != nil {
 		lines = append(lines, "routing state: inactive")
 	} else {
 		lines = append(lines, "routing state: active")
 	}
 
-	if health, herr := s.ChannelHealth(ctx); herr == nil {
-		var down []string
-		for _, ch := range health {
-			if !ch.Available {
-				down = append(down, ch.Name)
-			}
-		}
-		if len(down) > 0 {
-			lines = append(lines, "warning: недоступны каналы -> "+strings.Join(down, ", "))
-		} else if len(health) > 0 {
-			lines = append(lines, "каналы: все доступны")
-		}
-	}
 	return strings.Join(lines, "\n"), nil
 }
 
 func (s Service) Restart(ctx context.Context) error {
+	ctx, cancel := withTimeout(ctx, restartTimeout)
+	defer cancel()
 	_, err := s.runner.Run(ctx, s.initScript, "restart")
 	return err
 }
@@ -177,9 +168,41 @@ func (s Service) ListFailover(ctx context.Context) (string, error) {
 	return s.runner.Run(ctx, "/sbin/uci", "get", s.mainKey("failover_proxy_links"))
 }
 
-// FailoverHistory returns recent failover events from core RPC History.
-func (s Service) FailoverHistory(ctx context.Context) (string, error) {
-	return s.runner.RunCoreRPC(ctx, "History")
+// FailoverHistory returns recent failover events from core RPC History, newest last.
+func (s Service) FailoverHistory(ctx context.Context, limit int) (string, error) {
+	raw, err := s.runner.RunCoreRPC(ctx, "History")
+	if err != nil {
+		return "", err
+	}
+	var events []notify.Event
+	if err := json.Unmarshal([]byte(raw), &events); err != nil {
+		return raw, nil
+	}
+	if limit > 0 && len(events) > limit {
+		events = events[len(events)-limit:]
+	}
+	lines := make([]string, 0, len(events))
+	for _, ev := range events {
+		lines = append(lines, FormatEvent(ev))
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// FormatEvent renders one failover history entry as a single line.
+func FormatEvent(ev notify.Event) string {
+	when := "?"
+	if !ev.Time.IsZero() {
+		when = ev.Time.Local().Format("2006-01-02 15:04:05")
+	}
+	from := ev.From
+	if from == "" {
+		from = "-"
+	}
+	line := fmt.Sprintf("%s [%s] %s → %s", when, ev.Section, from, ev.To)
+	if ev.Reason != "" {
+		line += " (" + ev.Reason + ")"
+	}
+	return line
 }
 
 func (s Service) ListRouterParams(ctx context.Context) (string, error) {
@@ -305,11 +328,13 @@ func (s Service) PendingValidate(ctx context.Context) error {
 	return err
 }
 
+// PendingApply commits pending UCI changes. Core recompiles the plan and reloads
+// the engine itself, so no init.d restart (which would drop every connection).
 func (s Service) PendingApply(ctx context.Context) error {
-	if _, err := s.runner.RunCoreRPC(ctx, "PendingApply"); err != nil {
-		return err
-	}
-	return s.Restart(ctx)
+	ctx, cancel := withTimeout(ctx, applyTimeout)
+	defer cancel()
+	_, err := s.runner.RunCoreRPC(ctx, "PendingApply")
+	return err
 }
 
 func (s Service) PendingRollback(ctx context.Context) error {
@@ -358,16 +383,26 @@ func (s Service) ListClients(ctx context.Context) (string, error) {
 }
 
 func (s Service) ListUpdate(ctx context.Context) error {
+	ctx, cancel := withTimeout(ctx, listUpdateTimeout)
+	defer cancel()
 	_, err := s.runner.RunCoreRPC(ctx, "ListUpdate")
 	return err
 }
 
 func (s Service) SubscriptionRefresh(ctx context.Context) error {
+	ctx, cancel := withTimeout(ctx, subscriptionTimeout)
+	defer cancel()
 	_, err := s.runner.RunCoreRPC(ctx, "SubscriptionRefresh")
 	return err
 }
 
 func (s Service) CurrentProxy(ctx context.Context) (string, error) {
+	if out, err := s.runner.RunCoreRPC(ctx, "Status"); err == nil {
+		var report diag.Report
+		if json.Unmarshal([]byte(out), &report) == nil && report.ActiveOutbound != "" {
+			return report.ActiveOutbound, nil
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.clashAPI+"/proxies/"+url.PathEscape(s.selectorTag()), nil)
 	if err != nil {
 		return "", err
@@ -376,7 +411,7 @@ func (s Service) CurrentProxy(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		return "", fmt.Errorf("clash api status %s", resp.Status)
 	}
@@ -400,28 +435,85 @@ func (s Service) Logs(ctx context.Context, lines int) (string, error) {
 	return s.runner.Run(ctx, "/sbin/logread", "-e", "hybrid-failover", "-l", fmt.Sprintf("%d", lines))
 }
 
+// Health runs core RPC Health (status plus fresh channel probes) once and
+// returns both the formatted status and the channel list.
+func (s Service) Health(ctx context.Context) (string, []ChannelHealth, error) {
+	ctx, cancel := withTimeout(ctx, healthTimeout)
+	defer cancel()
+	out, err := s.runner.RunCoreRPC(ctx, "Health")
+	if err != nil {
+		return "", nil, err
+	}
+	var report diag.Report
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		return "", nil, fmt.Errorf("health: %w", err)
+	}
+	return formatDiagReport(report), channelsFromReport(report), nil
+}
+
+func channelsFromReport(r diag.Report) []ChannelHealth {
+	out := make([]ChannelHealth, 0, len(r.Channels))
+	for _, ch := range r.Channels {
+		name := ch.Name
+		if ch.Display != "" && ch.Display != ch.Name {
+			name = ch.Display + " (" + ch.Name + ")"
+		}
+		if ch.Selected {
+			name += " ◀ активный"
+		}
+		h := ChannelHealth{Name: name, Available: ch.Available, DelayMs: ch.DelayMs, Detail: ch.Detail}
+		switch {
+		case ch.Available && ch.DelayMs > 0:
+			h.Detail = fmt.Sprintf("%dms", ch.DelayMs)
+		case ch.Available && h.Detail == "":
+			h.Detail = "ok"
+		case !ch.Available && h.Detail == "":
+			if ch.Probed {
+				h.Detail = "нет ответа"
+			} else {
+				h.Detail = "не проверялся"
+			}
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
+// ChannelHealth probes the main section's outbounds. Core RPC Health is the
+// source of truth for the native engine; the Clash API is only a fallback for
+// legacy sing-box installs, which still expose it.
 func (s Service) ChannelHealth(ctx context.Context) ([]ChannelHealth, error) {
+	_, channels, rpcErr := s.Health(ctx)
+	if rpcErr == nil {
+		return channels, nil
+	}
+	return s.clashChannelHealth(ctx, rpcErr)
+}
+
+func (s Service) clashChannelHealth(ctx context.Context, rpcErr error) ([]ChannelHealth, error) {
 	names, err := s.mainOutboundNames(ctx)
 	if err != nil {
-		if strings.Contains(err.Error(), "connect: connection refused") {
-			return nil, fmt.Errorf("clash api недоступен (%s). Вероятно hybrid-failover/sing-box не запущен", s.clashAPI)
-		}
-		return nil, err
+		return nil, fmt.Errorf("проверка каналов не удалась: %v", rpcErr)
 	}
-	result := make([]ChannelHealth, 0, len(names))
-	for _, name := range names {
-		ch := ChannelHealth{Name: name}
-		delay, derr := s.delayProbe(ctx, name)
-		if derr != nil {
-			ch.Available = false
-			ch.Detail = derr.Error()
-		} else {
-			ch.Available = true
-			ch.DelayMs = delay
-			ch.Detail = fmt.Sprintf("%dms", delay)
-		}
-		result = append(result, ch)
+	result := make([]ChannelHealth, len(names))
+	var wg sync.WaitGroup
+	for i, name := range names {
+		wg.Add(1)
+		go func(i int, name string) {
+			defer wg.Done()
+			ch := ChannelHealth{Name: name}
+			delay, derr := s.delayProbe(ctx, name)
+			if derr != nil {
+				ch.Detail = derr.Error()
+			} else {
+				ch.Available = true
+				ch.DelayMs = delay
+				ch.Detail = fmt.Sprintf("%dms", delay)
+			}
+			result[i] = ch
+		}(i, name)
 	}
+	wg.Wait()
 	return result, nil
 }
 
@@ -456,6 +548,22 @@ func formatDiagReport(r diag.Report) string {
 	if r.ActiveOutbound != "" {
 		lines = append(lines, "active_outbound: "+r.ActiveOutbound)
 	}
+	if r.Failover != nil && r.Failover.URLTestNow != "" && r.Failover.URLTestNow != r.ActiveOutbound {
+		lines = append(lines, "urltest: "+r.Failover.URLTestNow)
+	}
+	for _, c := range r.Controller {
+		line := fmt.Sprintf("failover [%s]: %s", c.Section, c.Active)
+		if c.Policy != "" {
+			line += ", policy " + c.Policy
+		}
+		if !c.PrimaryOK {
+			line += ", primary down"
+		}
+		if c.LastError != "" {
+			line += " (" + c.LastError + ")"
+		}
+		lines = append(lines, line)
+	}
 	if r.FakeIPSkipped {
 		lines = append(lines, "fakeip: skipped")
 	} else if r.FakeIPOK != nil {
@@ -486,14 +594,6 @@ func shellQuote(in string) string {
 	return "'" + strings.ReplaceAll(in, "'", "'\\''") + "'"
 }
 
-func (s Service) isEngineRunning(ctx context.Context) bool {
-	out, err := s.runner.RunCoreRPC(ctx, "Status")
-	if err != nil {
-		return false
-	}
-	return strings.Contains(out, `"engine_running":true`)
-}
-
 func (s Service) isSingBoxRunning(ctx context.Context) bool {
 	_, err := s.runner.Run(ctx, "/bin/sh", "-lc", "pgrep -f 'sing-box' >/dev/null 2>&1 && echo ok")
 	return err == nil
@@ -508,7 +608,7 @@ func (s Service) mainOutboundNames(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("clash api status %s", resp.Status)
 	}
@@ -540,7 +640,7 @@ func (s Service) delayProbe(ctx context.Context, outbound string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(resp.Body)
 		return 0, fmt.Errorf("probe status %s %s", resp.Status, strings.TrimSpace(string(body)))

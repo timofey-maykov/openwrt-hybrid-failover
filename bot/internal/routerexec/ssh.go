@@ -47,35 +47,43 @@ func (r SSH) RunCoreRPC(ctx context.Context, method string, args ...string) (str
 }
 
 func (r SSH) runShell(ctx context.Context, cmd string) (string, error) {
-	timeout := r.timeout
-	if timeout <= 0 {
-		timeout = 15 * time.Second
-	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
+	cctx, cancel := withDeadline(ctx, r.timeout)
 	defer cancel()
 
 	client, err := r.dial(cctx)
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	sess, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("ssh session: %w", err)
 	}
-	defer sess.Close()
+	defer func() { _ = sess.Close() }()
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	sess.Stdout = &stdout
 	sess.Stderr = &stderr
-	if err := sess.Run(cmd); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
+
+	// sess.Run ignores the context; closing the client unblocks it when the
+	// deadline passes so a hung remote command cannot stall the bot.
+	done := make(chan error, 1)
+	go func() { done <- sess.Run(cmd) }()
+	select {
+	case <-cctx.Done():
+		_ = client.Close()
+		<-done
+		return "", fmt.Errorf("ssh %s: %s: timeout: %w", r.host, cmd, cctx.Err())
+	case err := <-done:
+		if err != nil {
+			msg := failureDetail(stdout.String(), stderr.String())
+			if msg == "" {
+				msg = err.Error()
+			}
+			return "", fmt.Errorf("ssh %s: %s: %s", r.host, cmd, msg)
 		}
-		return "", fmt.Errorf("ssh %s: %s: %s", r.host, cmd, msg)
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
@@ -94,7 +102,7 @@ func (r SSH) dial(ctx context.Context) (*ssh.Client, error) {
 		User:            r.user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // home routers, key in config path
-		Timeout:         r.timeout,
+		Timeout:         dialTimeout(ctx, r.timeout),
 	}
 	addr := net.JoinHostPort(r.host, fmt.Sprintf("%d", r.port))
 
@@ -110,6 +118,12 @@ func (r SSH) dial(ctx context.Context) (*ssh.Client, error) {
 
 	select {
 	case <-ctx.Done():
+		// The dial may still succeed later; close that client instead of leaking it.
+		go func() {
+			if res := <-ch; res.client != nil {
+				_ = res.client.Close()
+			}
+		}()
 		return nil, ctx.Err()
 	case res := <-ch:
 		if res.err != nil {
@@ -129,4 +143,16 @@ func shellJoin(name string, args ...string) string {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+func dialTimeout(ctx context.Context, fallback time.Duration) time.Duration {
+	if dl, ok := ctx.Deadline(); ok {
+		if d := time.Until(dl); d > 0 {
+			return d
+		}
+	}
+	if fallback <= 0 {
+		return DefaultCommandTimeout
+	}
+	return fallback
 }

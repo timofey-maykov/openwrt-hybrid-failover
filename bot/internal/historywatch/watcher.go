@@ -1,12 +1,12 @@
 package historywatch
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,72 +14,139 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
-const offsetFile = "/var/run/hybrid-failover-bot/history.offset"
+// State lives next to the old byte-offset file. A byte offset breaks as soon
+// as core rotates history.jsonl (it rewrites the file keeping the last N
+// lines): events were either skipped or the whole history was resent. The
+// time of the last delivered event survives rotation.
+var (
+	stateFile        = "/var/run/hybrid-failover-bot/history.state"
+	legacyOffsetFile = "/var/run/hybrid-failover-bot/history.offset"
+	historyFile      = paths.HistoryFile
+)
+
+type state struct {
+	// Last is the timestamp of the newest event already delivered.
+	Last time.Time `json:"last"`
+	// SameTime counts delivered events that share Last exactly, so a burst
+	// written within one clock tick is neither lost nor repeated.
+	SameTime int `json:"same_time"`
+}
+
+type sender interface {
+	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
+}
 
 // Run polls failover history and notifies Telegram admins on new events.
-func Run(ctx context.Context, api *tgbotapi.BotAPI, adminIDs []int64, interval time.Duration) {
+func Run(ctx context.Context, api *tgbotapi.BotAPI, adminIDs []int64, interval time.Duration, router string) {
 	if api == nil || len(adminIDs) == 0 || interval <= 0 {
 		return
 	}
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	pollOnce(api, adminIDs)
+	pollOnce(api, adminIDs, router)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			pollOnce(api, adminIDs)
+			pollOnce(api, adminIDs, router)
 		}
 	}
 }
 
-func pollOnce(api *tgbotapi.BotAPI, adminIDs []int64) {
-	data, err := os.ReadFile(paths.HistoryFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return
+func pollOnce(api sender, adminIDs []int64, router string) {
+	events, err := readEvents(historyFile)
+	if err != nil || len(events) == 0 {
+		return
+	}
+	st, ok := loadState()
+	if !ok {
+		st = initialState(events)
+	}
+	fresh, next := newEvents(events, st)
+	for _, ev := range fresh {
+		msg := formatEvent(ev, router)
+		for _, id := range adminIDs {
+			if _, err := api.Send(tgbotapi.NewMessage(id, msg)); err != nil {
+				fmt.Fprintf(os.Stderr, "historywatch: send failed for admin %d: %v\n", id, err)
+			}
 		}
-		return
 	}
-	offset := readOffset()
-	if offset > int64(len(data)) {
-		offset = 0
+	if len(fresh) > 0 || !ok {
+		_ = saveState(next)
 	}
-	chunk := data[offset:]
-	if len(chunk) == 0 {
-		return
+}
+
+// initialState decides what counts as already seen when there is no state
+// file. After an upgrade from the offset-based watcher everything present was
+// delivered already. Otherwise (first install, or /var/run wiped by a reboot
+// together with /var/log) the whole current history is new.
+func initialState(events []notify.Event) state {
+	if _, err := os.Stat(legacyOffsetFile); err == nil {
+		_ = os.Remove(legacyOffsetFile)
+		_, st := newEvents(events, state{})
+		return st
 	}
-	// Only consume complete lines: a trailing line without a newline may still
-	// be mid-write and must be re-read (and not skipped) on the next poll.
-	lastNL := bytes.LastIndexByte(chunk, '\n')
-	if lastNL < 0 {
-		return
+	return state{}
+}
+
+// newEvents returns events after st in file order and the state after them.
+func newEvents(events []notify.Event, st state) ([]notify.Event, state) {
+	var out []notify.Event
+	seenAtLast := 0
+	for _, ev := range events {
+		switch {
+		case ev.Time.Before(st.Last):
+			continue
+		case ev.Time.Equal(st.Last) && !st.Last.IsZero():
+			seenAtLast++
+			if seenAtLast <= st.SameTime {
+				continue
+			}
+		}
+		out = append(out, ev)
 	}
-	consumed := chunk[:lastNL+1]
-	lines := splitLines(string(consumed))
-	for _, line := range lines {
+	next := st
+	for _, ev := range out {
+		if ev.Time.After(next.Last) {
+			next.Last = ev.Time
+			next.SameTime = 1
+		} else if ev.Time.Equal(next.Last) {
+			next.SameTime++
+		}
+	}
+	return out, next
+}
+
+func readEvents(path string) ([]notify.Event, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	// Ignore a trailing line without newline: core may still be writing it.
+	text := string(data)
+	if i := strings.LastIndexByte(text, '\n'); i >= 0 {
+		text = text[:i+1]
+	} else {
+		return nil, nil
+	}
+	var events []notify.Event
+	for _, line := range strings.Split(text, "\n") {
 		line = trimLine(line)
 		if line == "" {
 			continue
 		}
 		var ev notify.Event
-		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+		if json.Unmarshal([]byte(line), &ev) != nil || ev.Time.IsZero() {
 			continue
 		}
-		text := formatEvent(ev)
-		for _, id := range adminIDs {
-			msg := tgbotapi.NewMessage(id, text)
-			if _, err := api.Send(msg); err != nil {
-				fmt.Fprintf(os.Stderr, "historywatch: send failed for admin %d: %v\n", id, err)
-			}
-		}
+		events = append(events, ev)
 	}
-	_ = writeOffset(offset + int64(len(consumed)))
+	return events, nil
 }
 
-func formatEvent(ev notify.Event) string {
-	when := ev.Time.Format(time.RFC3339)
+func formatEvent(ev notify.Event, router string) string {
+	when := ev.Time.Local().Format("2006-01-02 15:04:05")
 	if ev.Time.IsZero() {
 		when = "?"
 	}
@@ -87,45 +154,44 @@ func formatEvent(ev notify.Event) string {
 	if reason == "" {
 		reason = "-"
 	}
-	return fmt.Sprintf("Failover [%s]\n%s → %s\n%s\n(%s)", ev.Section, ev.From, ev.To, reason, when)
+	from := ev.From
+	if from == "" {
+		from = "-"
+	}
+	head := "Failover [" + ev.Section + "]"
+	if router != "" {
+		head = "Failover · " + router + " [" + ev.Section + "]"
+	}
+	return fmt.Sprintf("%s\n%s → %s\n%s\n(%s)", head, from, ev.To, reason, when)
 }
 
-func readOffset() int64 {
-	b, err := os.ReadFile(offsetFile)
+func loadState() (state, bool) {
+	b, err := os.ReadFile(stateFile)
 	if err != nil {
-		return 0
+		return state{}, false
 	}
-	var n int64
-	fmt.Sscanf(string(b), "%d", &n)
-	return n
+	var st state
+	if json.Unmarshal(b, &st) != nil {
+		return state{}, false
+	}
+	return st, true
 }
 
-func writeOffset(n int64) error {
-	_ = os.MkdirAll(filepath.Dir(offsetFile), 0o755)
-	return os.WriteFile(offsetFile, []byte(fmt.Sprintf("%d", n)), 0o644)
-}
-
-func splitLines(s string) []string {
-	var out []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			out = append(out, s[start:i])
-			start = i + 1
-		}
+func saveState(st state) error {
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
+		return err
 	}
-	if start < len(s) {
-		out = append(out, s[start:])
+	b, err := json.Marshal(st)
+	if err != nil {
+		return err
 	}
-	return out
+	tmp := stateFile + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, stateFile)
 }
 
 func trimLine(s string) string {
-	for len(s) > 0 && (s[0] == '\n' || s[0] == '\r') {
-		s = s[1:]
-	}
-	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
-		s = s[:len(s)-1]
-	}
-	return s
+	return strings.Trim(s, "\r\n")
 }

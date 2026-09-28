@@ -2,11 +2,15 @@ package routers
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
 type Instance struct {
@@ -20,6 +24,44 @@ type Manager struct {
 	instances map[string]*Instance
 	order     []string
 	selection map[int64]string
+	// Warnings lists config problems worked around at startup (for the log).
+	Warnings []string
+}
+
+// Seams for tests: the local UCI lookup and the key file check.
+var (
+	localUCIGet = func(key string) (string, bool) {
+		out, err := exec.Command("uci", "-q", "get", key).Output()
+		if err != nil {
+			return "", false
+		}
+		return strings.TrimSpace(string(out)), true
+	}
+	fileExists = func(path string) bool {
+		_, err := os.Stat(path)
+		return err == nil
+	}
+)
+
+// localMainSection checks the configured section against this router's UCI.
+// The shipped example config used main_section "main" while core defaults to
+// "glob"; with a missing section every UCI key the bot touches is wrong. Core's
+// settings.main_section is authoritative when the configured one is absent.
+func localMainSection(pkg, configured string) (string, string) {
+	if _, ok := localUCIGet(pkg + "." + configured); ok {
+		return configured, ""
+	}
+	if _, ok := localUCIGet(pkg + ".settings"); !ok {
+		return configured, "" // no UCI here (tests, bot on a non-OpenWrt host)
+	}
+	actual := paths.DefaultMainSection
+	if v, ok := localUCIGet(pkg + ".settings.main_section"); ok && v != "" {
+		actual = v
+	}
+	if actual == configured {
+		return configured, ""
+	}
+	return actual, fmt.Sprintf("main_section %q не найдена в UCI %s, использую %q", configured, pkg, actual)
 }
 
 func NewManager(cfg config.Config) (*Manager, error) {
@@ -27,22 +69,25 @@ func NewManager(cfg config.Config) (*Manager, error) {
 		instances: map[string]*Instance{},
 		selection: map[int64]string{},
 	}
-	timeout := cfg.ProbeTimeoutSeconds
-	if timeout <= 0 {
-		timeout = 5
-	}
+	// dur bounds HTTP probes; router commands get their own, longer budget
+	// (uci, core RPC and init.d calls routinely take more than a probe timeout).
 	dur := cfg.ProbeDuration()
+	cmdTimeout := routerexec.DefaultCommandTimeout
 
 	if len(cfg.Routers) == 0 {
+		mainSec, warn := localMainSection(cfg.UCIPackage, cfg.MainSection)
+		if warn != "" {
+			m.Warnings = append(m.Warnings, warn)
+		}
 		svc := routing.NewService(
-			routerexec.NewLocal(dur),
+			routerexec.NewLocal(cmdTimeout),
 			cfg.ClashAPI,
 			cfg.RoutingInitScript,
 			cfg.UCIPackage,
-			cfg.MainSection,
+			mainSec,
 			dur,
 		)
-		m.instances["local"] = &Instance{ID: "local", Name: "local", Service: svc}
+		m.instances["local"] = &Instance{ID: "local", Name: cfg.Identity(), Service: svc}
 		m.order = []string{"local"}
 		return m, nil
 	}
@@ -60,7 +105,7 @@ func NewManager(cfg config.Config) (*Manager, error) {
 		}
 		var exec routerexec.Exec
 		if rc.Local {
-			exec = routerexec.NewLocal(dur)
+			exec = routerexec.NewLocal(cmdTimeout)
 		} else {
 			if rc.Host == "" {
 				return nil, fmt.Errorf("router %q: host is required unless local=true", rc.ID)
@@ -68,7 +113,14 @@ func NewManager(cfg config.Config) (*Manager, error) {
 			if rc.IdentityFile == "" {
 				return nil, fmt.Errorf("router %q: identity_file is required for remote router", rc.ID)
 			}
-			exec = routerexec.NewSSH(dur, rc.Host, rc.Port, rc.User, rc.IdentityFile)
+			if !fileExists(rc.IdentityFile) {
+				// Without the key every command fails, and with two entries the
+				// user must /use a router before anything works. Skip it so a
+				// bot left with one router keeps managing that router.
+				m.Warnings = append(m.Warnings, fmt.Sprintf("роутер %q пропущен: нет ключа %s", rc.ID, rc.IdentityFile))
+				continue
+			}
+			exec = routerexec.NewSSH(cmdTimeout, rc.Host, rc.Port, rc.User, rc.IdentityFile)
 		}
 		clashAPI := rc.ClashAPI
 		if clashAPI == "" {
@@ -86,9 +138,19 @@ func NewManager(cfg config.Config) (*Manager, error) {
 		if mainSec == "" {
 			mainSec = cfg.MainSection
 		}
+		if rc.Local {
+			sec, warn := localMainSection(uciPkg, mainSec)
+			if warn != "" {
+				m.Warnings = append(m.Warnings, fmt.Sprintf("роутер %q: %s", rc.ID, warn))
+			}
+			mainSec = sec
+		}
 		svc := routing.NewService(exec, clashAPI, initScript, uciPkg, mainSec, dur)
 		m.instances[rc.ID] = &Instance{ID: rc.ID, Name: name, Service: svc}
 		m.order = append(m.order, rc.ID)
+	}
+	if len(m.order) == 0 {
+		return nil, fmt.Errorf("нет доступных роутеров: %s", strings.Join(m.Warnings, "; "))
 	}
 	return m, nil
 }

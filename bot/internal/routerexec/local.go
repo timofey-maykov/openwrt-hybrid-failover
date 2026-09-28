@@ -20,11 +20,7 @@ func NewLocal(timeout time.Duration) Local {
 const coreBinary = "/usr/sbin/hybrid-failover"
 
 func (r Local) Run(ctx context.Context, name string, args ...string) (string, error) {
-	timeout := r.timeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	cctx, cancel := context.WithTimeout(ctx, timeout)
+	cctx, cancel := withDeadline(ctx, r.timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(cctx, name, args...)
@@ -33,7 +29,10 @@ func (r Local) Run(ctx context.Context, name string, args ...string) (string, er
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+		if cctx.Err() == context.DeadlineExceeded {
+			err = fmt.Errorf("timeout: %w", err)
+		}
+		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, failureDetail(stdout.String(), stderr.String()))
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }
