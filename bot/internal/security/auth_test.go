@@ -15,3 +15,15 @@ func TestAuthorizerDeniesUnknown(t *testing.T) {
 		t.Fatal("expected unknown user to be denied")
 	}
 }
+
+func TestViewerCanSelectRouter(t *testing.T) {
+	a := NewAuthorizer([]int64{1}, []int64{2})
+	for _, cmd := range []string{"/routers", "/use office", "/router", "/status"} {
+		if !a.Allowed(2, cmd) {
+			t.Fatalf("viewer denied %q", cmd)
+		}
+	}
+	if a.Allowed(2, "/param_apply") {
+		t.Fatal("viewer allowed to apply")
+	}
+}
