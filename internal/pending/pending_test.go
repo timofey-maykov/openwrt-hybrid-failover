@@ -3,8 +3,10 @@ package pending
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lifecycle"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
@@ -145,4 +147,59 @@ func TestDefaultPendingPath(t *testing.T) {
 		t.Fatal("paths.PendingDir unset")
 	}
 	_ = filepath.Join(paths.PendingDir, "pending.json")
+}
+
+func fakeUCI(t *testing.T, changes string) *[]string {
+	t.Helper()
+	var calls []string
+	origExec, origReload := execUCI, applyAndReload
+	t.Cleanup(func() { execUCI, applyAndReload = origExec, origReload })
+	execUCI = func(args ...string) (string, error) {
+		calls = append(calls, strings.Join(args, " "))
+		if args[0] == "changes" {
+			return changes, nil
+		}
+		return "", nil
+	}
+	applyAndReload = func(lifecycle.Options) (lifecycle.Result, error) { return lifecycle.Result{}, nil }
+	return &calls
+}
+
+func TestApplyCommitsStagedChangesWithoutReplay(t *testing.T) {
+	st := NewStore(t.TempDir())
+	if err := st.Save(map[string]string{
+		"hybrid-failover.glob.failover_proxy_links": opAddListPrefix + "vless://b",
+		"hybrid-failover.glob.urltest_tolerance":    opDelete,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	calls := fakeUCI(t, "hybrid-failover.glob.failover_proxy_links+='vless://b'\n-hybrid-failover.glob.urltest_tolerance\n")
+	if err := st.ApplyViaUCI(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range *calls {
+		if strings.HasPrefix(c, "add_list") || strings.HasPrefix(c, "delete") {
+			t.Fatalf("staged change replayed: %q (calls %v)", c, *calls)
+		}
+	}
+	if (*calls)[len(*calls)-1] != "commit hybrid-failover" {
+		t.Fatalf("expected commit last, got %v", *calls)
+	}
+}
+
+func TestApplyReplaysWhenStagingLost(t *testing.T) {
+	st := NewStore(t.TempDir())
+	if err := st.Save(map[string]string{
+		"hybrid-failover.glob.failover_proxy_links": opAddListPrefix + "vless://b",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	calls := fakeUCI(t, "")
+	if err := st.ApplyViaUCI(); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(*calls, "|")
+	if !strings.Contains(joined, "add_list hybrid-failover.glob.failover_proxy_links=vless://b") {
+		t.Fatalf("snapshot not replayed: %v", *calls)
+	}
 }

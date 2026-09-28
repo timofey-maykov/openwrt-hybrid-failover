@@ -97,7 +97,11 @@ func (s *Store) Validate() error {
 		}
 		return err
 	}
-	for key, val := range snap.Changes {
+	return validateChanges(snap.Changes)
+}
+
+func validateChanges(changes map[string]string) error {
+	for key, val := range changes {
 		if val == opDelete {
 			if err := validation.ValidateUCIKey(key); err != nil {
 				return err
@@ -126,7 +130,7 @@ func (s *Store) Validate() error {
 		if err != nil {
 			return err
 		}
-		peer := snap.Changes[validation.PeerURLTestUCIKey(key)]
+		peer := changes[validation.PeerURLTestUCIKey(key)]
 		switch {
 		case peer == opDelete:
 			peer = ""
@@ -250,18 +254,30 @@ func (s *Store) ApplyViaUCI() error {
 		}
 		return err
 	}
-	if err := s.Validate(); err != nil {
-		return fmt.Errorf("pending validate: %w", err)
-	}
-	for key, val := range snap.Changes {
-		if err := applyPendingChange(key, val); err != nil {
-			return err
+	// The snapshot is captured from `uci changes`, so while those staged
+	// changes still exist they are the real pending state. Replaying the
+	// snapshot on top of them doubled every add_list entry and failed on
+	// delete ("Entry not found"). Replay only when the staging area is gone,
+	// e.g. /tmp/.uci was wiped by a reboot.
+	staged, stagedErr := stagedChanges()
+	if stagedErr == nil && len(staged) > 0 {
+		if err := validateChanges(staged); err != nil {
+			return fmt.Errorf("pending validate: %w", err)
+		}
+	} else {
+		if err := validateChanges(snap.Changes); err != nil {
+			return fmt.Errorf("pending validate: %w", err)
+		}
+		for key, val := range snap.Changes {
+			if err := applyPendingChange(key, val); err != nil {
+				return err
+			}
 		}
 	}
 	if out, err := execUCI("commit", paths.UCIPackage); err != nil {
 		return fmt.Errorf("uci commit: %w: %s", err, out)
 	}
-	if _, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{}); err != nil {
+	if _, err := applyAndReload(lifecycle.Options{}); err != nil {
 		return fmt.Errorf("lifecycle apply: %w", err)
 	}
 	return os.Remove(s.path("pending"))
@@ -295,7 +311,19 @@ func applyPendingChange(key, val string) error {
 	return nil
 }
 
-func execUCI(args ...string) (string, error) {
-	out, err := exec.Command("uci", args...).CombinedOutput()
-	return string(out), err
+// Seams for tests.
+var (
+	execUCI = func(args ...string) (string, error) {
+		out, err := exec.Command("uci", args...).CombinedOutput()
+		return string(out), err
+	}
+	applyAndReload = lifecycle.ApplyAndReloadIfChanged
+)
+
+func stagedChanges() (map[string]string, error) {
+	out, err := execUCI("changes", paths.UCIPackage)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUCIChangesOutput(out)
 }
