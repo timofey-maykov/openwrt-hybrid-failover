@@ -1,0 +1,34 @@
+{
+  "token": "CHANGE_ME",
+  "admin_ids": [
+    123456789
+  ],
+  "log_path": "/var/log/hybrid-failover-bot.log",
+  "audit_path": "/var/log/hybrid-failover-bot.audit.log",
+  "routing_init_script": "/etc/init.d/hybrid-failover",
+  "uci_package": "hybrid-failover",
+  "main_section": "glob",
+  "policy": "outage-only",
+  "probe_timeout_seconds": 15,
+  "notify_failover_enabled": false,
+  "notify_failover_interval_seconds": 30,
+  "viewer_ids": [],
+  "routers": [
+    {
+      "id": "local",
+      "name": "Этот роутер",
+      "local": true,
+      "main_section": "glob"
+    },
+    {
+      "id": "office",
+      "name": "Mi Router 3G",
+      "host": "192.168.11.1",
+      "port": 22,
+      "user": "root",
+      "identity_file": "/etc/hybrid-failover-bot/id_router_office",
+      "main_section": "glob"
+    }
+  ],
+  "router_name": "Дом"
+}

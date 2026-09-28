@@ -33,7 +33,9 @@ func (l *Logger) Write(event Event) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	enc := json.NewEncoder(f)
-	return enc.Encode(event)
+	if err := json.NewEncoder(f).Encode(event); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }

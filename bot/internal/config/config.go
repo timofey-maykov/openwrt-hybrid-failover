@@ -13,6 +13,7 @@ import (
 
 type Config struct {
 	Token                         string         `json:"token"`
+	RouterName                    string         `json:"router_name,omitempty"`
 	AdminIDs                      []int64        `json:"admin_ids"`
 	ViewerIDs                     []int64        `json:"viewer_ids"`
 	LogPath                       string         `json:"log_path"`
@@ -89,7 +90,25 @@ func Load(path string) (Config, error) {
 	if cfg.MainSection == "" {
 		cfg.MainSection = paths.DefaultMainSection
 	}
+	cfg.RouterName = strings.TrimSpace(cfg.RouterName)
 	return cfg, cfg.Validate()
+}
+
+// Identity is the name of the router this bot instance runs on: router_name
+// from the config, else the system hostname.
+func (c Config) Identity() string {
+	if c.RouterName != "" {
+		return c.RouterName
+	}
+	if b, err := os.ReadFile("/proc/sys/kernel/hostname"); err == nil {
+		if h := strings.TrimSpace(string(b)); h != "" {
+			return h
+		}
+	}
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "local"
 }
 
 func migrateLegacy(legacy map[string]any, cfg *Config) {

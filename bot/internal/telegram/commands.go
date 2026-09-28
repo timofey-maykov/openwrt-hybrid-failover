@@ -121,7 +121,14 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 	case "/param_menu":
 		return h.paramMenuText(userID), nil
 	case "/status":
-		return rt.Status(ctx)
+		st, err := rt.Status(ctx)
+		if err != nil {
+			return "", err
+		}
+		if inst, ierr := h.mgr.InstanceFor(userID); ierr == nil && !h.mgr.Multi() {
+			st = "Роутер: " + inst.Name + "\n" + st
+		}
+		return st, nil
 	case "/params", "/param_list":
 		return rt.ListRouterParams(ctx)
 	case "/uci_show":
@@ -287,7 +294,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if err := rt.Apply(ctx); err != nil {
 			return "", err
 		}
-		return "Изменения применены, сервис маршрутизации (init.d hybrid-failover) перезапущен", nil
+		return "Изменения применены, конфигурация движка перезагружена", nil
 	case "/param_rollback":
 		if err := rt.Rollback(ctx); err != nil {
 			return "", err
@@ -321,7 +328,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		}
 		return strings.Join(out, "\n"), nil
 	case "/history", "/failover_history":
-		raw, err := rt.FailoverHistory(ctx)
+		raw, err := rt.FailoverHistory(ctx, 20)
 		if err != nil {
 			return "", err
 		}
@@ -330,28 +337,28 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		}
 		return "Последние события failover:\n" + raw, nil
 	case "/health", "/check_channels":
-		status, statusErr := rt.Status(ctx)
-		health, err := rt.ChannelHealth(ctx)
+		status, health, err := rt.Health(ctx)
 		if err != nil {
+			// Engine or core RPC unavailable: show what plain status still knows.
+			st, statusErr := rt.Status(ctx)
 			if statusErr != nil {
 				return "", fmt.Errorf("%v. Также не удалось получить статус hybrid-failover: %v", err, statusErr)
 			}
-			out := []string{
+			return strings.Join([]string{
 				"Проверка каналов временно недоступна.",
 				"Причина: " + err.Error(),
 				"",
 				"Текущее состояние:",
-				status,
+				st,
 				"",
 				"Что сделать:",
 				"1) /routing_restart",
 				"2) подождать 5-10 сек",
 				"3) /health",
-			}
-			return strings.Join(out, "\n"), nil
+			}, "\n"), nil
 		}
 		out := []string{}
-		if statusErr == nil && strings.TrimSpace(status) != "" {
+		if strings.TrimSpace(status) != "" {
 			out = append(out, "Состояние:", status, "")
 		}
 		if len(health) == 0 {
@@ -360,11 +367,11 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		}
 		out = append(out, "Проверка каналов:")
 		for _, ch := range health {
+			mark := "❌"
 			if ch.Available {
-				out = append(out, fmt.Sprintf("✅ %s: %s", ch.Name, ch.Detail))
-			} else {
-				out = append(out, fmt.Sprintf("❌ %s: %s", ch.Name, ch.Detail))
+				mark = "✅"
 			}
+			out = append(out, fmt.Sprintf("%s %s: %s", mark, ch.Name, ch.Detail))
 		}
 		return strings.Join(out, "\n"), nil
 	case "/failover_params":
@@ -390,7 +397,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 			"Редактирование failover:",
 			"/failover_add <uri>",
 			"/failover_rm <uri>",
-			"/set_policy outage-only|prefer-primary",
+			"/set_policy outage-only|prefer-primary|fastest",
 			"/set_urltest_interval <sec>",
 			"/set_urltest_tolerance <ms>",
 			"/set_urltest_idle_timeout <sec>",
@@ -466,7 +473,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if len(fields) < 3 {
 			return "", fmt.Errorf("использование: /config_set <key> <value>")
 		}
-		if err := h.store.SetPendingKey(fields[1], fields[2]); err != nil {
+		if err := h.store.SetPendingKey(fields[1], strings.Join(fields[2:], " ")); err != nil {
 			return "", err
 		}
 		return "Значение записано в pending-конфиг", nil
@@ -483,7 +490,7 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if err := h.store.ApplyPending(); err != nil {
 			return "", err
 		}
-		return "Pending-конфиг применен", nil
+		return "Pending-конфиг записан. Бот читает конфиг при старте, перезапустите его: /etc/init.d/hybrid-failover-bot restart", nil
 	case "/config_rollback":
 		if err := h.store.RollbackPending(); err != nil {
 			return "", err
@@ -497,7 +504,8 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 func isBotLocalCommand(cmd string) bool {
 	switch cmd {
 	case "/config_show", "/config_set", "/config_validate", "/config_apply", "/config_rollback",
-		"/start", "/help", "/routers", "/use", "/router", "/panel":
+		"/start", "/help", "/routers", "/use", "/router", "/panel",
+		"/quick", "/wizard", "/uci_menu", "/param_menu":
 		return true
 	default:
 		return false
@@ -541,7 +549,7 @@ func (h CommandHandler) helpText(userID int64) string {
 		"/param_apply",
 		"/param_rollback",
 		"/set_quic on|off",
-		"/set_policy outage-only|prefer-primary",
+		"/set_policy outage-only|prefer-primary|fastest",
 		"/set_urltest_interval <seconds>",
 		"/set_urltest_tolerance <ms>",
 		"/set_urltest_idle_timeout <seconds>",
@@ -564,7 +572,7 @@ func (h CommandHandler) helpText(userID int64) string {
 		"/config_apply",
 		"/config_rollback",
 		"",
-		"Основная секция UCI: " + sectionKey,
+		"Основная секция UCI: "+sectionKey,
 	)
 	return strings.Join(lines, "\n")
 }
@@ -596,7 +604,7 @@ func helpText() string {
 		"/param_apply",
 		"/param_rollback",
 		"/set_quic on|off",
-		"/set_policy outage-only|prefer-primary",
+		"/set_policy outage-only|prefer-primary|fastest",
 		"/set_urltest_interval <seconds>",
 		"/set_urltest_tolerance <ms>",
 		"/set_urltest_idle_timeout <seconds>",
@@ -627,6 +635,11 @@ func mainPanelText(mgr *routers.Manager) string {
 	if mgr != nil && mgr.Multi() {
 		return "Панель Hybrid Failover. Выберите роутер: /routers → /use <id>. Затем раздел кнопками ниже."
 	}
+	if mgr != nil {
+		if list := mgr.List(); len(list) == 1 {
+			return "Панель Hybrid Failover · роутер " + list[0].Name + ". Выберите раздел кнопками ниже."
+		}
+	}
 	return "Панель Hybrid Failover. Выберите раздел кнопками ниже."
 }
 
@@ -640,14 +653,6 @@ func (h CommandHandler) uciMenuText(userID int64) string {
 
 func (h CommandHandler) UCISectionKey(option string) string {
 	return uciSectionKey(paths.UCIPackage, h.MainSection(), option)
-}
-
-func (h CommandHandler) uciSectionKeyFor(userID int64, option string) string {
-	rt, err := h.routingFor(userID)
-	if err != nil {
-		return uciSectionKey(paths.UCIPackage, paths.DefaultMainSection, option)
-	}
-	return uciSectionKey(rt.UCIPackage(), rt.MainSection(), option)
 }
 
 func uciMenuText() string {

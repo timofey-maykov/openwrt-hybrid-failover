@@ -94,6 +94,7 @@ return view.extend({
 		};
 		var tasks = [
 			['token', get('pdkb_token')],
+			['router_name', get('pdkb_router_name')],
 			['admin_ids', get('pdkb_admin_ids')],
 			['viewer_ids', get('pdkb_viewer_ids')],
 			['policy', get('pdkb_policy')],
@@ -142,6 +143,7 @@ return view.extend({
 			E('h3', {}, _('Hybrid Failover Bot: JSON-конфиг')),
 			E('p', { 'class': 'hint' }, hfui.policyHint(policy)),
 			mkInput(_('Токен'), 'pdkb_token', cfg.token || '', { 'placeholder': '123456789:ABC...' }),
+			mkInput(_('Имя роутера (в уведомлениях и панели)'), 'pdkb_router_name', cfg.router_name || '', { 'placeholder': _('по умолчанию hostname') }),
 			mkInput(_('ID администраторов (через запятую)'), 'pdkb_admin_ids', (cfg.admin_ids || []).join(', '), { 'placeholder': '123456789, 987654321' }),
 			mkInput(_('ID только чтение (viewer_ids)'), 'pdkb_viewer_ids', (cfg.viewer_ids || []).join(', '), { 'placeholder': '111111111' }),
 			E('div', { 'class': 'cbi-value', 'style': 'margin-bottom:12px;width:100%;' }, [

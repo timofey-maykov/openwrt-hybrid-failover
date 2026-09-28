@@ -10,9 +10,9 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/audit"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/historywatch"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/historywatch"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/telegram"
@@ -45,10 +45,17 @@ func Run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("create telegram client: %w", err)
 	}
+	identity := cfg.Identity()
+	logger = logger.With("router", identity)
 	if cfg.NotifyFailoverEnabled {
 		interval := time.Duration(cfg.NotifyFailoverIntervalSeconds) * time.Second
-		go historywatch.Run(ctx, api, cfg.AdminIDs, interval)
+		go historywatch.Run(ctx, api, cfg.AdminIDs, interval, identity)
 	}
 	bot := telegram.New(api, auth, auditLogger, handler, logger)
+	bot.SetIdentity(identity, cfg.AdminIDs)
+	for _, w := range mgr.Warnings {
+		logger.Warn("config", "detail", w)
+	}
+	logger.Info("bot started", "routers", len(mgr.List()))
 	return bot.Run(ctx)
 }
