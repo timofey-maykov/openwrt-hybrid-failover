@@ -142,7 +142,7 @@ func (p *proxyHandler) dialServer(ctx context.Context) (net.Conn, error) {
 func (p *proxyHandler) socksHandshake(ctx context.Context, c net.Conn, dest M.Socksaddr, command byte) (socks5.Response, error) {
 	var result socks5.Response
 	if p.version == "4" && dest.IsFqdn() {
-		ips, err := realDNSResolver().LookupIP(ctx, "ip4", dest.Fqdn)
+		ips, err := realDNSResolver(p.bindIface).LookupIP(ctx, "ip4", dest.Fqdn)
 		if err != nil || len(ips) == 0 {
 			_ = c.Close()
 			return result, fmt.Errorf("socks4: resolve destination: %v", err)
