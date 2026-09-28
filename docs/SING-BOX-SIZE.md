@@ -1,66 +1,53 @@
+[English](en/SING-BOX-SIZE.md)
+
 # Размер пакетов и overlay
 
-OpenWrt с overlay **64–128 MiB** быстро заполняется: stock **sing-box** ~40 MiB, наши бинарники ~4 MiB, LuCI и системные обновления.
+Раньше Hybrid Failover работал поверх пакета sing-box, и на роутерах с overlay 64-128 MiB место кончалось быстро. Стоковый sing-box весил около 40 MiB. Сейчас маршрутизацию делает native engine внутри `hybrid-failover`, и sing-box больше не нужен.
 
-## Что занимает место
+## sing-box больше не ставится
 
-| Компонент | Типичный размер | Примечание |
-|-----------|-----------------|------------|
-| sing-box (stock) | ~38–41 MiB | все теги (tailscale, wireguard, …) |
-| sing-box-lite | ~15–25 MiB | `./scripts/build-sing-box-lite.sh` |
-| hybrid-failover core | ~1.5–2 MiB | `/usr/sbin/hybrid-failover` |
-| hybrid-failover-bot | ~1.5–2 MiB | опционально |
-| bind-libs + dig | ~1.3 MiB | **не нужен**: `check-fakeip` через Go DNS |
+Режим `engine_mode=singbox` удалён. `hybrid-failover migrate` переключает старые установки на `native`, останавливает и отключает `/etc/init.d/sing-box`, удаляет пакет `sing-box` через opkg и файл `/etc/sing-box/config.json`. На системах с apk пакет sing-box, если он остался, удалите вручную (`apk del sing-box`).
 
-## sing-box-lite
+Скрипт `scripts/build-sing-box-lite.sh` пока лежит в репозитории, он собирал урезанный sing-box без tailscale, wireguard и dhcp. Для текущих версий он не нужен.
 
-Сборка урезанного sing-box без tailscale/wireguard/dhcp:
+## Что занимает место сейчас
 
-```sh
-./scripts/build-sing-box-lite.sh aarch64_cortex-a53
-# HF_UPX=1 — дополнительное сжатие
-```
+| Пакет | Что внутри | Нужен |
+|-------|------------|-------|
+| `hybrid-failover-core` | `/usr/sbin/hybrid-failover`, в нём engine, DNS на `127.0.0.42`, контроллер failover | всегда |
+| `luci-app-hybrid-failover`, `luci-i18n-hybrid-failover` | страницы LuCI и переводы | если нужен веб-интерфейс |
+| `hybrid-failover-bot` | `/usr/bin/hybrid-failover-bot` | только для Telegram |
 
-На роутере (мало места — сначала снять старый пакет):
+Community-списки лежат в `/etc/hybrid-failover/rulesets/` и тоже занимают overlay. Их объём зависит от выбранных `community_lists`.
 
-```sh
-/etc/init.d/hybrid-failover stop
-/etc/init.d/sing-box stop
-opkg remove --force-depends sing-box
-cp /tmp/sing-box /usr/bin/sing-box
-chmod 755 /usr/bin/sing-box
-/etc/init.d/sing-box start
-/etc/init.d/hybrid-failover start
-```
+`bind-dig` и `bind-libs` не нужны. `hybrid-failover check-fakeip` проверяет DNS собственным клиентом на Go, так что эти пакеты можно снять (`opkg remove bind-dig bind-libs`).
 
-Проверка: `hybrid-failover status`, `sing-box version`.
+## Сжатие бинарников UPX
 
-## Наши бинарники (UPX)
+`scripts/build-packages.sh` после сборки прогоняет core и бота через UPX. Поведение задаёт переменная `HF_UPX`.
 
-CI и `./scripts/build-packages.sh` с **`HF_UPX=1`** сжимают core/bot через UPX (~40–60% меньше). На роутере старт на доли секунды дольше.
+| Значение | Что происходит |
+|----------|----------------|
+| `auto` (по умолчанию) | сжимает, если `upx` есть в `PATH`, иначе пропускает |
+| `1` | сжатие обязательно, без `upx` сборка падает |
+| `0` | не сжимать |
+
+Релизная сборка в GitHub Actions ставит `upx-ucl` и собирает с `HF_UPX=1`. Скрипт печатает размер каждого бинарника до и после сжатия. Сжатый бинарник на роутере стартует чуть дольше, на доли секунды.
 
 ## Установка при нехватке места
 
-`scripts/install-on-router.sh`:
-
-- проверяет свободное место на `/overlay`;
-- при нехватке снимает старый пакет перед установкой (`remove → install`);
-- использует `opkg install --force-space`.
-
-Переменные:
+`scripts/install-on-router.sh` смотрит свободное место на `/overlay`. Если его меньше порога или задан `HF_FORCE_REINSTALL=1`, установщик останавливает службы и снимает уже установленный пакет перед установкой нового. С opkg он ставит пакеты с `--force-space`.
 
 | Переменная | Значение |
 |------------|----------|
-| `HF_LOW_SPACE_KB` | порог «мало места» (по умолчанию 45000) |
-| `HF_FORCE_REINSTALL` | `1` — всегда remove→install для наших пакетов |
+| `HF_LOW_SPACE_KB` | порог в КБ, по умолчанию 45000 |
+| `HF_FORCE_REINSTALL` | `1` снимает и ставит заново наши пакеты при любом свободном месте |
 
-## Legacy `/usr/bin/hybrid-failover`
-
-Старые установки оставляли монолитный бинарник **6+ MiB** в `/usr/bin`. Postinst core удаляет его, если есть `/usr/sbin/hybrid-failover`.
+Старые установки оставляли монолитный бинарник `/usr/bin/hybrid-failover` размером больше 6 MiB. Установщик удаляет его, если уже есть `/usr/sbin/hybrid-failover`.
 
 ## Рекомендации
 
-1. Роутер с overlay **128+ MiB** или extroot.
-2. sing-box-lite на устройствах **64 MiB**.
-3. Без Telegram — не ставить `hybrid-failover-bot`.
-4. `bind-dig` можно снять: `opkg remove bind-dig bind-libs`.
+1. На роутере с overlay 64 MiB ставьте только `hybrid-failover-core` и LuCI.
+2. Без Telegram пакет `hybrid-failover-bot` не нужен.
+3. Если после обновления со старой версии остался sing-box, проверьте, что `migrate` его удалил (`opkg list-installed | grep sing-box`).
+4. Если места всё равно мало, поможет extroot.
