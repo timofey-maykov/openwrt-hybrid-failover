@@ -1,29 +1,25 @@
 # Hybrid Failover
 
-Автономный стек маршрутизации для OpenWrt: **VPN (AmneziaWG / bind_interface) + резервные proxy** через **urltest**, поддержка **`vpn://`**, расширенный **URLTest**, **Telegram-бот** и **LuCI** (RU). Пакет **`hybrid-failover-core`**: без зависимости от `jq` и `python3-light`.
+[English](README.en.md) | Русский
 
-Релизы (`.ipk` / `.apk`): [github.com/timofey-maykov/openwrt-hybrid-failover/releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases)
+Маршрутизация для OpenWrt с автоматическим резервом. Основной канал идёт через VPN (AmneziaWG). Если он падает, трафик уходит на резервные proxy, а после восстановления возвращается обратно. Устройствам в сети ничего настраивать не нужно.
 
-**Полное описание:** [docs/OVERVIEW.md](docs/OVERVIEW.md) · **LuCI по шагам:** [docs/LUCI.md](docs/LUCI.md)
+Всё работает внутри одного Go-бинарника на роутере. Внешний sing-box, jq и python не нужны. Управлять можно из LuCI и из Telegram.
 
----
+![Как работает Hybrid Failover](docs/img/hybrid-failover-schema.png)
 
-## Кратко
+## Что умеет
 
-| Компонент | Что даёт |
-|-----------|----------|
-| **`hybrid-failover-core`** | Go-бинарник `/usr/sbin/hybrid-failover`: UCI → native engine, nft, dnsmasq, списки |
-| **Hybrid failover** | VPN-интерфейс + резервные `vless`/`ss`/`trojan`/`socks`/`hy2`/`vpn://` через urltest |
-| **Telegram-бот** | Управление с телефона: UCI `hybrid-failover`, failover, `/health`, pending-конфиг |
-| **LuCI** | Маршрутизация, дашборд, per-client, Telegram-бот: **Сервисы → Hybrid Failover** |
+- Прозрачно перехватывает трафик LAN через nft tproxy и направляет его по правилам. Правила задаются доменами, подсетями и community-списками (например, youtube, telegram, russia_inside).
+- DNS отвечает fakeip-адресами из 198.18.0.0/15. Поэтому трафик к нужным доменам попадает в движок ещё до реального резолва.
+- Каналы проверяются через urltest. Живой и самый быстрый выбирается автоматически, есть политики `outage-only`, `prefer-primary` и `fastest`.
+- Поддерживает ссылки `vless://`, `ss://`, `trojan://`, `hysteria2://`, `socks5://` и экспорт Amnezia `vpn://`, включая AmneziaWG 3.1.
+- Правила для отдельных устройств по IP. Например, консоль всегда через VPN, а телевизор мимо.
+- Telegram-бот показывает статус и каналы, переключает их, редактирует конфиг и присылает уведомления о переключениях.
 
-Конфиг UCI: **`/etc/config/hybrid-failover`**. Первичная настройка и миграция: `hybrid-failover migrate`.
+## Установка
 
-**Быстрый старт в LuCI:** [docs/LUCI.md](docs/LUCI.md)
-
----
-
-## Установка на роутер
+На роутере с OpenWrt 24.x или 25.12:
 
 ```sh
 wget -O /tmp/install.sh \
@@ -31,73 +27,68 @@ wget -O /tmp/install.sh \
 ash /tmp/install.sh
 ```
 
-Скрипт определяет **архитектуру**, качает **релиз** с GitHub и ставит пакеты (`opkg` / `apk`).
+Скрипт сам определит архитектуру, скачает последний [релиз](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases) и поставит пакеты через opkg или apk.
 
-| `HF_MODE` | Содержимое |
-|-----------|------------|
-| `full` (по умолчанию) | hybrid-failover-core + hybrid-failover-bot + luci-app-hybrid-failover |
-| `bot` | только бот + LuCI |
-| `core` | только hybrid-failover-core |
+| `HF_MODE` | Что ставится |
+|-----------|--------------|
+| `full` (по умолчанию) | сервис, LuCI и Telegram-бот |
+| `core` | сервис и LuCI, без бота |
+| `bot` | только Telegram-бот |
 
-Подробнее: [docs/INSTALL.md](docs/INSTALL.md). Сборка `.ipk`: `./scripts/build-packages.sh`.
+Режим задаётся переменной окружения, например `HF_MODE=core ash /tmp/install.sh`. Вкладка Telegram в LuCI появляется, только если бот установлен.
 
-После установки бота: токен из [@BotFather](https://t.me/BotFather) → `/etc/hybrid-failover-bot.json` → `uci set hybrid-failover-bot.main.enabled=1` → `/panel` в Telegram.
+После установки откройте в LuCI раздел Сервисы, затем Hybrid Failover. Обновление до новой версии делается из LuCI или командой `hybrid-failover update apply`.
 
----
+Для AmneziaWG нужны пакеты `kmod-amneziawg` и `amneziawg-tools` под вашу версию OpenWrt. В релиз они не входят. Подробности в [docs/INSTALL.md](docs/INSTALL.md).
 
-## Поддерживаемые ссылки (failover / urltest)
+## Поддерживаемые ссылки
 
-| Схема | Core | Telegram-бот |
-|-------|------|----------------|
-| `vless://` | да | да |
-| `ss://` | да | да |
-| `trojan://` | да | да |
-| `socks4/4a/5://` | да | нет* |
-| `hysteria2://`, `hy2://` | да | нет* |
-| `vpn://` (Amnezia) | да (Go-декодер) | да |
-| `awg2://` | да (служебный URI)* | нет* |
+| Схема | Примечание |
+|-------|------------|
+| `vless://` | Reality, XTLS, транспорт из параметров |
+| `ss://` | Shadowsocks |
+| `trojan://` | |
+| `socks4://`, `socks4a://`, `socks5://` | UDP over TCP через `enable_udp_over_tcp` |
+| `hysteria2://`, `hy2://` | TLS, obfs, ограничения скорости |
+| `vpn://` | Экспорт Amnezia. Превращается в `vless://` или `awg2://` |
+| `awg2://` | Служебная ссылка core для AmneziaWG, в том числе 3.1 |
 
-\*`awg2://`: внутренняя ссылка для настройки **AmneziaWG** включая 3.1 (direct outbound). На роутере нужны `kmod-amneziawg` и `amneziawg-tools` **3.1+**, иначе `RandomTrailers` ломает handshake. Подробнее: [docs/OVERVIEW.md](docs/OVERVIEW.md#amnezia-awg2-awg2), [docs/INSTALL.md](docs/INSTALL.md#amneziawg-31).
+Ссылки добавляются из LuCI или из Telegram-бота. Проверяет их core при применении.
 
-\*В боте при добавлении URI проверяются `vless`, `trojan`, `ss`, `vpn`; остальное: через UCI/LuCI.
+## Telegram-бот
 
-Два режима: **VPN + failover** (`failover_proxy_links`) и **proxy URLTest** (`urltest_proxy_links`).
+Бот работает на роутере и управляет им через core. Токен берётся у [@BotFather](https://t.me/BotFather) и прописывается в `/etc/hybrid-failover-bot.json` вместе с `admin_ids`. Потом включите сервис:
 
----
+```sh
+uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot
+/etc/init.d/hybrid-failover-bot restart
+```
 
-## Telegram-бот и LuCI
-
-| | |
-|---|---|
-| Документация бота | [bot/README.md](bot/README.md) |
-| LuCI (интерфейс) | [docs/LUCI.md](docs/LUCI.md) |
-| LuCI (исходники) | [luci/README.md](luci/README.md) |
-
----
+В Telegram откройте `/panel`. Если роутеров несколько, дайте каждому своего бота или подключите их к одному боту по SSH. Обе схемы описаны в [bot/README.md](bot/README.md).
 
 ## Документация
 
-| Файл | Тема |
-|------|------|
-| [**docs/OVERVIEW.md**](docs/OVERVIEW.md) | Архитектура, URI, DNS, failover, per-client |
-| [**docs/LUCI.md**](docs/LUCI.md) | **LuCI: вкладки, клиенты, DHCP, pending** |
-| [docs/UCI.md](docs/UCI.md) | Все опции UCI |
-| [docs/INSTALL.md](docs/INSTALL.md) | Установка, режимы, зависимости |
-| [luci/README.md](luci/README.md) | Исходники LuCI, rpcd, сборка |
-| [packages/README.md](packages/README.md) | Пакеты `.ipk` / `.apk` |
-| [examples/glob-uci-commands.txt](examples/glob-uci-commands.txt) | Пример UCI для секции `glob` |
+| Файл | О чём |
+|------|-------|
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | Архитектура, режимы маршрутизации, DNS, failover, правила для устройств |
+| [docs/INSTALL.md](docs/INSTALL.md) | Установка, обновление, AmneziaWG 3.1 |
+| [docs/LUCI.md](docs/LUCI.md) | Веб-интерфейс по вкладкам |
+| [docs/UCI.md](docs/UCI.md) | Все опции `/etc/config/hybrid-failover` |
+| [bot/README.md](bot/README.md) | Telegram-бот, команды, несколько роутеров |
+| [luci/README.md](luci/README.md) | Исходники LuCI и rpcd |
+| [packages/README.md](packages/README.md) | Сборка пакетов `.ipk` и `.apk` |
 
----
+## Структура репозитория
 
-## Содержимое репозитория
-
-| Путь | Назначение |
-|------|------------|
-| `core/`, `internal/` | Go core |
+| Путь | Что там |
+|------|---------|
+| `core/`, `internal/` | Go core и движок |
 | `bot/` | Telegram-бот |
 | `luci/` | luci-app-hybrid-failover |
-| `packages/` | Сборка `.ipk` / `.apk` |
-| `openwrt/` | init.d, UCI-шаблон |
-| `scripts/` | install-on-router.sh, build-packages.sh, QEMU lab |
-| `docs/` | Документация |
-| `legacy/` | Устаревшие patch-скрипты (не в релизе по умолчанию) |
+| `openwrt/` | init.d и шаблон UCI |
+| `packages/` | Сборка пакетов |
+| `scripts/` | Установка, сборка, тестовые стенды на QEMU |
+| `docs/` | Документация на русском, `docs/en/` на английском |
+| `legacy/` | Старые скрипты, в релиз не входят |
+
+Сборка пакетов локально выполняется командой `./scripts/build-packages.sh`. Релиз собирает GitHub Actions при пуше тега `v*`.
