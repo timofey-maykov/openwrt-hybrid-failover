@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -130,5 +131,15 @@ peer: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=
 func TestParseAWGShowPeerMissing(t *testing.T) {
 	if _, _, ok := parseAWGShowPeer("interface: pawg\n  public key: x"); ok {
 		t.Fatal("expected missing peer")
+	}
+}
+
+func TestAWG2RandomPortDiffersFromOld(t *testing.T) {
+	for i := 0; i < 1000; i++ {
+		p := awg2RandomPort("20000")
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 20000 || n > 59999 || p == "20000" {
+			t.Fatalf("bad port %q", p)
+		}
 	}
 }

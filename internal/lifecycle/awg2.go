@@ -3,9 +3,11 @@ package lifecycle
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
@@ -33,14 +35,21 @@ func setupAWG2Interface(section, rawURI string, updateUCI bool) (string, bool, e
 		if updateUCI {
 			uciSetSectionInterface(section, ifname)
 		}
-		// Stale handshake: try alternate Host:Port of the same peer, then bounce.
+		// Stale handshake: try alternate Host:Port of the same peer, then a new
+		// local UDP port, and only then bounce. A bounce keeps the listen port,
+		// so a flow the ISP or a middlebox stopped passing (same 5-tuple) never
+		// comes back that way; a new source port is a new flow and does not touch
+		// netifd or routes.
 		// Full delete+recreate + uci commit races netifd and can drop the WAN default route.
 		if up {
 			if fresh, _ := probe.WgHandshakeFresh(ifname, probe.DefaultWGHandshakeMaxAge); !fresh {
 				if rotateAWG2Endpoint(ifname) {
 					return ifname, true, nil
 				}
-				_ = bounceAWGInterface(ifname)
+				if err := rotateAWG2ListenPort(ifname); err != nil {
+					log.Printf("hybrid-failover: %s new listen port: %v", ifname, err)
+					_ = bounceAWGInterface(ifname)
+				}
 			}
 			return ifname, adopted, nil
 		}
@@ -295,6 +304,35 @@ func setAWG2Endpoint(ifname, publicKey, endpoint string) error {
 }
 
 // bounceAWGInterface flaps the link to force a new handshake (keeps addresses/config).
+// rotateAWG2ListenPort moves the tunnel to a new random local UDP port. The
+// peer learns it from the next handshake (roaming), persistent keepalive
+// triggers that handshake within its interval.
+func rotateAWG2ListenPort(ifname string) error {
+	if ifname == "" {
+		return fmt.Errorf("empty iface")
+	}
+	old := ""
+	if out, err := exec.Command("awg", "show", ifname, "listen-port").Output(); err == nil {
+		old = strings.TrimSpace(string(out))
+	}
+	port := awg2RandomPort(old)
+	if out, err := exec.Command("awg", "set", ifname, "listen-port", port).CombinedOutput(); err != nil {
+		return fmt.Errorf("awg set listen-port %s: %w: %s", port, err, strings.TrimSpace(string(out)))
+	}
+	log.Printf("hybrid-failover: %s handshake stale, listen port %s -> %s", ifname, old, port)
+	return nil
+}
+
+// awg2RandomPort picks a port in 20000-59999 that differs from old.
+func awg2RandomPort(old string) string {
+	for {
+		p := strconv.Itoa(20000 + rand.Intn(40000))
+		if p != old {
+			return p
+		}
+	}
+}
+
 func bounceAWGInterface(ifname string) error {
 	if ifname == "" {
 		return fmt.Errorf("empty iface")
