@@ -19,6 +19,8 @@ Everything runs inside one Go binary on the router. No external sing-box, jq or 
 - Live per-tunnel charts in LuCI: traffic, connections, latency and traffic share, from 5 minutes up to a day.
 - A Telegram bot shows status and channels, switches them, edits the config and sends failover alerts.
 
+![Services and channels in LuCI](docs/img/luci-services.png)
+
 ![Per-channel charts in LuCI](docs/img/luci-charts.png)
 
 ## Install
