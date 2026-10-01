@@ -15,7 +15,11 @@ Everything runs inside one Go binary on the router. No external sing-box, jq or 
 - Channels are checked by urltest. The live and fastest one is picked automatically, with `outage-only`, `prefer-primary` and `fastest` policies.
 - Supports `vless://`, `ss://`, `trojan://`, `hysteria2://`, `socks5://` links and Amnezia `vpn://` exports, including AmneziaWG 3.1.
 - Per-device rules by IP. A console can always go through the VPN while a TV bypasses it.
+- Service lists can be spread over separate tunnels so YouTube does not share a channel with everything else. Each list gets a channel and a fallback for when that channel is down, with automatic spread and balancing. Your own lists of domains and subnets are bound the same way.
+- Live per-tunnel charts in LuCI: traffic, connections, latency and traffic share, from 5 minutes up to a day.
 - A Telegram bot shows status and channels, switches them, edits the config and sends failover alerts.
+
+![Per-channel charts in LuCI](docs/img/luci-charts.png)
 
 ## Install
 
