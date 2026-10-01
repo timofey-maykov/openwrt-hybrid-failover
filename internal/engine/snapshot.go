@@ -147,9 +147,12 @@ func DelaysFromSnapshot() map[string]DelayChannelState {
 }
 
 func channelRuntime(p *plan.Plan, traffic map[string]outbound.TrafficStat) []ChannelRuntime {
+	// Only tunnel interfaces carry one channel's bytes. A proxy outbound
+	// may also have BindIface (the WAN it leaves through), shared by every
+	// proxy and all direct traffic, so its bytes come from the engine.
 	ifaces := make(map[string]string, len(p.Outbounds))
 	for _, ob := range p.Outbounds {
-		if ob.BindIface != "" {
+		if ob.BindIface != "" && (ob.Kind == plan.OutboundDirectBind || ob.Kind == plan.OutboundAWG2Bind) {
 			ifaces[ob.Tag] = ob.BindIface
 		}
 	}
