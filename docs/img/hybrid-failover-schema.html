@@ -21,6 +21,7 @@
   .dns{stroke:#2dd4bf;}
   .vpn{stroke:#34d399;}
   .bak{stroke:#fbbf24;}
+  .bind{stroke:#f472b6;stroke-dasharray:3 5;}
   .dash{stroke-dasharray:6 6;}
 </style>
 </head>
@@ -59,6 +60,9 @@
     <linearGradient id="teal" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#14b8a6"/>
     </linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#ec4899"/>
+    </linearGradient>
     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
       <feGaussianBlur stdDeviation="6" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
@@ -70,6 +74,7 @@
     <marker id="aCtl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#a78bfa"/></marker>
     <marker id="aDns" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2dd4bf"/></marker>
     <marker id="aVpn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#34d399"/></marker>
+    <marker id="aBind" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#f472b6"/></marker>
     <marker id="aBak" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#fbbf24"/></marker>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.035" stroke-width="1"/>
@@ -85,7 +90,7 @@
   <!-- title -->
   <text x="60" y="66" class="t" font-size="30" font-weight="800" letter-spacing="-0.5">Hybrid Failover</text>
   <text x="298" y="66" class="s" font-size="16" font-weight="500">как работает сервис на OpenWrt</text>
-  <text x="60" y="92" class="s" font-size="13">VPN через AmneziaWG как основной путь, резервные proxy через urltest, DNS с fakeip, управление из LuCI и Telegram</text>
+  <text x="60" y="92" class="s" font-size="13">VPN через AmneziaWG как основной путь, резервные proxy через urltest, свои каналы для списков сервисов, DNS с fakeip, управление из LuCI и Telegram</text>
 
   <!-- ===================== CONTROL PLANE ===================== -->
   <text x="400" y="132" class="lbl">Управление</text>
@@ -94,13 +99,13 @@
     <rect x="400" y="142" width="180" height="70" rx="14" class="card"/>
     <rect x="400" y="142" width="180" height="3" rx="1.5" fill="url(#violet)"/>
     <text x="420" y="172" class="cardT">LuCI</text>
-    <text x="420" y="192" class="cardS">Сервисы → Hybrid Failover</text>
+    <text x="420" y="192" class="cardS">каналы, списки, графики</text>
   </g>
   <g filter="url(#soft)">
     <rect x="608" y="142" width="180" height="70" rx="14" class="card"/>
     <rect x="608" y="142" width="180" height="3" rx="1.5" fill="url(#violet)"/>
     <text x="628" y="172" class="cardT">Telegram-бот</text>
-    <text x="628" y="192" class="cardS">/panel · /health · уведомления</text>
+    <text x="628" y="192" class="cardS">/routes · уведомления</text>
   </g>
 
   <!-- pending pill -->
@@ -265,6 +270,19 @@
   <path d="M900 749 C 930 749, 925 696, 954 696" class="flow bak dash" marker-end="url(#aBak)"/>
   <circle cx="900" cy="749" r="5" fill="#3fd0ff" filter="url(#glow)"/>
 
+
+  <!-- list bindings -->
+  <path d="M900 500 H914 V852 H954" class="flow bind" marker-end="url(#aBind)"/>
+  <g filter="url(#soft)">
+    <rect x="960" y="810" width="250" height="88" rx="14" class="card" stroke="#f472b6" stroke-opacity="0.7"/>
+    <rect x="960" y="810" width="3" height="88" rx="1.5" fill="url(#pink)"/>
+    <text x="980" y="835" class="cardT">Привязки списков</text>
+    <text x="980" y="855" class="cardS mono" font-size="11">youtube → свой канал</text>
+    <text x="980" y="871" class="cardS mono" font-size="11">свой список → напрямую</text>
+    <text x="980" y="888" class="cardS" font-size="10.5">balance, если канал упал: пул</text>
+  </g>
+  <path d="M1210 836 C 1262 826, 1262 650, 1216 630" class="flow bind" marker-end="url(#aBind)"/>
+
   <!-- ===================== LAN CLIENTS ===================== -->
   <text x="80" y="318" class="lbl">Клиенты в LAN</text>
   <g filter="url(#soft)">
@@ -338,6 +356,7 @@
     <line x1="360" y1="950" x2="392" y2="950" class="flow vpn"/><text x="402" y="954">основной путь, VPN</text>
     <line x1="560" y1="950" x2="592" y2="950" class="flow bak dash"/><text x="602" y="954">резервные proxy</text>
     <line x1="740" y1="950" x2="772" y2="950" class="flow ctl"/><text x="782" y="954">управление и конфиг</text>
+    <line x1="950" y1="950" x2="982" y2="950" class="flow bind"/><text x="992" y="954">привязка списка к каналу</text>
   </g>
   <text x="1540" y="954" class="s" font-size="11.5" text-anchor="end">github.com/timofey-maykov/openwrt-hybrid-failover</text>
 </svg>
