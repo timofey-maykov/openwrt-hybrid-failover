@@ -1158,9 +1158,20 @@ function showModal(title, bodyNodes, onConfirm, opts) {
 			E('button', {
 				'class': 'btn cbi-button cbi-button-apply',
 				'click': function() {
-					document.body.removeChild(backdrop);
-					if (onConfirm)
-						onConfirm();
+					// A rejected promise from onConfirm keeps the dialog open
+					// (form validation); anything else closes it.
+					var close = function() {
+						if (backdrop.parentNode)
+							document.body.removeChild(backdrop);
+					};
+					var res = onConfirm ? onConfirm() : null;
+					if (res && typeof res.then === 'function')
+						res.then(close, function(err) {
+							if (err)
+								close();
+						});
+					else
+						close();
 				}
 			}, _('OK'))
 		])

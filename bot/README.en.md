@@ -62,7 +62,7 @@ With `notify_failover_enabled: true` the bot reads `/var/log/hybrid-failover/his
 
 ### Access
 
-Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
+Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
 
 
 ## Several routers
@@ -131,6 +131,8 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/status` shows the service state and active channels.
 - `/health` (or `/check_channels`) probes the channels again through RPC Health.
 - `/channels` (or `/failover_list`) shows the channels and whether they are up.
+- `/routes` shows the section channels with numbers and where each service list goes.
+- `/route <list> <channel> [pool|direct|block]` binds a list to a channel. The channel is a number from `/routes`, an id, the start of its name, or one of `pool`, `balance`, `direct`, `block`. The last argument says where to go when the channel is down. Example: `/route youtube 2`. The change goes to pending and is applied with `/param_apply`.
 - `/history` (or `/failover_history`) prints the last 20 failover events.
 - `/clients` shows the client rules.
 - `/logs [N]` prints the last `logread` lines for hybrid-failover, 50 by default, 500 at most.

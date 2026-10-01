@@ -36,3 +36,8 @@ func itoa(n int) string {
 	}
 	return string(b[i:])
 }
+
+// BindingTag is the outbound group of one list_route.
+func BindingTag(section, route string) string {
+	return section + "-route-" + route + "-out"
+}

@@ -12,6 +12,8 @@ import (
 type Package struct {
 	Name     string
 	Sections map[string]*Section
+	// order holds section names as they appear in the file.
+	order []string
 }
 
 type Section struct {
@@ -41,16 +43,31 @@ func Parse(text string) (*Package, error) {
 		}
 		if strings.HasPrefix(line, "config ") {
 			parts := strings.Fields(line)
-			if len(parts) < 3 {
+			if len(parts) < 2 {
 				return nil, fmt.Errorf("invalid config line: %q", line)
 			}
-			secType := parts[1]
-			secName := strings.Trim(parts[2], "'\"")
+			secType := strings.Trim(parts[1], "'\"")
+			var secName string
+			if len(parts) >= 3 {
+				secName = strings.Trim(parts[2], "'\"")
+			} else {
+				// Anonymous section, named the way `uci show` refers to it.
+				n := 0
+				for _, name := range pkg.order {
+					if pkg.Sections[name].Type == secType {
+						n++
+					}
+				}
+				secName = fmt.Sprintf("@%s[%d]", secType, n)
+			}
 			cur = &Section{
 				Type:    secType,
 				Name:    secName,
 				Options: make(map[string]string),
 				Lists:   make(map[string][]string),
+			}
+			if _, dup := pkg.Sections[secName]; !dup {
+				pkg.order = append(pkg.order, secName)
 			}
 			pkg.Sections[secName] = cur
 			if pkg.Name == "" {
@@ -125,6 +142,25 @@ func (p *Package) SectionNames(typ string) []string {
 		}
 	}
 	sort.Strings(names)
+	return names
+}
+
+// SectionNamesOrdered returns the sections of typ in file order, for
+// configs where the order means something (first binding wins).
+func (p *Package) SectionNamesOrdered(typ string) []string {
+	if p == nil {
+		return nil
+	}
+	var names []string
+	for _, name := range p.order {
+		if sec := p.Sections[name]; sec != nil && sec.Type == typ {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		// Packages built in code have no order.
+		return p.SectionNames(typ)
+	}
 	return names
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/listroutes"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -48,7 +49,13 @@ func CollectProxySubnets(pkg *uci.Package) []string {
 
 	for _, name := range pkg.SectionNames("section") {
 		sec := pkg.Section(name)
-		if sec == nil || !SectionHasEnabledLists(sec) {
+		if sec == nil {
+			continue
+		}
+		for _, ul := range listroutes.UserLists(pkg, name) {
+			add(ul.Subnets...)
+		}
+		if !SectionHasEnabledLists(sec) {
 			continue
 		}
 		for _, svc := range sec.GetList("community_lists") {

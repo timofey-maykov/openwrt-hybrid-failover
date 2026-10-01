@@ -7,7 +7,9 @@
 				"/etc/config/hybrid-failover": [ "read" ],
 				"/etc/config/hybrid-failover-bot": [ "read" ],
 				"/etc/hybrid-failover-bot.json": [ "read" ],
-				"/var/log/hybrid-failover/history.jsonl": [ "read" ]
+				"/var/log/hybrid-failover/history.jsonl": [ "read" ],
+				"/var/run/hybrid-failover/channel-metrics.json": [ "read" ],
+				"/var/run/hybrid-failover/channel-metrics-24h.json": [ "read" ]
 			},
 			"ubus": {
 				"hybrid-failover": [
@@ -15,7 +17,7 @@
 					"check_nft", "check_fakeip", "global_check", "decode_uri",
 					"pending_validate", "backup_uci", "duplicate_section",
 					"list_clients", "delay_history", "metrics", "backup_download", "dhcp_leases",
-					"update_status"
+					"update_status", "list_routes"
 				],
 				"service": [ "list" ]
 			}

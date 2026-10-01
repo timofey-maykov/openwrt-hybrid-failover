@@ -163,7 +163,68 @@ If a section has at least one list, it is list-based. The engine sends only matc
 | `list subnet_bypass_ips` | list | Client IPs, usually consoles. FakeIP traffic and community domains go through the proxy, while subnets from `hf_proxy_subnets` and Teredo stay on WAN. Pin these IPs with a static DHCP lease |
 | `list udp_routed_ips` | list | Client IPs whose UDP, except DNS, goes into tproxy and into this section. TCP goes direct. Works for `vpn` and `proxy` sections |
 
-Custom subnets (`user_subnets`, `user_subnets_text`, `local_subnet_lists`, `remote_subnet_lists`) end up in the nft set `hf_proxy_subnets`, and traffic to them enters tproxy. The native engine does not build a route rule for them yet, so the engine sends that traffic direct. Subnets from `community_lists` are routed into the section as expected.
+Custom subnets (`user_subnets`, `user_subnets_text`, `local_subnet_lists`, `remote_subnet_lists`) end up in the nft set `hf_proxy_subnets`, and traffic to them enters tproxy. For `user_subnets` and `user_subnets_text` the native engine builds a route rule into the section. There is no rule for `local_subnet_lists` and `remote_subnet_lists` yet, so the engine sends that traffic direct. Subnets from `community_lists` and from `user_list` are routed into the section as expected.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `list channel_names` | list | Your own channel names as `id=Name`. The channel ids are shown on the "Сервисы и каналы" (Services and channels) tab, by `/routes` in the bot and by `hybrid-failover rpc ListRoutes` |
+
+### Section channels
+
+Every link in `urltest_proxy_links` (or in `failover_proxy_links` of a VPN with backups) becomes a channel. A VPN section has the interface itself as its first channel, with the id `vpn`. The id of any other channel is the first 8 characters of a sha256 over the link's server and credentials: the peer public key for `awg2://`, the scheme, user, host and port for the rest. Obfuscation parameters and the order of the links do not change the id, so bindings survive editing and reordering links. Two `awg2://` links to the same peer with different addresses make one channel.
+
+## `config user_list '<name>'`
+
+Your own named list of domains and subnets. It works like a separate service and can be bound to its own channel. A section with at least one enabled `user_list` routes by lists.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `section` | string | Routing section (`vpn` or `proxy`) the list belongs to |
+| `title` | string | Name shown in the interface and the bot |
+| `enabled` | bool | Defaults to `1` |
+| `domains_text` | string | Domains separated by newlines, spaces, commas or semicolons. Subdomains are included |
+| `list domains` | list | The same domains as a list |
+| `subnets_text` | string | IPv4 subnets or addresses, a single address counts as `/32` |
+| `list subnets` | list | The same as a list |
+
+The subnets go into `hf_proxy_subnets`, the domains get FakeIP. Bindings refer to the list as `user:<name>`.
+
+## `config list_route '<name>'`
+
+Binds one or more lists of a section to a channel. A list with no binding goes through the section pool, which is the urltest choice, as before. Binding rules are checked before the section rule, so a binding wins when domains overlap. When two bindings name the same list, the first one in the file applies.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `section` | string | Routing section |
+| `list lists` | list | List keys: a `community_lists` name (`youtube`), `user` for the section's own domains and subnets, `local` for `local_domain_lists`, `user:<name>` for a `user_list` |
+| `channel` | string | Channel id, `auto` (the pool, same as no binding), `balance` (spread over all channels), `direct` (no tunnel) or `block` |
+| `on_down` | `pool` / `direct` / `block` | Where the lists go while the bound channel fails its urltest. Defaults to `pool` |
+| `enabled` | bool | Defaults to `1` |
+
+A channel counts as down when its last urltest probe failed. Before the first probe it counts as alive. When a connection through the channel cannot be opened, the engine tries the next `on_down` target right away instead of waiting for the probe.
+
+With `balance` the engine spreads connections over the live channels of the section, sticky per site: every connection to one site (the last two labels of the name, or the IP) uses one channel while that channel lives. Sites that check the session IP keep working. When the bound channel is removed from the section, its lists go back to the pool, and `validate` and the services tab warn about it.
+
+Example:
+
+```
+config user_list 'ul_work'
+	option section 'main'
+	option title 'Work'
+	option domains_text 'jira.example.com gitlab.example.com'
+	option subnets_text '10.20.0.0/16'
+
+config list_route 'lr_main_youtube'
+	option section 'main'
+	list lists 'youtube'
+	option channel 'a1b2c3d4'
+	option on_down 'pool'
+
+config list_route 'lr_main_user_ul_work'
+	option section 'main'
+	list lists 'user:ul_work'
+	option channel 'direct'
+```
 
 ### urltest parameters
 

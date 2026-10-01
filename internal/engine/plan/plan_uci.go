@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/channels"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clientrules"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/listroutes"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/policy"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subnets"
@@ -126,7 +128,10 @@ func (c *compiler) compileSection(section string, sec *uci.Section) error {
 			return fmt.Errorf("unknown connection_type %q", conn)
 		}
 	}
-	if singbox.SectionHasEnabledLists(sec) {
+	if conn == "vpn" || conn == "proxy" {
+		c.recordChannels(section, sec)
+	}
+	if sectionRoutesByLists(c.pkg, section, sec) {
 		sp.ListBased = true
 		if err := c.compileListRuleSets(section, sec); err != nil {
 			return err
@@ -134,6 +139,73 @@ func (c *compiler) compileSection(section string, sec *uci.Section) error {
 	}
 	c.plan.Sections = append(c.plan.Sections, sp)
 	return nil
+}
+
+// sectionRoutesByLists: the section only takes matching traffic (its own lists
+// or named user lists) instead of everything that reached tproxy.
+func sectionRoutesByLists(pkg *uci.Package, section string, sec *uci.Section) bool {
+	return singbox.SectionHasEnabledLists(sec) || listroutes.HasUserLists(pkg, section)
+}
+
+// recordChannels maps the stable channel ids of section to engine tags. The
+// tag of a link follows its position (section-N-out); alternate IPs of one AWG
+// peer share the first one's tag, as channels.List reports them once.
+func (c *compiler) recordChannels(section string, sec *uci.Section) {
+	conn := sec.Get("connection_type", "")
+	for _, ch := range channels.List(sec) {
+		tag := ""
+		switch {
+		case ch.Primary:
+			if sec.GetBool("failover_vpn_enabled", false) && len(sec.GetList("failover_proxy_links")) > 0 {
+				tag = AWGTag(section)
+			} else {
+				tag = OutboundTag(section)
+			}
+		case conn == "proxy" && sec.Get("proxy_config_type", "url") == "url":
+			tag = OutboundTag(section)
+		default:
+			tag = OutboundTag(fmt.Sprintf("%s-%d", section, ch.Index))
+			if strings.HasPrefix(ch.Link, "awg2://") {
+				if p, err := amnezia.ParseAWG2URI(ch.Link); err == nil {
+					if t, ok := c.awg2ByKey[p.PublicKey]; ok {
+						tag = t
+					}
+				}
+			}
+		}
+		if !c.hasOutbound(tag) {
+			continue
+		}
+		c.plan.Channels = append(c.plan.Channels, ChannelPlan{Section: section, ID: ch.ID, Name: ch.Name, Tag: tag})
+	}
+}
+
+func (c *compiler) hasOutbound(tag string) bool {
+	for _, ob := range c.plan.Outbounds {
+		if ob.Tag == tag {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *compiler) channelTags(section string) []string {
+	var out []string
+	for _, ch := range c.plan.Channels {
+		if ch.Section == section {
+			out = append(out, ch.Tag)
+		}
+	}
+	return out
+}
+
+func (c *compiler) channelTag(section, id string) string {
+	for _, ch := range c.plan.Channels {
+		if ch.Section == section && ch.ID == id {
+			return ch.Tag
+		}
+	}
+	return ""
 }
 
 func (c *compiler) compileVPN(section string, sec *uci.Section) error {
@@ -409,6 +481,16 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 		baseRule.Reject = true
 		baseRule.OutboundTag = ""
 	}
+	// Ruleset tags per list key (community name, user, local, user:<name>),
+	// so a binding can take some lists away from the section rule.
+	byKey := make(map[string][]string)
+	var keys []string
+	add := func(key, tag string) {
+		if _, ok := byKey[key]; !ok {
+			keys = append(keys, key)
+		}
+		byKey[key] = append(byKey[key], tag)
+	}
 	for _, svc := range sec.GetList("community_lists") {
 		svc = strings.TrimSpace(svc)
 		if svc == "" {
@@ -423,7 +505,7 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 			Path:      domainsPath,
 			FileStamp: rulesetFileStamp(domainsPath),
 		})
-		baseRule.RuleSetTags = append(baseRule.RuleSetTags, RulesetTag(section, svc, "community"))
+		add(svc, RulesetTag(section, svc, "community"))
 		if url, ok := singbox.SubnetListURLs[svc]; ok {
 			lstPath := filepath.Join(singbox.RulesetDir, svc+".lst")
 			_ = subnets.EnsureFile(url, lstPath)
@@ -436,12 +518,36 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 					Subnets: cidrs,
 					Path:    filepath.Join(singbox.RulesetDir, tag+".json"),
 				})
-				baseRule.RuleSetTags = append(baseRule.RuleSetTags, tag)
+				add(svc, tag)
 			}
 		}
 	}
-	if err := c.compileExtraDomainRuleSets(section, sec, &baseRule); err != nil {
+	if err := c.compileExtraDomainRuleSets(section, sec, add); err != nil {
 		return err
+	}
+	if conn == "vpn" || conn == "proxy" {
+		for _, ul := range listroutes.UserLists(c.pkg, section) {
+			if len(ul.Domains) > 0 {
+				tag, err := c.addDomainRuleSet(section, "ul-"+ul.Name, "domains", ul.Domains)
+				if err != nil {
+					return err
+				}
+				add(ul.Key(), tag)
+			}
+			if len(ul.Subnets) > 0 {
+				add(ul.Key(), c.addSubnetRuleSet(section, "ul-"+ul.Name, ul.Subnets))
+			}
+		}
+		taken := c.compileBindings(section, byKey)
+		for _, k := range keys {
+			if !taken[k] {
+				baseRule.RuleSetTags = append(baseRule.RuleSetTags, byKey[k]...)
+			}
+		}
+	} else {
+		for _, k := range keys {
+			baseRule.RuleSetTags = append(baseRule.RuleSetTags, byKey[k]...)
+		}
 	}
 	if len(baseRule.RuleSetTags) > 0 {
 		c.plan.Routes = append(c.plan.Routes, baseRule)
@@ -449,11 +555,83 @@ func (c *compiler) compileListRuleSets(section string, sec *uci.Section) error {
 	return nil
 }
 
-func (c *compiler) compileExtraDomainRuleSets(section string, sec *uci.Section, baseRule *RouteRule) error {
+// compileBindings adds one rule per list_route of section, ahead of the
+// section rule, and returns the list keys they took. Binding rules carry no
+// Section, so the router dials their own outbound and not the section selector.
+func (c *compiler) compileBindings(section string, byKey map[string][]string) map[string]bool {
+	taken := make(map[string]bool)
+	for _, r := range listroutes.Routes(c.pkg, section) {
+		if !r.Bound() {
+			continue
+		}
+		var lists, tags []string
+		for _, l := range r.Lists {
+			if taken[l] || len(byKey[l]) == 0 {
+				continue
+			}
+			lists = append(lists, l)
+			tags = append(tags, byKey[l]...)
+		}
+		if len(tags) == 0 {
+			continue
+		}
+		bp := BindingPlan{Name: r.Name, Section: section, Lists: lists, Channel: r.Channel, OnDown: r.OnDown}
+		rule := RouteRule{Action: "route", RuleSetTags: tags, Binding: r.Name}
+		switch r.Channel {
+		case listroutes.ChannelDirect:
+			rule.OutboundTag = DirectTag
+		case listroutes.ChannelBlock:
+			rule.Action = "reject"
+			rule.Reject = true
+		case listroutes.ChannelBalance:
+			members := c.channelTags(section)
+			if len(members) == 0 {
+				bp.Missing = true
+				c.plan.Bindings = append(c.plan.Bindings, bp)
+				continue
+			}
+			tag := BindingTag(section, r.Name)
+			c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{Tag: tag, Kind: OutboundBalance, Members: members})
+			rule.OutboundTag = tag
+		default:
+			chTag := c.channelTag(section, r.Channel)
+			if chTag == "" {
+				bp.Missing = true
+				c.plan.Bindings = append(c.plan.Bindings, bp)
+				continue
+			}
+			bp.ChannelTag = chTag
+			members := []string{chTag}
+			switch r.OnDown {
+			case listroutes.DownPool:
+				members = append(members, OutboundTag(section))
+			case listroutes.DownDirect:
+				members = append(members, DirectTag)
+			}
+			tag := BindingTag(section, r.Name)
+			c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{Tag: tag, Kind: OutboundFallback, Members: members})
+			rule.OutboundTag = tag
+		}
+		bp.OutboundTag = rule.OutboundTag
+		for _, l := range lists {
+			taken[l] = true
+		}
+		c.plan.Routes = append(c.plan.Routes, rule)
+		c.plan.Bindings = append(c.plan.Bindings, bp)
+	}
+	return taken
+}
+
+func (c *compiler) compileExtraDomainRuleSets(section string, sec *uci.Section, add func(key, tag string)) error {
 	if domains := singbox.UserDomainItems(sec); len(domains) > 0 {
-		if err := c.addDomainRuleSet(section, "user", "domains", domains, baseRule); err != nil {
+		tag, err := c.addDomainRuleSet(section, "user", "domains", domains)
+		if err != nil {
 			return err
 		}
+		add(listroutes.KeySectionUser, tag)
+	}
+	if cidrs := singbox.UserSubnetItems(sec); len(cidrs) > 0 {
+		add(listroutes.KeySectionUser, c.addSubnetRuleSet(section, "user", cidrs))
 	}
 	for i, listPath := range sec.GetList("local_domain_lists") {
 		listPath = strings.TrimSpace(listPath)
@@ -468,19 +646,20 @@ func (c *compiler) compileExtraDomainRuleSets(section string, sec *uci.Section, 
 		if len(domains) == 0 {
 			continue
 		}
-		name := fmt.Sprintf("local-%d", i)
-		if err := c.addDomainRuleSet(section, name, "domains", domains, baseRule); err != nil {
+		tag, err := c.addDomainRuleSet(section, fmt.Sprintf("local-%d", i), "domains", domains)
+		if err != nil {
 			return err
 		}
+		add(listroutes.KeySectionLocal, tag)
 	}
 	return nil
 }
 
-func (c *compiler) addDomainRuleSet(section, name, typ string, domains []string, baseRule *RouteRule) error {
+func (c *compiler) addDomainRuleSet(section, name, typ string, domains []string) (string, error) {
 	tag := RulesetTag(section, name, typ)
 	path := filepath.Join(singbox.RulesetDir, tag+".json")
 	if err := singbox.WriteDomainRuleset(path, domains); err != nil {
-		return err
+		return "", err
 	}
 	c.plan.RuleSets = append(c.plan.RuleSets, RuleSet{
 		Tag:       tag,
@@ -489,8 +668,20 @@ func (c *compiler) addDomainRuleSet(section, name, typ string, domains []string,
 		Path:      path,
 		FileStamp: rulesetFileStamp(path),
 	})
-	baseRule.RuleSetTags = append(baseRule.RuleSetTags, tag)
-	return nil
+	return tag, nil
+}
+
+// addSubnetRuleSet keeps the CIDRs inline in the plan; the router reads them
+// from there, no file needed.
+func (c *compiler) addSubnetRuleSet(section, name string, cidrs []string) string {
+	tag := RulesetTag(section, name, "subnets")
+	c.plan.RuleSets = append(c.plan.RuleSets, RuleSet{
+		Tag:     tag,
+		Kind:    "subnets",
+		Subnets: cidrs,
+		Path:    filepath.Join(singbox.RulesetDir, tag+".json"),
+	})
+	return tag
 }
 
 func (c *compiler) compileRoutes() {
@@ -503,7 +694,7 @@ func (c *compiler) compileRoutes() {
 		if conn != "vpn" && conn != "proxy" {
 			continue
 		}
-		if singbox.SectionHasEnabledLists(sec) {
+		if sectionRoutesByLists(c.pkg, name, sec) {
 			continue
 		}
 		c.plan.Routes = append(c.plan.Routes, RouteRule{
