@@ -114,6 +114,8 @@ All UCI options are described in [UCI.md](UCI.md).
 
 ## Services and channels
 
+![The services and channels tab](../img/luci-services.png)
+
 At the top are the channel cards of each section: urltest state, latency, open connections, traffic and the share of expected load from the lists bound to it. The pencil next to the name renames a channel; the name is stored in `channel_names` and tied to the server, not to the position of the link.
 
 Below is the section's list table. Each list gets a channel: the pool (fastest, same as no binding), a specific channel, balance over all, direct or block. The "Если канал упал" (if the channel is down) column sets the fallback path. The "Сейчас" (now) column shows where the list goes right now, for example that the channel is down and the list uses the pool.
@@ -124,11 +126,17 @@ Changes are applied with "Сохранить и применить" (save and ap
 
 ## Charts
 
+![The charts tab](../img/luci-charts.png)
+
 Live charts per channel: inbound and outbound traffic, open and new connections, probe latency with 300 ms and 1 s thresholds and marks for failures, and the traffic share over the period. The window goes from 5 minutes to a day, refresh from 2 to 30 seconds, or paused.
 
 Drag over a chart to zoom in, double-click to reset. Click a channel in a legend or a tile to show only that channel on every chart, Ctrl/Cmd+click hides or shows it. Hovering shows the values of all channels at that moment on every panel at once.
 
 The native engine writes the data every 2 seconds to `/var/run/hybrid-failover/channel-metrics.json` (last 10 minutes) and every minute to `channel-metrics-24h.json` (a day). That is tmpfs, so history starts over after a reboot. Bytes of interface channels (VPN, AWG) come from the interface counters; for proxy channels the engine counts them.
+
+With a dark LuCI theme the charts are dark too:
+
+![Charts in the dark theme](../img/luci-charts-dark.png)
 
 ---
 
