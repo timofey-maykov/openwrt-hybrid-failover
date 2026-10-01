@@ -15,6 +15,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lanipv6"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lifecycle"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/listroutes"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/migrate"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
@@ -147,6 +148,12 @@ func runValidate(args []string) int {
 				return 1
 			}
 		}
+	}
+	if errs := listroutes.Validate(pkg); len(errs) > 0 {
+		for _, e := range errs {
+			fmt.Fprintln(os.Stderr, e)
+		}
+		return 1
 	}
 	useNative := true
 	if *engineMode == "singbox" {
@@ -364,6 +371,8 @@ func runRPC(args []string) int {
 		return runRPCBackupDownload()
 	case "Metrics", "metrics":
 		return runRPCMetrics()
+	case "ListRoutes", "list_routes":
+		return runRPCListRoutes()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown rpc method %q\n", method)
 		return 2

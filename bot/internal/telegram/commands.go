@@ -10,6 +10,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/routesreport"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
@@ -310,6 +311,14 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 			lines, _ = strconv.Atoi(n)
 		}
 		return rt.Logs(ctx, lines)
+	case "/routes":
+		secs, err := rt.ListRoutes(ctx)
+		if err != nil {
+			return "", err
+		}
+		return routing.FormatRoutes(secs), nil
+	case "/route":
+		return h.routeCommand(ctx, rt, fields)
 	case "/channels", "/failover_list":
 		health, err := rt.ChannelHealth(ctx)
 		if err != nil {
@@ -555,6 +564,8 @@ func (h CommandHandler) helpText(userID int64) string {
 		"/set_urltest_idle_timeout <seconds>",
 		"/set_interrupt_existing on|off",
 		"/channels",
+		"/routes",
+		"/route <список> <канал> [pool|direct|block]",
 		"/health",
 		"/check_channels",
 		"/routing_restart",
@@ -614,6 +625,8 @@ func helpText() string {
 		"/set_urltest_idle_timeout <seconds>",
 		"/set_interrupt_existing on|off",
 		"/channels",
+		"/routes",
+		"/route <список> <канал> [pool|direct|block]",
 		"/health",
 		"/check_channels",
 		"/routing_restart",
@@ -822,4 +835,60 @@ func paramMenuText() string {
 		"Короткие алиасы ключей: disable_quic, urltest_interval,",
 		"urltest_tolerance, urltest_idle_timeout, urltest_interrupt_exist_connections, policy",
 	}, "\n")
+}
+
+// routeCommand: /route <list> <channel> [on_down] [section]. The section is
+// optional when the list exists in one section only.
+func (h CommandHandler) routeCommand(ctx context.Context, rt routing.Service, fields []string) (string, error) {
+	if len(fields) < 3 {
+		return "", fmt.Errorf("использование: /route <список> <номер канала|pool|balance|direct|block> [pool|direct|block] [секция]\nсписки и номера каналов: /routes")
+	}
+	listKey, chanArg := fields[1], fields[2]
+	onDown, secName := "pool", ""
+	for _, f := range fields[3:] {
+		switch f {
+		case "pool", "direct", "block":
+			onDown = f
+		default:
+			secName = f
+		}
+	}
+	secs, err := rt.ListRoutes(ctx)
+	if err != nil {
+		return "", err
+	}
+	var found []routesreport.Section
+	for _, sec := range secs {
+		if secName != "" && sec.Name != secName {
+			continue
+		}
+		for _, l := range sec.Lists {
+			if l.Key == listKey || l.Key == "user:"+listKey || (l.Kind == "user_list" && strings.EqualFold(l.Title, listKey)) {
+				listKey = l.Key
+				found = append(found, sec)
+				break
+			}
+		}
+	}
+	switch {
+	case len(found) == 0:
+		return "", fmt.Errorf("список «%s» не найден, смотрите /routes", fields[1])
+	case len(found) > 1:
+		return "", fmt.Errorf("список «%s» есть в нескольких секциях, добавьте имя секции в конце команды", fields[1])
+	}
+	sec := found[0]
+	ch, err := routing.ResolveChannel(sec, chanArg)
+	if err != nil {
+		return "", err
+	}
+	if err := rt.SetListRoute(ctx, sec.Name, listKey, ch, onDown); err != nil {
+		return "", err
+	}
+	target := ch
+	for _, c := range sec.Channels {
+		if c.ID == ch {
+			target = c.Name
+		}
+	}
+	return fmt.Sprintf("%s → %s (pending).\nПроверьте /param_preview и примените /param_apply", listKey, target), nil
 }

@@ -299,6 +299,7 @@ function method_dhcp_leases() {
 		delay_history: method_call('DelayHistory', null),
 		backup_download: method_call('BackupDownload', null),
 		metrics: method_call('Metrics', null),
+		list_routes: method_call('ListRoutes', null),
 		dhcp_leases: method_dhcp_leases(),
 		pending_validate: method_call('PendingValidate', null),
 		pending_capture: method_call('CapturePending', null),

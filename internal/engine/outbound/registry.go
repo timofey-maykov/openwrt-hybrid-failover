@@ -27,6 +27,9 @@ type Registry struct {
 	handlers  map[string]Handler
 	selectors map[string]*selectorHandler
 	urltests  []*urlTestRunner
+	counters  map[string]*countingHandler
+	groups    map[string]*fallbackHandler
+	ctrl      *control.Control
 }
 
 // NewRegistry builds outbound handlers. ctx bounds the lifetime of any
@@ -39,6 +42,8 @@ func NewRegistry(ctx context.Context, plans []plan.OutboundPlan) (*Registry, err
 	r := &Registry{
 		handlers:  make(map[string]Handler),
 		selectors: make(map[string]*selectorHandler),
+		counters:  make(map[string]*countingHandler),
+		groups:    make(map[string]*fallbackHandler),
 	}
 	for _, p := range plans {
 		h, err := newHandler(ctx, p)
@@ -63,8 +68,18 @@ func NewRegistry(ctx context.Context, plans []plan.OutboundPlan) (*Registry, err
 			ut := newURLTestRunner(p, r)
 			r.handlers[p.Tag] = ut
 			r.urltests = append(r.urltests, ut)
-		default:
+		case plan.OutboundFallback:
+			fh := &fallbackHandler{tag: p.Tag, members: p.Members, registry: r}
+			r.handlers[p.Tag] = fh
+			r.groups[p.Tag] = fh
+		case plan.OutboundBalance:
+			r.handlers[p.Tag] = &balanceHandler{tag: p.Tag, members: p.Members, registry: r}
+		case plan.OutboundDirect:
 			r.handlers[p.Tag] = h
+		default:
+			ch := newCountingHandler(h, p.Kind)
+			r.handlers[p.Tag] = ch
+			r.counters[p.Tag] = ch
 		}
 	}
 	return r, nil
@@ -82,7 +97,7 @@ func newHandler(ctx context.Context, p plan.OutboundPlan) (Handler, error) {
 		return newVLESSHandler(p)
 	case plan.OutboundTrojan, plan.OutboundShadowsocks, plan.OutboundSocks:
 		return newProxyHandler(p)
-	case plan.OutboundURLTest, plan.OutboundSelector:
+	case plan.OutboundURLTest, plan.OutboundSelector, plan.OutboundFallback, plan.OutboundBalance:
 		return &directHandler{tag: p.Tag}, nil
 	default:
 		return nil, fmt.Errorf("unsupported kind %q", p.Kind)
@@ -144,6 +159,9 @@ func (r *Registry) SetSelector(section, tag string) error {
 }
 
 func (r *Registry) StartURLTests(ctx context.Context, ctrl *control.Control) error {
+	r.mu.Lock()
+	r.ctrl = ctrl
+	r.mu.Unlock()
 	for _, ut := range r.urltests {
 		if err := ut.Start(ctx, ctrl); err != nil {
 			return err
@@ -163,7 +181,38 @@ func (r *Registry) Stop() {
 	}
 	r.handlers = nil
 	r.selectors = nil
+	r.counters = nil
+	r.groups = nil
 	r.urltests = nil
+}
+
+func (r *Registry) control() *control.Control {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.ctrl
+}
+
+// Traffic returns the connection and byte counters of every leaf outbound.
+func (r *Registry) Traffic() map[string]TrafficStat {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make(map[string]TrafficStat, len(r.counters))
+	for tag, ch := range r.counters {
+		out[tag] = ch.ctr.stat()
+	}
+	return out
+}
+
+// FallbackActive returns the member a fallback group (a list bound to one
+// channel) dials now, empty for an unknown tag.
+func (r *Registry) FallbackActive(tag string) string {
+	r.mu.RLock()
+	fh, ok := r.groups[tag]
+	r.mu.RUnlock()
+	if !ok {
+		return ""
+	}
+	return fh.Active()
 }
 
 // URLTestActive returns the active member tag for a urltest outbound group.

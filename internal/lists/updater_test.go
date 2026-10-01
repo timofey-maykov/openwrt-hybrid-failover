@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 )
@@ -126,7 +128,7 @@ func TestUpdateOnceSkipsServicesWithoutSubnetList(t *testing.T) {
 	dir := t.TempDir()
 	u.RulesetDir = dir
 	u.UCIPath = uciPath
-	u.HTTP = srv.Client()
+	u.HTTP = localHTTPClient(srv)
 	if err := singbox.WriteDomainRuleset(
 		filepath.Join(dir, singbox.RulesetTag("main", "russia_inside", "community")+".json"),
 		[]string{"example.ru"},
@@ -153,6 +155,23 @@ func offlineHTTPClient() *http.Client {
 	return &http.Client{
 		Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return nil, fmt.Errorf("offline")
+		}),
+	}
+}
+
+// localHTTPClient sends every request to srv whatever its URL, so the domain
+// rulesets (fetched from GitHub URLs the test cannot override) stay offline too.
+func localHTTPClient(srv *httptest.Server) *http.Client {
+	target, _ := url.Parse(srv.URL)
+	base := srv.Client().Transport
+	return &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			req = req.Clone(req.Context())
+			req.URL.Scheme = target.Scheme
+			req.URL.Host = target.Host
+			req.Host = target.Host
+			return base.RoundTrip(req)
 		}),
 	}
 }

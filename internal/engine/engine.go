@@ -23,6 +23,7 @@ type Engine struct {
 	runCtx  context.Context
 	cancel  context.CancelFunc
 	rt      *runtime.Runtime
+	sampler sync.Once
 }
 
 func Default() *Engine {
@@ -106,6 +107,7 @@ func (e *Engine) Run(ctx context.Context) error {
 		return err
 	}
 	markRunningState(true)
+	e.sampler.Do(func() { go e.sampleChannels() })
 
 	<-runCtx.Done()
 	// DNS Stop force-closes after ~2.5s; wait a bit longer so the next Start can bind.

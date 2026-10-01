@@ -139,6 +139,10 @@ Section traffic goes through the VPN interface first. When it fails, urltest mov
 
 Proxies only, no `bind_interface`. URI formats and urltest options are the same.
 
+### 3. Own channels for lists
+
+When a section has several channels, service lists can be spread over different tunnels so YouTube does not share a channel with everything else. Bindings are set on the "Сервисы и каналы" (Services and channels) tab or with `/route` in the bot and are stored in `config list_route`. A list with no binding goes through the section pool, as in the modes above. For each binding you choose what happens when its channel is down: fall back to the pool, go direct, or stay blocked. `balance` spreads the list's connections over all live channels while keeping each site on one channel. Your own named lists of domains and subnets (`config user_list`) are bound the same way as the ready-made ones. Details are in [UCI.md](UCI.md#config-list_route-name).
+
 ### Common URLTest options
 
 | UCI option | Default | Description |
@@ -295,6 +299,8 @@ The detailed guide to tabs, clients, the DHCP picker and pending changes is in [
 |------|---------|
 | Обзор (Overview) | Dashboard: engine, nft, channels and latency, policy controller, switch log, manual switch |
 | Маршрутизация (Routing) | VPN + failover, URLTest, subscriptions, community lists (through pending) |
+| Сервисы и каналы (Services and channels) | Section channels with their load, binding lists to channels, your own lists, automatic spread |
+| Графики (Charts) | Live per-channel charts: traffic, connections, latency, traffic share, from 5 minutes up to a day |
 | Диагностика (Diagnostics) | validate, global-check, UCI backup |
 | Клиенты (Clients) | `client_rule` by IP, effective rules, IP picker from DHCP |
 | Telegram | Bot JSON, pending validate, apply and rollback |

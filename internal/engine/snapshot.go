@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/outbound"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
@@ -14,6 +18,35 @@ type RuntimeSnapshot struct {
 	UpdatedAt time.Time                    `json:"updated_at"`
 	Sections  map[string]SectionRuntime    `json:"sections,omitempty"`
 	Delays    map[string]DelayChannelState `json:"delays,omitempty"`
+	Channels  []ChannelRuntime             `json:"channels,omitempty"`
+	Bindings  []BindingRuntime             `json:"bindings,omitempty"`
+}
+
+// ChannelRuntime is one channel of a section with its load since start.
+type ChannelRuntime struct {
+	Section string `json:"section"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Tag     string `json:"tag"`
+	Iface   string `json:"iface,omitempty"`
+	Conns   uint64 `json:"conns"`
+	Active  int64  `json:"active"`
+	Rx      uint64 `json:"rx"`
+	Tx      uint64 `json:"tx"`
+}
+
+// BindingRuntime is one list_route and where its traffic goes now.
+type BindingRuntime struct {
+	Name    string   `json:"name"`
+	Section string   `json:"section"`
+	Lists   []string `json:"lists"`
+	Channel string   `json:"channel"`
+	OnDown  string   `json:"on_down"`
+	Missing bool     `json:"missing,omitempty"`
+	// Current is the outbound tag new connections use; Via says how: the
+	// bound channel, the pool, direct, balance or block.
+	Current string `json:"current,omitempty"`
+	Via     string `json:"via"`
 }
 
 type SectionRuntime struct {
@@ -47,6 +80,8 @@ func (e *Engine) Snapshot() RuntimeSnapshot {
 	if rt == nil || p == nil {
 		return snap
 	}
+	snap.Channels = channelRuntime(p, rt.Traffic())
+	snap.Bindings = bindingRuntime(p, rt.BindingActive)
 	for _, sec := range p.Sections {
 		if sec.SelectorTag == "" {
 			continue
@@ -109,4 +144,73 @@ func DelaysFromSnapshot() map[string]DelayChannelState {
 		return nil
 	}
 	return snap.Delays
+}
+
+func channelRuntime(p *plan.Plan, traffic map[string]outbound.TrafficStat) []ChannelRuntime {
+	ifaces := make(map[string]string, len(p.Outbounds))
+	for _, ob := range p.Outbounds {
+		if ob.BindIface != "" {
+			ifaces[ob.Tag] = ob.BindIface
+		}
+	}
+	out := make([]ChannelRuntime, 0, len(p.Channels))
+	for _, ch := range p.Channels {
+		st := traffic[ch.Tag]
+		cr := ChannelRuntime{
+			Section: ch.Section, ID: ch.ID, Name: ch.Name, Tag: ch.Tag,
+			Iface: ifaces[ch.Tag], Conns: st.Conns, Active: st.Active, Rx: st.Rx, Tx: st.Tx,
+		}
+		if cr.Iface != "" {
+			// Interface-bound connections are spliced in the kernel; the
+			// interface counters carry their bytes.
+			cr.Rx = ifaceCounter(cr.Iface, "rx_bytes")
+			cr.Tx = ifaceCounter(cr.Iface, "tx_bytes")
+		}
+		out = append(out, cr)
+	}
+	return out
+}
+
+func ifaceCounter(iface, name string) uint64 {
+	data, err := os.ReadFile(filepath.Join("/sys/class/net", iface, "statistics", name))
+	if err != nil {
+		return 0
+	}
+	v, _ := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	return v
+}
+
+func bindingRuntime(p *plan.Plan, active func(tag string) string) []BindingRuntime {
+	out := make([]BindingRuntime, 0, len(p.Bindings))
+	for _, b := range p.Bindings {
+		br := BindingRuntime{
+			Name: b.Name, Section: b.Section, Lists: b.Lists,
+			Channel: b.Channel, OnDown: b.OnDown, Missing: b.Missing,
+		}
+		switch {
+		case b.Missing:
+			br.Current = plan.OutboundTag(b.Section)
+			br.Via = "pool"
+		case b.Channel == "block":
+			br.Via = "block"
+		case b.Channel == "direct":
+			br.Current = plan.DirectTag
+			br.Via = "direct"
+		case b.Channel == "balance":
+			br.Current = b.OutboundTag
+			br.Via = "balance"
+		default:
+			br.Current = active(b.OutboundTag)
+			switch br.Current {
+			case b.ChannelTag:
+				br.Via = "channel"
+			case plan.DirectTag:
+				br.Via = "direct"
+			default:
+				br.Via = "pool"
+			}
+		}
+		out = append(out, br)
+	}
+	return out
 }

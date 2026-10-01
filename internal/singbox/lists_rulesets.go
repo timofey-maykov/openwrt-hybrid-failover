@@ -226,6 +226,11 @@ func UserDomainItems(sec *uci.Section) []string {
 }
 
 func (b *Builder) userSubnetItems(sec *uci.Section) []string {
+	return UserSubnetItems(sec)
+}
+
+// UserSubnetItems returns custom subnets configured on a routing section.
+func UserSubnetItems(sec *uci.Section) []string {
 	switch sec.Get("user_subnet_list_type", "disabled") {
 	case "dynamic":
 		return sec.GetList("user_subnets")

@@ -113,3 +113,23 @@ func (r *Runtime) URLTestActive(section string) string {
 	}
 	return r.registry.URLTestActive(plan.URLTestTag(section))
 }
+
+// Traffic returns the counters of every leaf outbound.
+func (r *Runtime) Traffic() map[string]outbound.TrafficStat {
+	if r.registry == nil {
+		return nil
+	}
+	return r.registry.Traffic()
+}
+
+// BindingActive returns the outbound a list binding dials now: the member of
+// its fallback group, or the group tag itself for balance/direct.
+func (r *Runtime) BindingActive(tag string) string {
+	if r.registry == nil || tag == "" {
+		return ""
+	}
+	if m := r.registry.FallbackActive(tag); m != "" {
+		return m
+	}
+	return tag
+}

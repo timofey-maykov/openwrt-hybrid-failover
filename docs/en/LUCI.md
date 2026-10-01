@@ -28,6 +28,8 @@ The UI is written in Russian. This guide quotes the Russian labels as they appea
 |-----|----------------|
 | **Обзор** (Overview) | Live status: engine, nft, fakeip DNS, policy, active outbound, failover channels with latency, controller, switch log, manual switch |
 | **Маршрутизация** (Routing) | Global settings and routing sections: VPN with backups, URLTest, subscriptions, community lists, your own domains and subnets |
+| **Сервисы и каналы** (Services and channels) | Section channels with latency and load, a "list → channel → if the channel is down → now" table, your own lists, automatic spread |
+| **Графики** (Charts) | Live per-channel charts, refreshed every 2 seconds |
 | **Диагностика** (Diagnostics) | Validate, check-nft, check-fakeip, global-check, UCI backup and restore |
 | **Клиенты** (Clients) | Per-client rules by IP (`client_rule`): Include, Exclude, Full route, Global exclude |
 | **Telegram** | The bot service and its JSON config through pending: validate, apply, roll back, restart |
@@ -107,6 +109,26 @@ Validate and apply work on the file `/etc/config/hybrid-failover`. When the LuCI
 The same block has **Обновить community lists** (Update community lists), **Обновить подписки** (Refresh subscriptions) and **Дублировать секцию...** (Duplicate section). Duplicate writes the copy into UCI right away (with `uci commit`) and reloads the page.
 
 All UCI options are described in [UCI.md](UCI.md).
+
+---
+
+## Services and channels
+
+At the top are the channel cards of each section: urltest state, latency, open connections, traffic and the share of expected load from the lists bound to it. The pencil next to the name renames a channel; the name is stored in `channel_names` and tied to the server, not to the position of the link.
+
+Below is the section's list table. Each list gets a channel: the pool (fastest, same as no binding), a specific channel, balance over all, direct or block. The "Если канал упал" (if the channel is down) column sets the fallback path. The "Сейчас" (now) column shows where the list goes right now, for example that the channel is down and the list uses the pool.
+
+**Распределить автоматически** (spread automatically) puts lists on live channels: heavy services (video) land on different channels, faster channels get more. You can adjust the result before saving. **+ Свой список** (own list) creates a `user_list` with domains and subnets and lets you pick its channel right away.
+
+Changes are applied with "Сохранить и применить" (save and apply), through the usual LuCI apply with rollback.
+
+## Charts
+
+Live charts per channel: inbound and outbound traffic, open and new connections, probe latency with 300 ms and 1 s thresholds and marks for failures, and the traffic share over the period. The window goes from 5 minutes to a day, refresh from 2 to 30 seconds, or paused.
+
+Drag over a chart to zoom in, double-click to reset. Click a channel in a legend or a tile to show only that channel on every chart, Ctrl/Cmd+click hides or shows it. Hovering shows the values of all channels at that moment on every panel at once.
+
+The native engine writes the data every 2 seconds to `/var/run/hybrid-failover/channel-metrics.json` (last 10 minutes) and every minute to `channel-metrics-24h.json` (a day). That is tmpfs, so history starts over after a reboot. Bytes of interface channels (VPN, AWG) come from the interface counters; for proxy channels the engine counts them.
 
 ---
 
