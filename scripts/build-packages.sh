@@ -260,12 +260,12 @@ build_luci_i18n_pkg() {
 	rm -rf "$pkg_root"
 	mkdir -p "$pkg_root/CONTROL" "$pkg_root/usr/lib/lua/luci/i18n"
 
-	if [[ ! -f "$ROOT_DIR/luci/i18n/hybrid-failover.en.lmo" ]]; then
+	if [[ ! -f "$ROOT_DIR/luci/i18n/hybrid-failover.en.lmo" || ! -f "$ROOT_DIR/luci/i18n/hybrid-failover.zh-cn.lmo" ]]; then
 		chmod +x "$ROOT_DIR/scripts/compile-luci-i18n.sh"
 		"$ROOT_DIR/scripts/compile-luci-i18n.sh"
 	fi
-	[[ -f "$ROOT_DIR/luci/i18n/hybrid-failover.en.lmo" ]] || {
-		echo "Missing luci/i18n/hybrid-failover.en.lmo: run scripts/compile-luci-i18n.sh" >&2
+	[[ -f "$ROOT_DIR/luci/i18n/hybrid-failover.en.lmo" && -f "$ROOT_DIR/luci/i18n/hybrid-failover.zh-cn.lmo" ]] || {
+		echo "Missing compiled LuCI translations: run scripts/compile-luci-i18n.sh" >&2
 		exit 1
 	}
 	cp "$ROOT_DIR/luci/i18n/"*.lmo "$pkg_root/usr/lib/lua/luci/i18n/" 2>/dev/null || true
@@ -275,7 +275,7 @@ build_luci_i18n_pkg() {
 
 	write_control "$pkg_root/CONTROL/control" "luci-i18n-hybrid-failover" "all" \
 		"luci-base" \
-		"Hybrid Failover LuCI translations (EN/RU)" \
+		"Hybrid Failover LuCI translations (RU/EN/ZH-CN)" \
 		"32" "$FULL_VERSION"
 
 	pack_pkg "$pkg_root"

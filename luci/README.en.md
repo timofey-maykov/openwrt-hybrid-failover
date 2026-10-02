@@ -35,14 +35,14 @@ Tab titles come from the menu JSON and are in Russian.
 | `luci/root/usr/share/rpcd/ucode/hybrid-failover` | rpcd backend (ucode) |
 | `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover.json` | ACL |
 | `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover-bot.json`, `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover-bot.json` | Menu and ACL of the old standalone `luci-app-hybrid-failover-bot` package (only an SDK Makefile in `packages/`, not part of releases) |
-| `luci/po/en/hybrid-failover.po`, `luci/po/ru/hybrid-failover.po` | Translation catalogs |
-| `luci/i18n/hybrid-failover.en.lmo` | Compiled English catalog |
+| `luci/po/en/hybrid-failover.po`, `luci/po/ru/hybrid-failover.po`, `luci/po/zh-cn/hybrid-failover.po` | Translation catalogs |
+| `luci/i18n/hybrid-failover.en.lmo`, `luci/i18n/hybrid-failover.zh-cn.lmo` | Compiled English and Chinese catalogs |
 
 ### Translations
 
-The source strings in the JS are Russian, so the Russian UI works without a catalog. `po/ru` is nearly empty and exists for tooling only. `po/en` covers most strings but not all of them. Newer strings (the Update tab, the router name field on the Telegram tab) are missing and stay Russian in an English LuCI.
+The source strings in the JS are Russian, so the Russian UI works without a catalog. `po/ru` is nearly empty and exists for tooling only. The English and Simplified Chinese catalogs cover every interface string.
 
-`scripts/build-packages.sh` compiles the `.lmo` only when `luci/i18n/hybrid-failover.en.lmo` does not exist, and the file in the repository has not been updated since 1.7.0. After editing a `.po`, rebuild the catalog by hand:
+After editing a `.po`, rebuild the catalogs by hand:
 
 ```sh
 ./scripts/compile-luci-i18n.sh
