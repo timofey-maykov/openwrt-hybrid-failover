@@ -58,15 +58,15 @@ _write_apk_post_install() {
 _run_apk_mkpkg_native() {
 	local apk_bin="$1"
 	shift
-	local -a sign_args=()
 	if [[ -n "${APK_SIGNING_KEY_FILE:-}" ]]; then
 		[[ -r "$APK_SIGNING_KEY_FILE" ]] || {
 			echo "APK signing key is not readable: $APK_SIGNING_KEY_FILE" >&2
 			return 1
 		}
-		sign_args=(--sign-key "$APK_SIGNING_KEY_FILE")
+		"$apk_bin" mkpkg --sign-key "$APK_SIGNING_KEY_FILE" "$@"
+	else
+		"$apk_bin" mkpkg "$@"
 	fi
-	"$apk_bin" mkpkg "${sign_args[@]}" "$@"
 }
 
 _run_apk_mkpkg_docker() {
@@ -84,7 +84,12 @@ _run_apk_mkpkg_docker() {
 
 	local args_quoted=""
 	local sign_arg=""
-	local -a key_mount=()
+	local -a docker_args=(
+		run --rm
+		-v "${idir}:/pkg:ro"
+		-v "${scripts_dir}:/scripts:ro"
+		-v "${out_dir}:/out"
+	)
 	local arg
 	for arg in "${mkpkg_args[@]}"; do
 		args_quoted+=" $(printf '%q' "$arg")"
@@ -94,15 +99,11 @@ _run_apk_mkpkg_docker() {
 			echo "APK signing key is not readable: $APK_SIGNING_KEY_FILE" >&2
 			return 1
 		}
-		key_mount=(-v "${APK_SIGNING_KEY_FILE}:/signing-key.pem:ro")
+		docker_args+=(-v "${APK_SIGNING_KEY_FILE}:/signing-key.pem:ro")
 		sign_arg=" --sign-key /signing-key.pem"
 	fi
 
-	docker run --rm \
-		-v "${idir}:/pkg:ro" \
-		-v "${scripts_dir}:/scripts:ro" \
-		-v "${out_dir}:/out" \
-		"${key_mount[@]}" \
+	docker "${docker_args[@]}" \
 		"${APK_DOCKER_IMAGE}" \
 		sh -c "apk add -q apk-tools 2>/dev/null || true; apk mkpkg${sign_arg}${args_quoted} --script post-install:/scripts/post-install --files /pkg --output /out/${out_name}"
 }
