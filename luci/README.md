@@ -33,14 +33,14 @@
 | `luci/root/usr/share/rpcd/ucode/hybrid-failover` | Backend для rpcd (ucode) |
 | `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover.json` | ACL |
 | `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover-bot.json`, `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover-bot.json` | Меню и ACL старого отдельного пакета `luci-app-hybrid-failover-bot` (только SDK Makefile в `packages/`, в релизы не входит) |
-| `luci/po/en/hybrid-failover.po`, `luci/po/ru/hybrid-failover.po` | Каталоги переводов |
-| `luci/i18n/hybrid-failover.en.lmo` | Скомпилированный английский каталог |
+| `luci/po/en/hybrid-failover.po`, `luci/po/ru/hybrid-failover.po`, `luci/po/zh-cn/hybrid-failover.po` | Каталоги переводов |
+| `luci/i18n/hybrid-failover.en.lmo`, `luci/i18n/hybrid-failover.zh-cn.lmo` | Скомпилированные английский и китайский каталоги |
 
 ### Переводы
 
-Исходные строки в JS написаны на русском, поэтому русский интерфейс работает без каталога. `po/ru` почти пустой и нужен только для инструментов. `po/en` покрывает большую часть строк, но не все. Новые строки (вкладка Обновление, поле имени роутера на вкладке Telegram) в нём отсутствуют и в английском LuCI останутся русскими.
+Исходные строки в JS написаны на русском, поэтому русский интерфейс работает без каталога. `po/ru` почти пустой и нужен только для инструментов. Английский и упрощённый китайский каталоги покрывают все строки интерфейса.
 
-`scripts/build-packages.sh` собирает `.lmo` только если файла `luci/i18n/hybrid-failover.en.lmo` нет, а лежащий в репозитории файл не обновлялся с 1.7.0. После правки `.po` пересоберите каталог вручную:
+После правки `.po` пересоберите каталоги вручную:
 
 ```sh
 ./scripts/compile-luci-i18n.sh
@@ -110,4 +110,3 @@ hybrid-failover rpc Status
 ```
 
 `scripts/luci-ubus-smoke.sh` проходит по основным ubus-методам и проверяет, что каждый отвечает.
-

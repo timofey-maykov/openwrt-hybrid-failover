@@ -2,40 +2,38 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: hybrid-failover 1.7.53\n"
-"Language: en\n"
+"Language: zh-cn\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
 msgid "Нет данных"
-msgstr "No data"
+msgstr "无数据"
 
 msgid "Нажмите Validate или global-check, чтобы запустить проверку."
-msgstr "Click Validate or global-check to run the check."
+msgstr "点击 Validate 或 global-check 开始检查。"
 
 msgid "Raw JSON"
-msgstr "Raw JSON"
+msgstr "原始 JSON"
 
 msgid "Hybrid Failover: диагностика"
-msgstr "Hybrid Failover: diagnostics"
+msgstr "Hybrid Failover：诊断"
 
 msgid ""
 "Проверки конфигурации и сетевого стека. Результаты: чеклист и raw JSON ниже."
-msgstr ""
-"Configuration and network stack checks. Results: checklist and raw JSON "
-"below."
+msgstr "检查配置和网络栈。下方显示检查结果和原始 JSON。"
 
 msgid "First-run"
-msgstr "First-run"
+msgstr "首次运行"
 
 msgid ""
 "1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip. Для "
 "VPN+резервы рекомендуется outage-only."
 msgstr ""
-"1) hybrid-failover migrate 2) validate 3) apply 4) check-fakeip. For "
-"VPN+backups, outage-only is recommended."
+"1) hybrid-failover migrate  2) validate  3) apply  4) check-fakeip。对于 VPN "
+"和备用通道，建议使用 outage-only。"
 
 msgid "Validate"
-msgstr "Validate"
+msgstr "验证"
 
 msgid "check-nft"
 msgstr "check-nft"
@@ -47,55 +45,55 @@ msgid "global-check"
 msgstr "global-check"
 
 msgid "Результат"
-msgstr "Result"
+msgstr "结果"
 
 msgid "Бэкап UCI"
-msgstr "UCI backup"
+msgstr "UCI 备份"
 
 msgid "Create backup"
-msgstr "Create backup"
+msgstr "创建备份"
 
 msgid "Бэкап создан на роутере"
-msgstr "The backup was created on the router."
+msgstr "备份已在路由器上创建"
 
 msgid "Ошибка создания бэкапа"
-msgstr "Error creating backup"
+msgstr "创建备份时出错"
 
 msgid "Создать backup на роутере"
-msgstr "Create backup on router"
+msgstr "在路由器上创建备份"
 
 msgid "Download backup"
-msgstr "Download backup"
+msgstr "下载备份"
 
 msgid "Скачать бэкап"
-msgstr "Download backup"
+msgstr "下载备份"
 
 msgid "Восстановить UCI из "
-msgstr "Restore UCI from"
+msgstr "恢复 UCI，来源 "
 
 msgid "Restore"
-msgstr "Restore"
+msgstr "恢复"
 
 msgid "Восстановить"
-msgstr "Restore"
+msgstr "恢复"
 
 msgid "Сервис"
-msgstr "Service"
+msgstr "服务"
 
 msgid "Из настроек секции"
-msgstr "From the section settings"
+msgstr "来自配置段设置"
 
 msgid "Файлы из настроек секции"
-msgstr "Files from section settings"
+msgstr "配置段设置中的文件"
 
 msgid "Свой список"
-msgstr "Your list"
+msgstr "自定义列表"
 
 msgid "Примерная доля трафика сервиса"
-msgstr "Approximate share of service traffic"
+msgstr "服务流量的大致份额"
 
 msgid "Сервисы и каналы"
-msgstr "Services and channels"
+msgstr "服务和通道"
 
 msgid ""
 "Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через"
@@ -103,632 +101,606 @@ msgid ""
 "быстрый живой канал. Если выбранный канал упал, список временно уходит туда,"
 " что указано в колонке «Если канал упал»."
 msgstr ""
-"Bind service lists to separate channels so heavy traffic does not use one "
-"tunnel. An unbound list still uses the section pool and goes through the "
-"fastest available channel. If its selected channel goes down, the list "
-"temporarily uses the fallback shown in the \"If channel is down\" column."
+"将服务列表绑定到不同通道，避免大量流量集中到一个隧道。未绑定的列表仍使用配置段的通道池，并选择最快的可用通道。如果所选通道出现故障，列表会暂时切换到\"通道故障时\"列中指定的备用通道。"
 
 msgid ""
 "Нет секций vpn или proxy с каналами. Добавьте секцию на вкладке "
 "«Маршрутизация»."
-msgstr ""
-"There are no VPN or proxy sections with channels. Add a section in the "
-"\"Routing\" tab."
+msgstr "没有带通道的 vpn 或 proxy 配置段。请在\"路由\"页面添加配置段。"
 
 msgid ""
 "Привязка «%s» указывает на канал, которого больше нет. Ее списки сейчас идут"
 " через пул."
-msgstr ""
-"The \"%s\" binding points to a channel that no longer exists. Its lists are "
-"now being shared through a pool."
+msgstr "绑定“%s”指向的通道已不存在。相关列表目前使用通道池。"
 
 msgid "В привязке «%s» есть список «%s», которого нет в секции."
-msgstr "The binding \"%s\" contains a list \"%s\" that is not in the section."
+msgstr "绑定\"%s\"包含列表\"%s\"，但该列表不在配置段中。"
 
 msgid ""
 "В секции один канал: привязки к каналу не разгрузят его. Добавьте ссылки в "
 "urltest или резервные каналы."
-msgstr ""
-"There's only one channel in this section: linking to the channel won't "
-"reduce the load. Add links to urltest or backup channels."
+msgstr "该配置段只有一个通道，绑定列表无法分散负载。请向 urltest 添加链接或增加备用通道。"
 
 msgid "Есть несохраненные изменения"
-msgstr "There are unsaved changes"
+msgstr "存在未保存的更改"
 
 msgid "Секция"
-msgstr "Section"
+msgstr "配置段"
 
 msgid ""
 "Тяжелые сервисы раскладываются по разным живым каналам, быстрые каналы "
 "получают больше"
-msgstr ""
-"Heavy services are distributed across different live channels, fast channels"
-" receive more"
+msgstr "高流量服务分配到不同的可用通道，速度更快的通道承担更多流量"
 
 msgid "Нужно хотя бы два живых канала."
-msgstr "At least two live channels are needed."
+msgstr "至少需要两个可用通道。"
 
 msgid "Распределить автоматически"
-msgstr "Distribute automatically"
+msgstr "自动分发"
 
 msgid "Все через пул"
-msgstr "Everything is through a pool"
+msgstr "全部使用通道池"
 
 msgid "+ Свой список"
-msgstr "+ Your list"
+msgstr "+ 自定义列表"
 
 msgid "Сохранить и применить"
-msgstr "Save and apply"
+msgstr "保存并应用"
 
 msgid "Переименовать канал"
-msgstr "Rename channel"
+msgstr "重命名通道"
 
 msgid "VPN-интерфейс"
-msgstr "VPN interface"
+msgstr "VPN接口"
 
 msgid "мс"
-msgstr "ms"
+msgstr "毫秒"
 
 msgid "работает"
-msgstr "running"
+msgstr "正常"
 
 msgid "недоступен"
-msgstr "unavailable"
+msgstr "不可用"
 
 msgid "нет проверки"
-msgstr "no verification"
+msgstr "未检查"
 
 msgid "соед."
-msgstr "conn."
+msgstr "连接"
 
 msgid "Закреплено %d%% ожидаемой нагрузки"
-msgstr "%d%% of the expected load is pinned"
+msgstr "已固定 %d%% 的预计负载"
 
 msgid "Списки не закреплены, работает в пуле"
-msgstr "The lists are not fixed, they work in a pool."
+msgstr "列表未固定到通道，当前使用通道池"
 
 msgid "Свои домены и подсети"
-msgstr "Your domains and subnets"
+msgstr "自定义域名和子网"
 
 msgid "Локальные списки"
-msgstr "Local lists"
+msgstr "本地列表"
 
 msgid "пул секции"
-msgstr "section pool"
+msgstr "配置段通道池"
 
 msgid "пул: канала нет"
-msgstr "pool: no channel"
+msgstr "通道池：没有可用通道"
 
 msgid "канал упал, идет через пул"
-msgstr "The channel is down and is going through the pool."
+msgstr "通道故障，改用通道池"
 
 msgid "напрямую"
-msgstr "directly"
+msgstr "直连"
 
 msgid "канал упал, идет напрямую"
-msgstr "the channel is down, it goes directly"
+msgstr "通道故障，改为直连"
 
 msgid "по всем каналам"
-msgstr "on all channels"
+msgstr "所有通道"
 
 msgid "заблокировано"
-msgstr "blocked"
+msgstr "已屏蔽"
 
 msgid "после применения"
-msgstr "after use"
+msgstr "应用后"
 
 msgid "Список"
-msgstr "List"
+msgstr "列表"
 
 msgid "Нагрузка"
-msgstr "Load"
+msgstr "负载"
 
 msgid "Канал"
-msgstr "Channel"
+msgstr "通道"
 
 msgid "Если канал упал"
-msgstr "If the channel is down"
+msgstr "如果通道中断"
 
 msgid "Сейчас"
-msgstr "Now"
+msgstr "现在"
 
 msgid ""
 "В секции нет списков. Включите сервисы на вкладке «Маршрутизация» или "
 "добавьте свой список."
-msgstr ""
-"There are no lists in this section. Enable services in the \"Routing\" tab "
-"or add your own list."
+msgstr "该配置段没有列表。请在“路由”页面启用服务或添加自定义列表。"
 
 msgid "Пул (самый быстрый)"
-msgstr "Pool (the fastest)"
+msgstr "通道池（最快通道）"
 
 msgid "(недоступен)"
-msgstr "(not available)"
+msgstr "（无法使用）"
 
 msgid "Балансировка по всем"
-msgstr "Balancing across all"
+msgstr "在所有通道间分配"
 
 msgid "Напрямую, без туннеля"
-msgstr "Directly, without a tunnel"
+msgstr "直连，不经过隧道"
 
 msgid "Блокировать"
-msgstr "Block"
+msgstr "阻止"
 
 msgid "Удаленный канал %s"
-msgstr "Remote channel %s"
+msgstr "远程通道 %s"
 
 msgid "В пул секции"
-msgstr "In the section pool"
+msgstr "使用配置段通道池"
 
 msgid "Напрямую"
-msgstr "Directly"
+msgstr "直连"
 
 msgid "Не пускать"
-msgstr "Don't let in"
+msgstr "阻止"
 
 msgid "Изменить"
-msgstr "Change"
+msgstr "编辑"
 
 msgid "Удалить"
-msgstr "Delete"
+msgstr "删除"
 
 msgid "Название канала"
-msgstr "Channel name"
+msgstr "通道名称"
 
 msgid "Как показывать канал в интерфейсе и в боте"
-msgstr "How to display a channel in the interface and in the bot"
+msgstr "如何在界面和机器人中显示通道"
 
 msgid ""
 "Название привязано к серверу и ключу, а не к позиции в списке, так что "
 "переживет перестановку ссылок."
-msgstr ""
-"The name is tied to the server and key, not to the position in the list, so "
-"it will survive link reshuffling."
+msgstr "名称与服务器和密钥绑定，而不是与列表中的位置绑定，因此即使链接重新排序也不会丢失。"
 
 msgid "Например: Работа"
-msgstr "For example: Work"
+msgstr "例如：工作"
 
 msgid "Изменить список"
-msgstr "Edit list"
+msgstr "编辑列表"
 
 msgid "Название"
-msgstr "Name"
+msgstr "名称"
 
 msgid "Домены"
-msgstr "Domains"
+msgstr "域名"
 
 msgid ""
 "По одному на строку или через пробел. Поддомены входят: example.com "
 "покрывает www.example.com."
-msgstr ""
-"One per line or separated by spaces. Subdomains include: example.com covers "
-"www.example.com."
+msgstr "每行一个或用空格分隔。子域名包括：example.com 涵盖 www.example.com。"
 
 msgid "Подсети и IP"
-msgstr "Subnets and IP"
+msgstr "子网和IP"
 
 msgid "CIDR или отдельные адреса IPv4."
-msgstr "CIDR or individual IPv4 addresses."
+msgstr "CIDR 或单个 IPv4 地址。"
 
 msgid "Нужны название и хотя бы один домен или подсеть."
-msgstr "A name and at least one domain or subnet are required."
+msgstr "需要一个名称和至少一个域名或子网。"
 
 msgid "Не похоже на IPv4 или CIDR: %s"
-msgstr "Doesn't look like IPv4 or CIDR: %s"
+msgstr "看起来不像 IPv4 或 CIDR：%s"
 
 msgid "Удалить список"
-msgstr "Delete list"
+msgstr "删除列表"
 
 msgid "Удалить список «%s» и его привязку?"
-msgstr "Delete list \"%s\" and its binding?"
+msgstr "删除列表\"%s\"及其绑定？"
 
 msgid "5 мин"
-msgstr "5 min"
+msgstr "5分钟"
 
 msgid "10 мин"
-msgstr "10 min"
+msgstr "10分钟"
 
 msgid "1 час"
-msgstr "1 hour"
+msgstr "1小时"
 
 msgid "6 часов"
-msgstr "6 hours"
+msgstr "6小时"
 
 msgid "24 часа"
-msgstr "24 hours"
+msgstr "24小时"
 
 msgid "2 с"
-msgstr "2 s"
+msgstr "2秒"
 
 msgid "5 с"
-msgstr "5 s"
+msgstr "5秒"
 
 msgid "10 с"
-msgstr "10 s"
+msgstr "10秒"
 
 msgid "30 с"
-msgstr "30 s"
+msgstr "30秒"
 
 msgid "Выкл."
-msgstr "Off"
+msgstr "离开"
 
 msgid "Пул"
-msgstr "Pool"
+msgstr "水池"
 
 msgid "Сбросить масштаб ✕"
-msgstr "Reset zoom ✕"
+msgstr "重置缩放 ✕"
 
 msgid "Продолжить"
-msgstr "Continue"
+msgstr "继续"
 
 msgid "Пауза"
-msgstr "Pause"
+msgstr "暂停"
 
 msgid "Каналы: графики"
-msgstr "Channels: Charts"
+msgstr "通道图表"
 
 msgid "Обновление"
-msgstr "Update"
+msgstr "更新"
 
 msgid "Входящий трафик"
-msgstr "Incoming traffic"
+msgstr "入站流量"
 
 msgid "из туннеля к клиентам"
-msgstr "from the tunnel to the clients"
+msgstr "从隧道到客户端"
 
 msgid "Исходящий трафик"
-msgstr "Outgoing traffic"
+msgstr "出站流量"
 
 msgid "от клиентов в туннель"
-msgstr "from clients into the tunnel"
+msgstr "从客户端到隧道"
 
 msgid "Открытые соединения"
-msgstr "Open connections"
+msgstr "开放连接"
 
 msgid "Новые соединения"
-msgstr "New connections"
+msgstr "新建连接"
 
 msgid "в секунду"
-msgstr "per second"
+msgstr "每秒"
 
 msgid "Задержка проверки"
-msgstr "Delay in verification"
+msgstr "探测延迟"
 
 msgid "URL-тест канала, красным отмечены отказы"
-msgstr "Channel URL test, failures are marked in red"
+msgstr "通道 URL 测试，失败项以红色标记。"
 
 msgid ""
 "Выделите участок графика мышью, чтобы приблизить, двойной клик возвращает "
 "масштаб. Клик по каналу в легенде или по плитке оставляет только его, "
 "Ctrl/Cmd+клик скрывает или показывает."
-msgstr ""
-"Drag across part of the chart to zoom in. Double-click to reset the zoom. "
-"Click a channel in the legend or a tile to show only that channel. "
-"Ctrl/Cmd+click hides or shows it."
+msgstr "拖动选择图表区域可放大，双击可恢复缩放。点击图例中的通道或通道卡片可仅显示该通道。按住 Ctrl/Cmd 点击可隐藏或显示通道。"
 
 msgid "Онлайн"
-msgstr "Online"
+msgstr "在线"
 
 msgid "Данных пока нет."
-msgstr "There is no data yet."
+msgstr "目前还没有数据。"
 
 msgid ""
 "Графики пишет нативный движок раз в 2 секунды для каналов секций vpn и "
 "proxy. Проверьте, что движок запущен (Обзор), и подождите несколько секунд."
-msgstr ""
-"The native engine generates graphs every 2 seconds for the VPN and proxy "
-"section channels. Make sure the engine is running (Overview) and wait a few "
-"seconds."
+msgstr "原生引擎每 2 秒为 VPN 和代理通道生成一次图表。请确保引擎正在运行（概览），并稍等片刻。"
 
 msgid "нет ответа"
-msgstr "no answer"
+msgstr "无响应"
 
 msgid "Все"
-msgstr "All"
+msgstr "全部"
 
 msgid "Распределение трафика за период"
-msgstr "Traffic distribution for the period"
+msgstr "所选时段的流量分布"
 
 msgid "Работает"
-msgstr "Works"
+msgstr "正常"
 
 msgid "Недоступен"
-msgstr "Unavailable"
+msgstr "不可用"
 
 msgid "Нет проверки"
-msgstr "No verification"
+msgstr "未检查"
 
 msgid "Клик: показать только этот канал. Ctrl/Cmd+клик: скрыть или показать"
-msgstr "Click: Show only this channel. Ctrl/Cmd+click: Hide or show"
+msgstr "点击：仅显示此通道。按住 Ctrl/Cmd 键并点击：隐藏或显示"
 
 msgid "Вход"
-msgstr "Entrance"
+msgstr "入口"
 
 msgid "Выход"
-msgstr "Exit"
+msgstr "出口"
 
 msgid "Задержка"
-msgstr "Latency"
+msgstr "延迟"
 
 msgid "Соединений"
-msgstr "Connections"
+msgstr "连接"
 
 msgid "всего соединений"
-msgstr "total connections"
+msgstr "连接总数"
 
 msgid "запуск"
-msgstr "launch"
+msgstr "启动"
 
 msgid "поиск релиза"
-msgstr "search for release"
+msgstr "搜索发布"
 
 msgid "чтение списка пакетов"
-msgstr "reading the package list"
+msgstr "读取软件包列表"
 
 msgid "скачивание"
-msgstr "download"
+msgstr "下载"
 
 msgid "установка пакетов"
-msgstr "installing packages"
+msgstr "安装软件包"
 
 msgid "перезапуск служб"
-msgstr "restart services"
+msgstr "重启服务"
 
 msgid "готово"
-msgstr "ready"
+msgstr "完成"
 
 msgid "Установлена"
-msgstr "Installed"
+msgstr "已安装"
 
 msgid "ещё не проверялось"
-msgstr "not yet tested"
+msgstr "尚未测试"
 
 msgid "ошибка проверки: "
-msgstr "verification error:"
+msgstr "验证错误："
 
 msgid "есть обновление"
-msgstr "there is an update"
+msgstr "有更新"
 
 msgid "установлена последняя"
-msgstr "the latest one is installed"
+msgstr "已安装最新版本"
 
 msgid "Последняя на GitHub"
-msgstr "Latest on GitHub"
+msgstr "GitHub 最新版本"
 
 msgid "Проверено"
-msgstr "Verified"
+msgstr "已验证"
 
 msgid "Что нового в "
-msgstr "What's new in"
+msgstr "更新内容 "
 
 msgid "Идёт обновление: "
-msgstr "Update in progress:"
+msgstr "更新进行中："
 
 msgid "Обновление до %s установлено"
-msgstr "Update to %s installed"
+msgstr "已更新至 %s"
 
 msgid "Обновление не удалось"
-msgstr "Update failed"
+msgstr "更新失败"
 
 msgid "Журнал"
-msgstr "Magazine"
+msgstr "日志"
 
 msgid "Обновить до %s"
-msgstr "Update to %s"
+msgstr "更新至 %s"
 
 msgid "Обновить"
-msgstr "Refresh"
+msgstr "更新"
 
 msgid "Hybrid Failover обновлён до %s. Страница перезагрузится."
-msgstr "Hybrid Failover has been updated to %s. The page will reload."
+msgstr "Hybrid Failover 已更新到 %s。页面将重新加载。"
 
 msgid "Не удалось проверить: "
-msgstr "Failed to verify:"
+msgstr "验证失败："
 
 msgid ""
 "Установить Hybrid Failover %s? Службы будут перезапущены, связь с роутером "
 "может пропасть на несколько секунд."
-msgstr ""
-"Install Hybrid Failover %s? Services will restart and the router may be "
-"unreachable for a few seconds."
+msgstr "安装 Hybrid Failover %s？服务将重新启动，路由器可能会有几秒钟无法访问。"
 
 msgid "Обновление не запущено: "
-msgstr "Update not running:"
+msgstr "更新未运行："
 
 msgid "Hybrid Failover: обновление"
-msgstr "Hybrid Failover: Update"
+msgstr "Hybrid Failover：更新"
 
 msgid ""
 "Проверка новых версий на GitHub и установка из релиза. Ставятся только "
 "пакеты для этого роутера, каждый файл сверяется с контрольной суммой из "
 "релиза. Настройки сохраняются."
 msgstr ""
-"Check for new versions on GitHub and install from the release. Only packages"
-" for this router are installed, and each file is verified against the "
-"checksum from the release. Settings are preserved."
+"检查 GitHub 上的新版本并从 Release 安装。只安装适用于当前路由器的软件包，每个文件都会与 Release "
+"中的校验和比对。现有设置会保留。"
 
 msgid "Проверить обновления"
-msgstr "Check for updates"
+msgstr "检查更新"
 
 msgid "Готово"
-msgstr "Done"
+msgstr "完成"
 
 msgid "Ошибка: "
-msgstr "Error:"
+msgstr "错误："
 
 msgid "running"
-msgstr "running"
+msgstr "运行中"
 
 msgid "stopped"
-msgstr "stopped"
+msgstr "已停止"
 
 msgid "Сохранено в pending-конфиг. Нажмите «Проверить» или «Применить»."
-msgstr "Saved in pending config. Click \"Check\" or \"Apply.\""
+msgstr "已保存到 pending 配置。请点击“验证”或“应用”。"
 
 msgid "Ошибка сохранения: "
-msgstr "Saving error:"
+msgstr "保存错误："
 
 msgid "Hybrid Failover Bot: JSON-конфиг"
-msgstr "Hybrid Failover Bot: JSON config"
+msgstr "Hybrid Failover Bot：JSON 配置"
 
 msgid "Токен"
-msgstr "Token"
+msgstr "令牌"
 
 msgid "Имя роутера (в уведомлениях и панели)"
-msgstr "Router name (in notifications and panel)"
+msgstr "路由器名称（在通知和面板中）"
 
 msgid "по умолчанию hostname"
-msgstr "default hostname"
+msgstr "默认主机名"
 
 msgid "ID администраторов (через запятую)"
-msgstr "Administrator IDs (comma separated)"
+msgstr "管理员 ID（以逗号分隔）"
 
 msgid "ID только чтение (viewer_ids)"
-msgstr "Read-only IDs (viewer_ids)"
+msgstr "只读 ID（viewer_ids）"
 
 msgid "Политика failover"
-msgstr "Policy failover"
+msgstr "故障转移策略"
 
 msgid "outage-only (только при падении)"
-msgstr "outage-only (only when falling)"
+msgstr "outage-only（仅在故障时）"
 
 msgid "prefer-primary (предпочитать основной)"
-msgstr "prefer-primary"
+msgstr "prefer-primary（优先使用主通道）"
 
 msgid "fastest (urltest passive)"
-msgstr "fastest (urltest passive)"
+msgstr "fastest（被动 urltest）"
 
 msgid "URL Clash API"
-msgstr "URL Clash API"
+msgstr "Clash API URL"
 
 msgid "Скрипт init.d hybrid-failover"
-msgstr "Init.d hybrid-failover script"
+msgstr "init.d 脚本 hybrid-failover"
 
 msgid "Путь к логам"
-msgstr "Path to logs"
+msgstr "日志路径"
 
 msgid "Путь к audit-логу"
-msgstr "Path to the audit log"
+msgstr "审计日志路径"
 
 msgid "Таймаут проверки, сек"
-msgstr "Check timeout, sec"
+msgstr "检查超时时间，秒"
 
 msgid "Алерты failover (true/false)"
-msgstr "Failover alerts (true/false)"
+msgstr "故障转移通知（true/false）"
 
 msgid "Интервал алертов, сек"
-msgstr "Alert interval, sec"
+msgstr "警报间隔，秒"
 
 msgid "Сохранить в pending"
-msgstr "Save to pending"
+msgstr "保存到 pending"
 
 msgid "Действия с конфигом"
-msgstr "Config actions"
+msgstr "配置操作"
 
 msgid "Проверить pending"
-msgstr "Validate pending"
+msgstr "验证待应用配置"
 
 msgid "Применить"
-msgstr "Apply"
+msgstr "应用"
 
 msgid "Откатить"
-msgstr "Rollback"
+msgstr "回滚"
 
 msgid "Перезапуск"
-msgstr "Restart"
+msgstr "重启"
 
 msgid "Перезапустить бота"
-msgstr "Restart bot"
+msgstr "重启机器人"
 
 msgid "Telegram-бот Hybrid Failover"
-msgstr "Hybrid Failover Telegram bot"
+msgstr "Hybrid Failover Telegram 机器人"
 
 msgid "Настройка бота, pending-конфиг и безопасное применение изменений."
-msgstr "Setting up the bot, pending config, and safely applying changes."
+msgstr "配置机器人，检查 pending 配置并安全应用更改。"
 
 msgid "Включить сервис"
-msgstr "Enable service"
+msgstr "启用服务"
 
 msgid "Путь к бинарнику"
-msgstr "Path to the binary"
+msgstr "二进制文件的路径"
 
 msgid "Путь к конфигу JSON"
-msgstr "Path to JSON config"
+msgstr "JSON 配置路径"
 
 msgid "Путь к лог-файлу"
-msgstr "Path to the log file"
+msgstr "日志文件路径"
 
 msgid "Статус сервиса"
-msgstr "Service status"
+msgstr "服务状态"
 
 msgid "init.d hybrid-failover-bot:"
-msgstr "init.d hybrid-failover-bot:"
+msgstr "init.d hybrid-failover-bot："
 
 msgid "Ручное переключение"
-msgstr "Manual switching"
+msgstr "手动切换"
 
 msgid "Outbound"
-msgstr "Outbound"
+msgstr "出站"
 
 msgid "При policy fastest ручное переключение недоступно"
-msgstr "Manual switching is not available with the fastest policy."
+msgstr "使用 fastest 策略时不能手动切换"
 
 msgid "Подтверждение"
-msgstr "Confirm"
+msgstr "确认"
 
 msgid "Переключить selector "
-msgstr "Switch selector"
+msgstr "切换 selector "
 
 msgid "Переключено"
-msgstr "Switched"
+msgstr "已切换"
 
 msgid "Ошибка"
-msgstr "Error"
+msgstr "错误"
 
 msgid "Переключить"
-msgstr "Switch"
+msgstr "切换"
 
 msgid "Диагностика и данные"
-msgstr "Diagnostics and data"
+msgstr "诊断和数据"
 
 msgid "Live probe"
-msgstr "Live probe"
+msgstr "实时探测"
 
 msgid "Экспорт журнала"
-msgstr "Export history"
+msgstr "导出日志"
 
 msgid "Графики задержек сброшены"
-msgstr "Delay charts have been reset"
+msgstr "延迟图表已重置"
 
 msgid "Сбросить графики"
-msgstr "Reset charts"
+msgstr "重置图表"
 
 msgid "Обзор"
-msgstr "Overview"
+msgstr "概览"
 
 msgid "Каналы"
-msgstr "Channels"
+msgstr "通道"
 
 msgid "Инструменты"
-msgstr "Tools"
+msgstr "工具"
 
 msgid "Каналы и задержки"
-msgstr "Channels and latency"
+msgstr "通道和延迟"
 
 msgid "История переключений"
-msgstr "Switch history"
+msgstr "切换历史记录"
 
 msgid "Показать"
-msgstr "Show"
+msgstr "显示"
 
 msgid "Обновлено"
-msgstr "Updated"
+msgstr "更新"
 
 msgid "следующее через"
-msgstr "next in"
+msgstr "下次更新还有"
 
 msgid "не удалось получить статус"
-msgstr "failed to fetch status"
+msgstr "获取状态失败"
 
 msgid "Hybrid Failover"
 msgstr "Hybrid Failover"
@@ -736,164 +708,156 @@ msgstr "Hybrid Failover"
 msgid ""
 "Сводка состояния, каналы failover, контроллер политики и журнал "
 "переключений. Обновление каждые 5 с."
-msgstr ""
-"Status summary, failover channels, policy controller, and switchover log. "
-"Updated every 5 seconds."
+msgstr "状态摘要、故障转移通道、策略控制器和切换日志。每 5 秒更新一次。"
 
 msgid "Include: через Hybrid Failover (nft mark)"
-msgstr "Include: via Hybrid Failover (nft mark)"
+msgstr "Include：通过 Hybrid Failover（nft mark）"
 
 msgid "Exclude: миновать Hybrid Failover"
-msgstr "Exclude: Bypass Hybrid Failover"
+msgstr "Exclude：绕过 Hybrid Failover"
 
 msgid "Full route: весь трафик клиента через секцию"
-msgstr "Full route: all client traffic through the section"
+msgstr "Full route：客户端的全部流量通过指定配置段"
 
 msgid "Global exclude: исключить из tproxy маршрутизации"
-msgstr "Global exclude: exclude from tproxy routing"
+msgstr "全局排除：从 tproxy 路由中排除"
 
 msgid "Трафик клиента проходит через sing-box tproxy и nft mark."
-msgstr "Client traffic passes through sing-box tproxy and nft mark."
+msgstr "客户端流量通过 sing-box tproxy 和 nft 标记。"
 
 msgid "Клиент не попадает под Hybrid Failover (direct)."
-msgstr "The client is not subject to Hybrid Failover (direct)."
+msgstr "该客户端不经过 Hybrid Failover（direct）。"
 
 msgid "Весь трафик клиента направляется через выбранную секцию маршрутизации."
-msgstr "All client traffic is routed through the selected routing section."
+msgstr "客户端的全部流量都通过所选路由配置段。"
 
 msgid "Исключение из tproxy без per-section правила."
-msgstr "Exception from tproxy without per-section rule."
+msgstr "不经过 tproxy，且不使用配置段规则。"
 
 msgid ""
 "Нет правил клиентов. Добавьте client_rule ниже или выберите IP из DHCP."
-msgstr "No client rules yet. Add a client_rule below or pick an IP from DHCP."
+msgstr "当前没有客户端规则。请在下方添加客户端规则或从 DHCP 服务器选择一个 IP 地址。"
 
 msgid ""
 "Core не запущен. Запустите hybrid-failover, затем добавьте client_rule."
-msgstr "Core is not running. Start hybrid-failover, then add client_rule."
+msgstr "core 未运行。请先启动 hybrid-failover，再添加 client_rule。"
 
 msgid "Нет effective rules (client_rule пуст или core не запущен)."
-msgstr "No effective rules (empty client_rule or core not running)."
+msgstr "没有有效的规则（client_rule 为空或 core 未运行）。"
 
 msgid "IP"
 msgstr "IP"
 
 msgid "Режим"
-msgstr "Mode"
+msgstr "模式"
 
 msgid "Источник"
-msgstr "Source"
+msgstr "来源"
 
 msgid "Нет leases или ubus dhcp недоступен"
-msgstr "No DHCP leases (check dnsmasq/odhcpd and rpcd-mod-luci)"
+msgstr "没有租约，或者 ubus dhcp 不可用"
 
 msgid "Нет активных DHCP leases"
-msgstr "No active DHCP leases"
+msgstr "没有活动的 DHCP 租约。"
 
 msgid "Добавить"
-msgstr "Add"
+msgstr "添加"
 
 msgid "IP подставлен. Выберите режим и нажмите Save & Apply."
-msgstr "IP filled in. Choose mode and click Save & Apply."
+msgstr "IP地址已输入。选择模式，然后单击\"保存并应用\"。"
 
 msgid "Нажмите «Добавить правило», затем снова выберите IP из DHCP."
-msgstr "Click Add rule, then pick the IP from DHCP again."
+msgstr "点击\"添加规则\"，然后再次从 DHCP 服务器选择 IP 地址。"
 
 msgid "Выбрать"
-msgstr "Choose"
+msgstr "选择"
 
 msgid "DHCP leases"
-msgstr "DHCP leases"
+msgstr "DHCP租约"
 
 msgid "Hostname"
-msgstr "Hostname"
+msgstr "主机名"
 
 msgid "MAC"
 msgstr "MAC"
 
 msgid "Lease"
-msgstr "Lease"
+msgstr "租期"
 
 msgid "Effective rules (как видит core)"
-msgstr "Effective rules (as seen by the core)"
+msgstr "生效规则（core 看到的规则）"
 
 msgid ""
 "Read-only сводка list_clients. Изменения клиентов применяются сразу через "
 "reload, без pending."
-msgstr ""
-"Read-only summary list_clients. Client changes are applied immediately after"
-" reload, without pending."
+msgstr "list_clients 的只读摘要。客户端更改通过 reload 立即生效，不进入 pending。"
 
 msgid "Выбрать из DHCP…"
-msgstr "Pick from DHCP…"
+msgstr "从 DHCP 服务器选择…"
 
 msgid "Hybrid Failover: клиенты"
-msgstr "Hybrid Failover: clients"
+msgstr "Hybrid Failover：客户端"
 
 msgid ""
 "Единые правила per-client (client_rule). Legacy list-опции читаются, пока "
 "нет client_rule секций."
-msgstr ""
-"Unified per-client rules (client_rule). Legacy list options are read until "
-"client_rule sections are defined."
+msgstr "统一的客户端规则（client_rule）。在定义 client_rule 部分之前，将读取旧版列表选项。"
 
 msgid "Правила клиентов"
-msgstr "Client rules"
+msgstr "客户端规则"
 
 msgid "Добавить правило"
-msgstr "Add rule"
+msgstr "添加规则"
 
 msgid ""
 "Include/exclude: nft mark. Full route: секция маршрутизации. Global exclude:"
 " direct без tproxy."
-msgstr ""
-"Include/exclude: nft mark. Full route: routing section. Global exclude: "
-"direct without tproxy."
+msgstr "包含/排除：nft 标记。完整路由：路由部分。全局排除：不带代理的直接路由。"
 
 msgid "IP / CIDR клиента"
-msgstr "Client IP/CIDR"
+msgstr "客户端 IP/CIDR"
 
 msgid "Описание режима"
-msgstr "Mode description"
+msgstr "模式描述"
 
 msgid "Секция маршрутизации"
-msgstr "Routing section"
+msgstr "路由配置段"
 
 msgid "Reload sing-box"
-msgstr "Reload sing-box"
+msgstr "重新加载 sing-box"
 
 msgid "Сохранено. Применяется reload sing-box…"
-msgstr "Saved. Applying reload sing-box…"
+msgstr "已保存。正在应用重新加载 sing-box…"
 
 msgid "OK"
-msgstr "OK"
+msgstr "确定"
 
 msgid "Проверка"
-msgstr "Validation"
+msgstr "检查"
 
 msgid "Russia inside"
-msgstr "Russia inside"
+msgstr "俄罗斯内部"
 
 msgid "Russia outside"
-msgstr "Russia outside"
+msgstr "俄罗斯境外"
 
 msgid "Ukraine inside"
-msgstr "Ukraine inside"
+msgstr "乌克兰境内"
 
 msgid "Geoblock"
-msgstr "Geoblock"
+msgstr "地域限制"
 
 msgid "Block"
-msgstr "Block"
+msgstr "阻止"
 
 msgid "Porn"
-msgstr "Porn"
+msgstr "成人内容"
 
 msgid "News"
-msgstr "News"
+msgstr "新闻"
 
 msgid "Anime"
-msgstr "Anime"
+msgstr "动漫"
 
 msgid "YouTube"
 msgstr "YouTube"
@@ -947,23 +911,21 @@ msgid "Netflix"
 msgstr "Netflix"
 
 msgid "Hybrid Failover: маршрутизация"
-msgstr "Hybrid Failover: routing"
+msgstr "Hybrid Failover：路由"
 
 msgid ""
 "Настройка VPN + failover, URLTest и подписок. Сохраните UCI, затем "
 "«Проверить» и «Применить»."
-msgstr ""
-"Configure VPN + failover, URLTest, and subscriptions. Save the UCI, then "
-"\"Test\" and \"Apply.\""
+msgstr "配置 VPN、故障转移、URLTest 和订阅。保存 UCI 后，依次点击“验证”和“应用”。"
 
 msgid "Глобальные настройки"
-msgstr "Global settings"
+msgstr "全局设置"
 
 msgid "Включить Hybrid Failover"
-msgstr "Enable Hybrid Failover"
+msgstr "启用 Hybrid Failover"
 
 msgid "Тип DNS"
-msgstr "Type DNS"
+msgstr "DNS 类型"
 
 msgid "DoH"
 msgstr "DoH"
@@ -975,119 +937,110 @@ msgid "UDP"
 msgstr "UDP"
 
 msgid "DNS-сервер"
-msgstr "DNS server"
+msgstr "DNS服务器"
 
 msgid "Bootstrap DNS"
-msgstr "Bootstrap DNS"
+msgstr "引导 DNS"
 
 msgid "Путь cache sing-box"
-msgstr "sing-box cache path"
+msgstr "sing-box 缓存路径"
 
 msgid "Отключить QUIC в маршрутизации"
-msgstr "Disable QUIC in routing"
+msgstr "禁用路由中的 QUIC"
 
 msgid "Отключить IPv6 на LAN"
-msgstr "Disable IPv6 on LAN"
+msgstr "在 LAN 上禁用 IPv6"
 
 msgid ""
 "RA/DHCPv6 off и filter-AAAA в dnsmasq: tproxy только IPv4. Без этого "
 "Instagram и другие сервисы могут обходить прокси по IPv6. Private DNS на "
 "телефоне всё равно нужно выключить вручную."
 msgstr ""
-"RA/DHCPv6 off and filter-AAAA in dnsmasq: tproxy IPv4 only. Without this, "
-"Instagram and other services can bypass the proxy over IPv6. Private DNS on "
-"the phone still needs to be manually disabled."
+"关闭 RA/DHCPv6，并在 dnsmasq 中设置 filter-AAAA：tproxy 仅支持 IPv4。否则，Instagram "
+"和其他服务可以通过 IPv6 绕过代理。手机上的私有 DNS 仍需手动禁用。"
 
 msgid "DNS rewrite TTL (сек)"
-msgstr "DNS rewrite TTL (sec)"
+msgstr "DNS 重写 TTL（秒）"
 
 msgid "Clash API listen"
-msgstr "Clash API listen"
+msgstr "Clash API 监听"
 
 msgid "Включить Yacd (Clash UI)"
-msgstr "Enable Yacd (Clash UI)"
+msgstr "启用 Yacd（Clash UI）"
 
 msgid "Открыть Clash UI"
-msgstr "Open Clash UI"
+msgstr "打开 Clash 用户界面"
 
 msgid "Не включайте WAN access без необходимости: API будет доступен извне."
-msgstr ""
-"Do not enable WAN access unless necessary: the API will be accessible from "
-"the outside."
+msgstr "如无必要，请勿启用 WAN 访问，否则 API 将可从外网访问。"
 
 msgid "Clash API на WAN (0.0.0.0)"
-msgstr "Clash API on WAN (0.0.0.0)"
+msgstr "WAN 上的 Clash API (0.0.0.0)"
 
 msgid "Clash API secret (Bearer)"
-msgstr "Clash API secret (Bearer)"
+msgstr "Clash API 密钥（持有者）"
 
 msgid "Исходящий сетевой интерфейс"
-msgstr "Output network interface"
+msgstr "出站网络接口"
 
 msgid "пусто = авто"
-msgstr "empty = auto"
+msgstr "空 = 自动"
 
 msgid "Основная секция маршрутизации"
-msgstr "Main routing section"
+msgstr "主路由配置段"
 
 msgid "Интервал обновления списков"
-msgstr "List update interval"
+msgstr "列表更新间隔"
 
 msgid "Скачивать community-списки через proxy"
-msgstr "Download community lists via proxy"
+msgstr "通过 proxy 下载社区列表"
 
 msgid "Секция proxy для загрузки списков"
-msgstr "Proxy section for loading lists"
+msgstr "用于下载列表的 proxy 配置段"
 
 msgid "Webhook URL (failover)"
-msgstr "Webhook URL (failover)"
+msgstr "Webhook URL（故障转移）"
 
 msgid "Не изменять dnsmasq/DHCP"
-msgstr "Do not touch dnsmasq/DHCP"
+msgstr "请勿更改 dnsmasq/DHCP"
 
 msgid "Исключить IP из маршрутизации"
-msgstr "Exclude IPs from routing"
+msgstr "将 IP 地址从路由中排除"
 
 msgid ""
 "Глобально не направлять эти IP через sing-box (не путать с вкладкой "
 "«Клиенты»)."
-msgstr ""
-"Globally do not route these IPs through the sing-box (not to be confused "
-"with the Clients tab)."
+msgstr "这些 IP 全局不经过 sing-box。此设置与“客户端”页面中的规则不同。"
 
 msgid "Интервал probe контроллера"
-msgstr "Controller probe interval"
+msgstr "控制器探测间隔"
 
 msgid ""
 "Как часто фоновый controller проверяет primary VPN (не URLTest interval)."
-msgstr ""
-"How often the background controller checks the primary VPN (not URLTest "
-"interval)."
+msgstr "后台控制器检查主 VPN 的频率（不是 URLTest 间隔）。"
 
 msgid "Макс. строк в журнале failover"
-msgstr "Max failover history lines"
+msgstr "故障转移日志中的最大行数"
 
 msgid "Точек delay-history на канал"
-msgstr "Delay-history points per channel"
+msgstr "每个通道的延迟历史点"
 
 msgid ""
 "Размер буфера задержек в /var/run/hybrid-failover/delay-history.json для "
 "графиков в обзоре."
-msgstr ""
-"Delay buffer size in /var/run/hybrid-failover/delay-history.json for graphs "
-"in the overview."
+msgstr "概览图表中 /var/run/hybrid-failover/delay-history.json 中的延迟缓冲区大小。"
 
 msgid "Subscription URLs"
-msgstr "Subscription URLs"
+msgstr "订阅 URL"
 
 msgid "Секции маршрутизации"
-msgstr "Routing sections"
+msgstr "路由配置段"
 
 msgid "Включить секцию"
-msgstr "Enable section"
+msgstr "启用配置段"
 
 msgid "Тип подключения"
-msgstr "Connection type"
+msgstr "连接类型"
 
 msgid "VPN"
 msgstr "VPN"
@@ -1096,255 +1049,251 @@ msgid "Proxy"
 msgstr "Proxy"
 
 msgid "VPN + резервные proxy"
-msgstr "VPN + backup proxies"
+msgstr "VPN + 备用 proxy"
 
 msgid "outage-only: только при падении VPN"
-msgstr "outage-only: only when the VPN is down"
+msgstr "outage-only：仅在 VPN 故障时切换"
 
 msgid "prefer-primary: вернуться на VPN раньше"
-msgstr "prefer-primary: Switch back to VPN earlier"
+msgstr "prefer-primary：优先恢复到 VPN"
 
 msgid "fastest: urltest в sing-box (controller passive)"
-msgstr "fastest: urltest in sing-box (controller passive)"
+msgstr "fastest：sing-box 使用 urltest，controller 仅监控"
 
 msgid ""
 "fastest: sing-box urltest выбирает канал; controller только наблюдает. Для "
 "VPN→backup при падении используйте outage-only."
 msgstr ""
-"fastest: sing-box urltest selects a channel; controller only observes. For "
-"VPN→backup in case of failure, use outage-only."
+"fastest：由 sing-box urltest 选择通道，controller 只负责监控。需要在 VPN 故障时切换到备用通道，请使用 "
+"outage-only。"
 
 msgid "Подробнее на вкладке «Обзор»."
-msgstr "More details on the Overview tab."
+msgstr "更多详情请参见\"概览\"选项卡。"
 
 msgid "Резервные URI"
-msgstr "Backup URIs"
+msgstr "备份URI"
 
 msgid ""
 "Порядок в списке = приоритет резервов. vpn:// и awg2:// поддерживаются. "
 "AmneziaWG 3.1: на роутере kmod-amneziawg и amneziawg-tools 3.1+."
 msgstr ""
-"List order = backup priority. vpn:// and awg2:// are supported. AmneziaWG "
-"3.1 needs kmod-amneziawg and amneziawg-tools 3.1+ on the router."
+"列表顺序决定备用通道优先级。支持 vpn:// 和 awg2://。使用 AmneziaWG 3.1 时，路由器需要安装 kmod-amneziawg "
+"和 amneziawg-tools 3.1+。"
 
 msgid "Порог сбоев primary (fail)"
-msgstr "Primary fail threshold"
+msgstr "主通道故障阈值（fail）"
 
 msgid "Порог восстановления (recover)"
-msgstr "Recovery threshold"
+msgstr "恢复阈值"
 
 msgid "Превью URI"
-msgstr "URI preview"
+msgstr "URI预览"
 
 msgid "Введите URI"
-msgstr "Enter URI"
+msgstr "输入URI"
 
 msgid "Проверить URI"
-msgstr "Check URI"
+msgstr "检查 URI"
 
 msgid "Порядок резервов"
-msgstr "Backup order"
+msgstr "备用通道顺序"
 
 msgid "Индекс в списке failover_proxy_links:"
-msgstr "Index in the failover_proxy_links list:"
+msgstr "failover_proxy_links 列表中的索引："
 
 msgid "Вверх"
-msgstr "Up"
+msgstr "向上"
 
 msgid "Вниз"
-msgstr "Down"
+msgstr "向下"
 
 msgid "Тип proxy-конфига"
-msgstr "Proxy configuration type"
+msgstr "proxy 配置类型"
 
 msgid "Connection URL"
-msgstr "Connection URL"
+msgstr "连接 URL"
 
 msgid "Outbound JSON"
-msgstr "Outbound JSON"
+msgstr "出站 JSON"
 
 msgid "URLTest"
-msgstr "URLTest"
+msgstr "URL测试"
 
 msgid "Proxy URL"
-msgstr "Proxy URL"
+msgstr "代理 URL"
 
 msgid "URLTest URI"
-msgstr "URLTest URI"
+msgstr "URL测试URI"
 
 msgid "URLTest interval"
-msgstr "URLTest interval"
+msgstr "URL测试间隔"
 
 msgid "Duration: 30s, 1m, 5m и т.д."
-msgstr "Duration: 30s, 1m, 5m, etc."
+msgstr "持续时间：30秒、1分钟、5分钟等。"
 
 msgid "URLTest tolerance (ms)"
-msgstr "URLTest tolerance (ms)"
+msgstr "URL测试容差（毫秒）"
 
 msgid "URLTest probe URL"
-msgstr "URLTest probe URL"
+msgstr "URLTest 探测 URL"
 
 msgid "URLTest idle timeout"
-msgstr "URLTest idle timeout"
+msgstr "URL测试空闲超时"
 
 msgid "Interrupt existing connections"
-msgstr "Interrupt existing connections"
+msgstr "中断现有连接"
 
 msgid "UDP over TCP (SS/SOCKS)"
-msgstr "UDP over TCP (SS/SOCKS)"
+msgstr "基于 TCP 的 UDP（SS/SOCKS）"
 
 msgid "Domain resolver"
-msgstr "Domain resolver"
+msgstr "域名解析器"
 
 msgid "Domain resolver DNS type"
-msgstr "Domain resolver DNS type"
+msgstr "域名解析器 DNS 类型"
 
 msgid "Domain resolver DNS server"
-msgstr "Domain resolver DNS server"
+msgstr "域名解析器 DNS 服务器"
 
 msgid "Community lists"
-msgstr "Community lists"
+msgstr "社区列表"
 
 msgid "Service list"
-msgstr "Service list"
+msgstr "服务列表"
 
 msgid "User domain list type"
-msgstr "User domain list type"
+msgstr "用户域列表类型"
 
 msgid "Disabled"
-msgstr "Disabled"
+msgstr "已禁用"
 
 msgid "Dynamic list"
-msgstr "Dynamic list"
+msgstr "动态列表"
 
 msgid "Text list"
-msgstr "Text list"
+msgstr "文本列表"
 
 msgid "User domains"
-msgstr "User domains"
+msgstr "用户域"
 
 msgid "User domains (text)"
-msgstr "User domains (text)"
+msgstr "用户域（文本）"
 
 msgid "Список подсетей / IP (тип)"
-msgstr "List of subnets / IP (type)"
+msgstr "子网/IP（类型）列表"
 
 msgid "Отключён"
-msgstr "Disabled"
+msgstr "已禁用"
 
 msgid "По одному в списке"
-msgstr "One per list"
+msgstr "每项单独列出"
 
 msgid "Текстовый список"
-msgstr "Text list"
+msgstr "文本列表"
 
 msgid "Подсети и IP через VPN"
-msgstr "Subnets and IP over VPN"
+msgstr "通过 VPN 的子网和 IP"
 
 msgid "Подсети и IP через VPN (текст)"
-msgstr "Subnets and IP over VPN (text)"
+msgstr "通过 VPN 的子网和 IP（文本）"
 
 msgid "Local domain lists"
-msgstr "Local domain lists"
+msgstr "本地域列表"
 
 msgid "Local subnet lists"
-msgstr "Local subnet lists"
+msgstr "本地子网列表"
 
 msgid "Remote domain lists"
-msgstr "Remote domain lists"
+msgstr "远程域列表"
 
 msgid "Remote subnet lists"
-msgstr "Remote subnet lists"
+msgstr "远程子网列表"
 
 msgid "Fully routed IPs (nft tproxy)"
-msgstr "Fully routed IPs (nft tproxy)"
+msgstr "完全路由的 IP 地址（nft tproxy）"
 
 msgid ""
 "IP/подсети клиентов LAN: весь их трафик принудительно через sing-box (fully "
 "routed)."
-msgstr ""
-"LAN clients' IP/subnets: all their traffic is forced through a sing-box "
-"(fully routed)."
+msgstr "LAN 客户端的 IP 或子网，其全部流量都会强制经过 sing-box（fully routed）。"
 
 msgid "Форма не готова"
-msgstr "The form is not ready"
+msgstr "表格尚未准备就绪"
 
 msgid "Нажмите «Проверить» после сохранения формы."
-msgstr "Click \"Verify\" after saving the form."
+msgstr "保存表单后，点击\"验证\"。"
 
 msgid "Сначала успешная проверка"
-msgstr "Successful validation required first"
+msgstr "需要先通过检查"
 
 msgid "Применение"
-msgstr "Apply"
+msgstr "应用"
 
 msgid "3. Применить"
-msgstr "3. Apply"
+msgstr "3. 应用"
 
 msgid "Применение конфигурации"
-msgstr "Apply configuration"
+msgstr "应用配置"
 
 msgid ""
 "1) Сохраните форму LuCI  2) Проверить  3) Применить. «Сохранить и применить»"
 " выполняет все шаги. «Проверить» сохраняет форму и проверяет sing-box "
 "конфиг."
-msgstr ""
-"1) Save the LuCI form 2) Validate 3) Apply. \"Save and Apply\" performs all "
-"steps. \"Validate\" saves the form and validates the sing-box configuration."
+msgstr "1) 保存 LuCI 表单  2) 验证  3) 应用。\"保存并应用\"会完成全部步骤。\"验证\"会保存表单并检查 sing-box 配置。"
 
 msgid "Открыть обзор failover"
-msgstr "Open failover overview"
+msgstr "打开故障转移概览"
 
 msgid "2. Проверить"
-msgstr "2. Validate"
+msgstr "2. 验证"
 
 msgid "Откат pending"
-msgstr "Pending rollback"
+msgstr "回滚待处理"
 
 msgid "Откатить pending"
-msgstr "Rollback pending"
+msgstr "回滚待处理"
 
 msgid "list-update"
 msgstr "list-update"
 
 msgid "Обновить community lists"
-msgstr "Update community lists"
+msgstr "更新社区列表"
 
 msgid "subscription-refresh"
 msgstr "subscription-refresh"
 
 msgid "Обновить подписки"
-msgstr "Update subscriptions"
+msgstr "更新订阅"
 
 msgid "Дублировать секцию"
-msgstr "Duplicate section"
+msgstr "复制配置段"
 
 msgid "Исходная секция"
-msgstr "Source section"
+msgstr "原配置段"
 
 msgid "Имя новой секции"
-msgstr "New section name"
+msgstr "新配置段名称"
 
 msgid "Дублирование"
-msgstr "Duplication"
+msgstr "复制"
 
 msgid "Дублировать секцию…"
-msgstr "Duplicate section…"
+msgstr "复制配置段…"
 
 msgid "validate failed"
-msgstr "validate failed"
+msgstr "验证失败"
 
 msgid "бит/с"
-msgstr "bit/s"
+msgstr "比特/秒"
 
 msgid "кбит/с"
-msgstr "kbps"
+msgstr "千比特/秒"
 
 msgid "Мбит/с"
-msgstr "Mbps"
+msgstr "Mbit/s"
 
 msgid "Гбит/с"
-msgstr "Gbps"
+msgstr "Gbit/s"
 
 msgid "Б"
 msgstr "B"
@@ -1362,280 +1311,277 @@ msgid "ТБ"
 msgstr "TB"
 
 msgid "с"
-msgstr "With"
+msgstr "秒"
 
 msgid "Складывать каналы друг на друга"
-msgstr "Stack channels on top of each other"
+msgstr "将通道堆叠在一起"
 
 msgid "Стек"
-msgstr "Stack"
+msgstr "堆叠"
 
 msgid "Последнее"
-msgstr "Latest"
+msgstr "最新值"
 
 msgid "Среднее"
-msgstr "Average"
+msgstr "平均值"
 
 msgid "Макс."
-msgstr "Max."
+msgstr "最大值"
 
 msgid "Мин."
-msgstr "Min."
+msgstr "最小值"
 
 msgid "н/д"
-msgstr "n/a"
+msgstr "不适用"
 
 msgid "Primary VPN"
-msgstr "Primary VPN"
+msgstr "主 VPN"
 
 msgid "URLTest группа"
-msgstr "URLTest group"
+msgstr "URLTest 组"
 
 msgid "активный резерв"
-msgstr "active reserve"
+msgstr "当前备用通道"
 
 msgid "резерв"
-msgstr "backup"
+msgstr "备用通道"
 
 msgid "engine down"
-msgstr "engine down"
+msgstr "引擎已停止"
 
 msgid "живы"
-msgstr "alive"
+msgstr "可用"
 
 msgid "handshake"
-msgstr "handshake"
+msgstr "握手"
 
 msgid "Каналы failover"
-msgstr "Failover channels"
+msgstr "故障转移通道"
 
 msgid "Каналы не найдены. Включите VPN+failover в секции маршрутизации."
-msgstr "No channels found. Enable VPN+failover in the routing section."
+msgstr "未找到通道。请在路由设置中启用 VPN+故障转移。"
 
 msgid "Резервы"
-msgstr "Reserves"
+msgstr "备用通道"
 
 msgid "URLTest member"
-msgstr "URLTest member"
+msgstr "URLTest 成员"
 
 msgid "Активный"
-msgstr "Active"
+msgstr "当前使用"
 
 msgid ""
 "AWG2: handshake. HTTP urltest выбирает канал. Ручное переключение пинит "
 "selector, не urltest."
 msgstr ""
-"AWG2: handshake. HTTP urltest selects the channel. Manual switching pins the"
-" selector, not urltest."
+"AWG2 使用 handshake 状态。HTTP urltest 选择通道。手动切换会固定 selector，而不是固定 urltest。"
 
 msgid "Статус из кэша Clash. Live probe обновит проверку всех каналов."
-msgstr ""
-"Status from the Clash cache. Live probe will update the scan of all "
-"channels."
+msgstr "状态来自 Clash 缓存。Live probe 会重新检查所有通道。"
 
 msgid "с назад"
-msgstr "s ago"
+msgstr "秒前"
 
 msgid "мин назад"
-msgstr "min ago"
+msgstr "分钟前"
 
 msgid "ч назад"
-msgstr "h ago"
+msgstr "小时前"
 
 msgid "д назад"
-msgstr "d ago"
+msgstr "天前"
 
 msgid "VPN пока probe OK; при сбоях — резервы"
-msgstr "VPN probe is OK for now; backups are available in case of failures"
+msgstr "VPN 探测正常，故障时使用备用通道"
 
 msgid "Предпочитать VPN; быстрый возврат"
-msgstr "Prefer VPN; quick return"
+msgstr "优先使用 VPN，并尽快恢复"
 
 msgid "Выбор самого быстрого канала (urltest)"
-msgstr "Selecting the fastest channel (urltest)"
+msgstr "选择最快的通道（urltest）"
 
 msgid "В норме"
-msgstr "Normal"
+msgstr "正常"
 
 msgid "Деградация"
-msgstr "Degradation"
+msgstr "性能下降"
 
 msgid "Недоступно"
-msgstr "Not available"
+msgstr "无法使用"
 
 msgid "Неизвестно"
-msgstr "Unknown"
+msgstr "未知"
 
 msgid "Маршрутизация активна"
-msgstr "Routing active"
+msgstr "路由已激活"
 
 msgid "Критичные компоненты в норме."
-msgstr "Critical components are normal."
+msgstr "关键部件正常。"
 
 msgid "Частичная деградация"
-msgstr "Partial degradation"
+msgstr "部分功能异常"
 
 msgid "Сервис работает с предупреждениями."
-msgstr "The service works with warnings."
+msgstr "服务仍在运行，但存在警告。"
 
 msgid "Маршрутизация недоступна"
-msgstr "Routing is unavailable"
+msgstr "路由不可用"
 
 msgid "Engine, nft или control plane не отвечают."
-msgstr "Engine, nft, or control plane not responding."
+msgstr "Engine、nft 或 control plane 无响应。"
 
 msgid "sing-box, nft или Clash API не отвечают."
-msgstr "sing-box, nft, or Clash API are not responding."
+msgstr "sing-box、nft 或 Clash API 没有响应。"
 
 msgid "Не удалось получить статус с роутера."
-msgstr "Failed to get status from router."
+msgstr "无法从路由器获取状态。"
 
 msgid "Активный канал"
-msgstr "Active channel"
+msgstr "当前通道"
 
 msgid "Primary"
-msgstr "Primary"
+msgstr "主通道"
 
 msgid "Маршрутизация"
-msgstr "Routing"
+msgstr "路由"
 
 msgid "Диагностика"
-msgstr "Diagnostics"
+msgstr "诊断"
 
 msgid "Клиенты"
-msgstr "Clients"
+msgstr "客户端"
 
 msgid "неизвестная ошибка"
-msgstr "unknown error"
+msgstr "未知错误"
 
 msgid "Все критичные компоненты работают."
-msgstr "All critical components are working."
+msgstr "所有关键部件均运转正常。"
 
 msgid "Сервис работает, но есть предупреждения."
-msgstr "The service works, but there are warnings."
+msgstr "该服务可以运行，但存在一些警告。"
 
 msgid "Маршрутизация неактивна"
-msgstr "Routing is inactive"
+msgstr "路由未启用"
 
 msgid "Engine, nft или control API недоступны."
-msgstr "Engine, nft, or control APIs are not available."
+msgstr "Engine、nft 或 control API 不可用。"
 
 msgid "sing-box, nft или Clash API недоступны."
-msgstr "sing-box, nft, or Clash APIs are not available."
+msgstr "sing-box、nft 或 Clash API 不可用。"
 
 msgid "Настройки"
-msgstr "Settings"
+msgstr "设置"
 
 msgid "Переключить канал"
-msgstr "Switch channel"
+msgstr "切换通道"
 
 msgid "пропущено"
-msgstr "skipped"
+msgstr "已跳过"
 
 msgid "ошибка"
-msgstr "error"
+msgstr "错误"
 
 msgid "Control"
-msgstr "Control"
+msgstr "控制"
 
 msgid "остановлен"
-msgstr "stopped"
+msgstr "停止"
 
 msgid "Политика"
-msgstr "Policy"
+msgstr "策略"
 
 msgid "Активный outbound"
-msgstr "Active outbound"
+msgstr "当前 outbound"
 
 msgid "Policy"
-msgstr "Policy"
+msgstr "策略"
 
 msgid "Probe"
-msgstr "Probe"
+msgstr "探测"
 
 msgid "Счётчики"
-msgstr "Counters"
+msgstr "计数器"
 
 msgid "fail"
-msgstr "fail"
+msgstr "失败"
 
 msgid "recover"
-msgstr "recover"
+msgstr "恢复"
 
 msgid "Контроллер failover"
-msgstr "Controller failover"
+msgstr "故障转移控制器"
 
 msgid "Описание"
-msgstr "Description"
+msgstr "描述"
 
 msgid "Selector"
 msgstr "Selector"
 
 msgid "Primary probe"
-msgstr "Primary probe"
+msgstr "主通道探测"
 
 msgid "Задержка primary"
-msgstr "Latency primary"
+msgstr "主通道延迟"
 
 msgid "Последний probe"
-msgstr "The last probe"
+msgstr "最近一次探测"
 
 msgid "На канале с"
-msgstr "On the channel with"
+msgstr "当前通道自"
 
 msgid "Последнее переключение"
-msgstr "Last switch"
+msgstr "最后切换"
 
 msgid "Ошибка probe"
-msgstr "Probe error"
+msgstr "探测错误"
 
 msgid "Tolerance"
-msgstr "Tolerance"
+msgstr "容差"
 
 msgid "Idle timeout"
-msgstr "Idle timeout"
+msgstr "空闲超时"
 
 msgid "Probe URL"
-msgstr "Probe URL"
+msgstr "探测 URL"
 
 msgid "Маршрут"
-msgstr "Route"
+msgstr "路由"
 
 msgid "Контроллер"
-msgstr "Controller"
+msgstr "控制器"
 
 msgid "Статус"
-msgstr "Status"
+msgstr "状态"
 
 msgid "Тип"
-msgstr "Type"
+msgstr "类型"
 
 msgid "Тренд"
-msgstr "Trend"
+msgstr "趋势"
 
 msgid "Роль"
-msgstr "Role"
+msgstr "角色"
 
 msgid "Данные из engine. Нажмите «Live probe» для актуальной проверки."
-msgstr "Data from the engine. Click \"Live probe\" for a live check."
+msgstr "数据来自 engine。点击\"Live probe\"执行实时检查。"
 
 msgid "Данные из кэша Clash. Нажмите «Live probe» для актуальной проверки."
-msgstr "Data from the Clash cache. Click \"Live probe\" for a live check."
+msgstr "数据来自 Clash 缓存。点击\"Live probe\"执行实时检查。"
 
 msgid "Событий failover пока не было."
-msgstr "There have been no failover events yet."
+msgstr "目前尚未发生故障转移事件。"
 
 msgid "Время"
-msgstr "Time"
+msgstr "时间"
 
 msgid "Переход"
-msgstr "Transition"
+msgstr "切换"
 
 msgid "Причина"
-msgstr "Reason"
+msgstr "原因"
 
 msgid "Отмена"
-msgstr "Cancel"
+msgstr "取消"
 
 msgid "Графики"
-msgstr "Charts"
+msgstr "图表"

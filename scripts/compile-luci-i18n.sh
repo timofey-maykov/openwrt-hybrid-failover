@@ -43,3 +43,4 @@ compile_one() {
 
 compile_one en
 compile_one ru || true
+compile_one zh-cn
