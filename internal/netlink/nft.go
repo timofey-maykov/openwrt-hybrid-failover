@@ -64,6 +64,12 @@ func applyStepsLocked(pkg *uci.Package) error {
 		}
 	}
 	ifaces = expandSourceIfaces(ifaces)
+	// Containers are LAN clients of this router too: without their bridges in
+	// the set, a container gets a FakeIP from the router DNS and cannot use it.
+	// source_docker=0 leaves them out.
+	if pkg == nil || sourceDockerEnabled(pkg) {
+		ifaces = appendUnique(ifaces, dockerBridgeIfaces()...)
+	}
 
 	steps := []string{
 		"nft add table inet " + NFTTable,
@@ -328,4 +334,23 @@ func ensureIPRulesLocked() error {
 		}
 	}
 	return nil
+}
+
+func sourceDockerEnabled(pkg *uci.Package) bool {
+	settings := pkg.Section("settings")
+	return settings == nil || settings.GetBool("source_docker", true)
+}
+
+func appendUnique(list []string, add ...string) []string {
+	seen := make(map[string]struct{}, len(list))
+	for _, v := range list {
+		seen[v] = struct{}{}
+	}
+	for _, v := range add {
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			list = append(list, v)
+		}
+	}
+	return list
 }

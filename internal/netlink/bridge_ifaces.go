@@ -3,6 +3,7 @@ package netlink
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -45,6 +46,31 @@ func bridgeMemberIfaces(bridge string) []string {
 	for _, e := range entries {
 		name := strings.TrimSpace(e.Name())
 		if name == "" || name == "." || name == ".." {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
+}
+
+var dockerBridgeName = regexp.MustCompile(`^(docker0|br-[0-9a-f]{12})$`)
+
+// dockerBridgeIfaces lists the bridges Docker made for its containers: the
+// default docker0 and one br-<12 hex> per user network or compose stack. They
+// are routed, not bridged, so the bridge itself is the iifname to match and its
+// veth ports are not needed.
+func dockerBridgeIfaces() []string {
+	entries, err := os.ReadDir("/sys/class/net")
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		name := e.Name()
+		if !dockerBridgeName.MatchString(name) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join("/sys/class/net", name, "bridge")); err != nil {
 			continue
 		}
 		out = append(out, name)
