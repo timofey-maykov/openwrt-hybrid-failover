@@ -14,9 +14,10 @@ define Package/hybrid-failover-core
 endef
 
 define Package/hybrid-failover-core/install
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/hotplug.d/net
 	$(INSTALL_BIN) ../../dist/binaries/$(ARCH)/hybrid-failover $(1)/usr/sbin/hybrid-failover
 	$(INSTALL_BIN) ../../openwrt/etc/init.d/hybrid-failover $(1)/etc/init.d/hybrid-failover
+	$(INSTALL_BIN) ../../openwrt/etc/hotplug.d/net/30-hybrid-failover-docker $(1)/etc/hotplug.d/net/30-hybrid-failover-docker
 endef
 
 $(eval $(call BuildPackage,hybrid-failover-core))

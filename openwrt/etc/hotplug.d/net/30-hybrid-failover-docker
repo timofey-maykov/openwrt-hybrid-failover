@@ -1,0 +1,19 @@
+#!/bin/sh
+# Keep Docker's bridges in the nft interface set of Hybrid Failover as they
+# appear and go, so containers are steered like any other LAN client. The
+# service itself adds the bridges that already exist when it applies its rules.
+case "$INTERFACE" in
+docker0) ;;
+br-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+*) exit 0 ;;
+esac
+case "$ACTION" in
+add) verb=add ;;
+remove) verb=delete ;;
+*) exit 0 ;;
+esac
+
+[ "$(uci -q get hybrid-failover.settings.source_docker)" = 0 ] && exit 0
+nft list set inet hybrid_failover hf_ifaces >/dev/null 2>&1 || exit 0
+nft "$verb" element inet hybrid_failover hf_ifaces "{ $INTERFACE }" >/dev/null 2>&1
+exit 0
