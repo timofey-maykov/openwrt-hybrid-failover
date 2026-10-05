@@ -171,6 +171,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 | `hysteria2://`, `hy2://` | да | TLS (`sni`, `insecure`), obfs, `up`/`down` в mbps |
 | `vpn://` | да | Экспорт **Amnezia**, превращается в `vless://` (xray) или `awg2://` (awg, awg2) |
 | `awg2://` | да (служебный URI) | Не протокол, см. [ниже](#amnezia-awg2-awg2) |
+| `amneziawg://` | только в подписках | Целиком клиентский конфиг AmneziaWG в base64, так его отдают панели подписок. При загрузке подписки превращается в `awg2://`, берётся первый peer |
 | `http://`, `https://` | нет | Ошибка `unsupported scheme` |
 
 ### Amnezia `vpn://`

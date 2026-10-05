@@ -171,6 +171,7 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 | `hysteria2://`, `hy2://` | yes | TLS (`sni`, `insecure`), obfs, `up`/`down` in mbps |
 | `vpn://` | yes | **Amnezia** export, converted to `vless://` (xray) or `awg2://` (awg, awg2) |
 | `awg2://` | yes (internal URI) | Not a protocol, see [below](#amnezia-awg2-awg2) |
+| `amneziawg://` | subscriptions only | A whole AmneziaWG client config in base64, as subscription panels hand it out. Converted to `awg2://` when the subscription is loaded, the first peer is used |
 | `http://`, `https://` | no | Fails with `unsupported scheme` |
 
 ### Amnezia `vpn://`
