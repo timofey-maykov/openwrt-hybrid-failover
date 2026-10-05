@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
@@ -28,6 +29,13 @@ func (f *Fetcher) FetchURLs(urls []string) ([]string, error) {
 			return nil, err
 		}
 		for _, link := range links {
+			if amnezia.IsConfURI(link) {
+				conv, err := amnezia.ConfURIToAWG2(link)
+				if err != nil {
+					continue
+				}
+				link = conv
+			}
 			if _, ok := seen[link]; ok {
 				continue
 			}
