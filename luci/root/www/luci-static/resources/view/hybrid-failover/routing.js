@@ -240,6 +240,16 @@ return view.extend({
 
 		o = st.option(form.DynamicList, 'subscription_urls', _('Subscription URLs'));
 
+		o = st.option(form.ListValue, 'subscription_update_interval', _('Автообновление подписки'));
+		o.value('off', _('выключено'));
+		o.value('1h', _('раз в час'));
+		o.value('3h', _('каждые 3 часа'));
+		o.value('6h', _('каждые 6 часов'));
+		o.value('12h', _('каждые 12 часов'));
+		o.value('1d', _('раз в сутки'));
+		o.default = 'off';
+		o.description = _('Заменяет ссылки, пришедшие из подписки, ссылки, добавленные вручную, остаются. Работает, если указан хотя бы один Subscription URL.');
+
 		s = m.section(form.TypedSection, 'section', _('Секции маршрутизации'));
 		s.anonymous = false;
 		s.addremove = true;

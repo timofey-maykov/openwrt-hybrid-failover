@@ -38,6 +38,7 @@ The "Default" column shows what the code uses when the option is absent. If the 
 | `delay_history_points` | int | `50` | Delay points per channel in `/var/run/hybrid-failover/delay-history.json`, from 10 to 200 |
 | `output_network_interface` | string | empty | Read into the engine plan, but the native engine does not apply it |
 | `list subscription_urls` | list | - | Subscription URLs. `hybrid-failover subscription-refresh` or LuCI write the links into `main_section` |
+| `subscription_update_interval` | `off` / `1h` / `3h` / `6h` / `12h` / `1d` | `off` | Cron period for `hybrid-failover subscription-refresh`. The job exists only when `subscription_urls` is set. A refresh replaces the links the previous refresh wrote (remembered in `/etc/hybrid-failover/subscription-links.json`) and keeps the links added by hand. A subscription with no supported links changes nothing |
 | `list include_source_ips` | list | - | Legacy, see `client_rule` |
 | `list exclude_source_ips` | list | - | Legacy, see `client_rule` |
 | `list routing_excluded_ips` | list | - | Legacy, see `client_rule` with `mode global_exclude` |

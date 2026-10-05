@@ -1,7 +1,10 @@
 package subscription
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -27,6 +30,8 @@ func listKeyForSection(sec *uci.Section) (string, error) {
 
 // ApplyToUCI writes links to failover_proxy_links or urltest_proxy_links on mainSection.
 // When merge is true, existing list entries are kept and new unique links are appended.
+// Links that the previous refresh wrote are replaced, so servers dropped from the
+// subscription disappear and the links added by hand stay.
 func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKey string, err error) {
 	pkg, err := uci.Load(uciPath)
 	if err != nil {
@@ -41,7 +46,8 @@ func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKe
 	uciKey := paths.UCIPackage + "." + mainSection + "." + listKey
 	finalLinks := links
 	if merge {
-		finalLinks = mergeLinks(sec.GetList(listKey), links)
+		kept := dropOwned(sec.GetList(listKey), loadOwned(mainSection))
+		finalLinks = mergeLinks(kept, links)
 	}
 
 	if _, err := uci.Exec("delete", uciKey); err != nil && !strings.Contains(err.Error(), "Not found") {
@@ -55,7 +61,55 @@ func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKe
 	if _, err := uci.Exec("commit", paths.UCIPackage); err != nil {
 		return "", fmt.Errorf("uci commit: %w", err)
 	}
+	if merge {
+		saveOwned(mainSection, links)
+	}
 	return listKey, nil
+}
+
+type ownedLinks struct {
+	Section string   `json:"section"`
+	Links   []string `json:"links"`
+}
+
+func loadOwned(section string) []string {
+	raw, err := os.ReadFile(paths.SubscriptionState)
+	if err != nil {
+		return nil
+	}
+	var st ownedLinks
+	if json.Unmarshal(raw, &st) != nil || st.Section != section {
+		return nil
+	}
+	return st.Links
+}
+
+func saveOwned(section string, links []string) {
+	raw, err := json.Marshal(ownedLinks{Section: section, Links: links})
+	if err != nil {
+		return
+	}
+	if os.MkdirAll(filepath.Dir(paths.SubscriptionState), 0o755) != nil {
+		return
+	}
+	_ = os.WriteFile(paths.SubscriptionState, raw, 0o600)
+}
+
+func dropOwned(existing, owned []string) []string {
+	if len(owned) == 0 {
+		return existing
+	}
+	drop := make(map[string]struct{}, len(owned))
+	for _, l := range owned {
+		drop[strings.TrimSpace(l)] = struct{}{}
+	}
+	out := make([]string, 0, len(existing))
+	for _, l := range existing {
+		if _, ok := drop[strings.TrimSpace(l)]; !ok {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func mergeLinks(existing, incoming []string) []string {

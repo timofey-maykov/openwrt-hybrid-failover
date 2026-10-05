@@ -232,6 +232,7 @@ func runStop(args []string) int {
 	_ = args
 	lifecycle.CancelBackground()
 	lists.RemoveCron()
+	subscription.RemoveCron()
 	lists.ClearPID()
 	_ = dnsmasq.Restore()
 	_ = lanipv6.Restore()

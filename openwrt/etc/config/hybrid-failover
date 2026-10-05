@@ -25,6 +25,7 @@ config settings 'settings'
 	option failover_probe_interval '30s'
 	option history_max_lines '500'
 	list subscription_urls
+	option subscription_update_interval 'off'
 	list include_source_ips
 	list exclude_source_ips
 	list routing_excluded_ips
