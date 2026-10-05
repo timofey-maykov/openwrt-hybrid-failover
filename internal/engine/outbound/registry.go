@@ -383,33 +383,72 @@ func (u *urlTestRunner) Stop() {
 	}
 }
 
+// While no member answers, probe again soon instead of waiting a whole
+// interval: the first round at boot runs before the uplink is up (PPPoE can
+// take over a minute), and with a 10 minute interval the channels would show
+// as down for ten minutes after every start.
+const (
+	probeRetryFirst = 5 * time.Second
+	probeRetryMax   = time.Minute
+)
+
+// nextProbeWait is the time to the next round. failedRounds counts the rounds
+// in a row in which no member answered; elapsed is how long the last round
+// took, so that a healthy schedule keeps its period.
+func nextProbeWait(interval time.Duration, failedRounds int, elapsed time.Duration) time.Duration {
+	if failedRounds <= 0 {
+		if w := interval - elapsed; w > time.Second {
+			return w
+		}
+		return time.Second
+	}
+	w := probeRetryMax
+	if failedRounds <= 4 {
+		w = probeRetryFirst << (failedRounds - 1)
+	}
+	if w > probeRetryMax {
+		w = probeRetryMax
+	}
+	if w > interval {
+		w = interval
+	}
+	return w
+}
+
 func (u *urlTestRunner) loop(ctx context.Context, ctrl *control.Control) {
 	interval := parseDuration(u.plan.URLTest.Interval, 30*time.Second)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
+	failed := 0
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		u.probe(ctx, ctrl)
+		started := time.Now()
+		if u.probe(ctx, ctrl) {
+			failed = 0
+		} else {
+			failed++
+		}
+		timer := time.NewTimer(nextProbeWait(interval, failed, time.Since(started)))
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 		}
 	}
 }
 
-func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) {
-	if u.plan.URLTest == nil {
-		return
+// probe runs one round and reports whether at least one member answered.
+func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) bool {
+	if u.plan.URLTest == nil || len(u.plan.Members) == 0 {
+		return true
 	}
 	testURL := u.plan.URLTest.URL
 	delays := make(map[string]int, len(u.plan.Members))
 	batch := make(map[string]delayhistory.SampleInput, len(u.plan.Members))
 	for _, member := range u.plan.Members {
 		if parent.Err() != nil {
-			return
+			return true
 		}
 		h, err := u.registry.Handler(member)
 		if err != nil {
@@ -439,6 +478,12 @@ func (u *urlTestRunner) probe(parent context.Context, ctrl *control.Control) {
 	u.mu.Lock()
 	u.active = pickURLTestMember(u.plan, delays, u.active)
 	u.mu.Unlock()
+	for _, ms := range delays {
+		if ms > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Kept internal for existing callers; diagnostics use the exact same HTTP probe.
