@@ -143,3 +143,21 @@ func TestAWG2RandomPortDiffersFromOld(t *testing.T) {
 		}
 	}
 }
+
+func TestMissingAddresses(t *testing.T) {
+	const withAddr = "12: pawg1    inet 10.78.0.2/32 scope global pawg1\\       valid_lft forever preferred_lft forever\n"
+	const without = "12: pawg1: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1280 qdisc noqueue state UNKNOWN\\    link/none\n"
+
+	if got := missingAddresses(withAddr, "10.78.0.2/32"); len(got) != 0 {
+		t.Fatalf("address is there, got missing %v", got)
+	}
+	if got := missingAddresses(without, "10.78.0.2/32"); len(got) != 1 || got[0] != "10.78.0.2/32" {
+		t.Fatalf("got %v", got)
+	}
+	if got := missingAddresses(withAddr, "10.78.0.2/32, fd00::2/128"); len(got) != 1 || got[0] != "fd00::2/128" {
+		t.Fatalf("only the second address is missing, got %v", got)
+	}
+	if got := missingAddresses(without, ""); len(got) != 0 {
+		t.Fatalf("nothing wanted, got %v", got)
+	}
+}

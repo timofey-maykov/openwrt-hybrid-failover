@@ -31,6 +31,7 @@ func setupAWG2Interface(section, rawURI string, updateUCI bool) (string, bool, e
 
 	match, up := awg2PeerConfigMatch(ifname, params)
 	if match {
+		ensureAWG2Addresses(ifname, params.Address)
 		ensureAWG2NetworkUCI(ifname)
 		if updateUCI {
 			uciSetSectionInterface(section, ifname)
@@ -173,6 +174,49 @@ func removeAWG2NetworkUCI(ifname string) {
 		return
 	}
 	_ = exec.Command("uci", "-q", "commit", "network").Run()
+}
+
+// ensureAWG2Addresses puts back the tunnel address when something took it off a
+// healthy interface. netifd does that when it re-enables the pawg* interfaces after
+// a network or firewall reload. The handshake stays fresh, but without a local
+// address nothing is routed through the tunnel.
+func ensureAWG2Addresses(ifname, want string) {
+	out, err := exec.Command("ip", "-o", "address", "show", "dev", ifname).CombinedOutput()
+	if err != nil {
+		return
+	}
+	for _, addr := range missingAddresses(string(out), want) {
+		if res, err := exec.Command("ip", "address", "add", addr, "dev", ifname).CombinedOutput(); err != nil {
+			log.Printf("hybrid-failover: awg2 %s: address %s: %v: %s", ifname, addr, err, strings.TrimSpace(string(res)))
+			continue
+		}
+		log.Printf("hybrid-failover: awg2 %s: restored address %s", ifname, addr)
+	}
+}
+
+// missingAddresses returns the addresses from want (comma separated, with prefix)
+// that do not appear in the output of "ip -o address show".
+func missingAddresses(ipOutput, want string) []string {
+	have := map[string]struct{}{}
+	for _, line := range strings.Split(ipOutput, "\n") {
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if (f == "inet" || f == "inet6") && i+1 < len(fields) {
+				have[fields[i+1]] = struct{}{}
+			}
+		}
+	}
+	var missing []string
+	for _, addr := range strings.Split(want, ",") {
+		addr = strings.TrimSpace(addr)
+		if addr == "" {
+			continue
+		}
+		if _, ok := have[addr]; !ok {
+			missing = append(missing, addr)
+		}
+	}
+	return missing
 }
 
 // awg2PeerConfigMatch reports whether ifname exists with the expected peer public key.
