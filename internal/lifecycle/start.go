@@ -8,6 +8,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subscription"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -52,6 +53,9 @@ func StartPipeline(opts StartOptions) (StartResult, error) {
 	}
 
 	_ = lists.InstallCron(opts.UCIPath)
+	if err := subscription.InstallCron(opts.UCIPath); err != nil {
+		log.Printf("hybrid-failover start: subscription cron: %v", err)
+	}
 
 	updater := lists.NewFromUCI(opts.UCIPath)
 	go func() {

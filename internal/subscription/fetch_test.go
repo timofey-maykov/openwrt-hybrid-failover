@@ -47,3 +47,10 @@ func TestFetchURLs_SkipsBrokenAmneziaWGEntry(t *testing.T) {
 		t.Fatalf("links = %v", links)
 	}
 }
+
+func TestFetchURLs_NoSupportedLinksIsAnError(t *testing.T) {
+	url := serve(t, "amneziawg://!!!\nnot-a-link://x\n")
+	if _, err := NewFetcher().FetchURLs([]string{url}); err == nil {
+		t.Fatal("a subscription without usable links must be an error, not an empty list")
+	}
+}

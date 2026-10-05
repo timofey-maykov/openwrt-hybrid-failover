@@ -46,6 +46,9 @@ func (f *Fetcher) FetchURLs(urls []string) ([]string, error) {
 			out = append(out, link)
 		}
 	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("subscription has no supported links")
+	}
 	return out, nil
 }
 

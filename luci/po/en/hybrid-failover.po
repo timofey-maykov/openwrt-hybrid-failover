@@ -1639,3 +1639,27 @@ msgstr "Cancel"
 
 msgid "Графики"
 msgstr "Charts"
+
+msgid "Автообновление подписки"
+msgstr "Subscription auto-update"
+
+msgid "выключено"
+msgstr "off"
+
+msgid "раз в час"
+msgstr "every hour"
+
+msgid "каждые 3 часа"
+msgstr "every 3 hours"
+
+msgid "каждые 6 часов"
+msgstr "every 6 hours"
+
+msgid "каждые 12 часов"
+msgstr "every 12 hours"
+
+msgid "раз в сутки"
+msgstr "once a day"
+
+msgid "Заменяет ссылки, пришедшие из подписки, ссылки, добавленные вручную, остаются. Работает, если указан хотя бы один Subscription URL."
+msgstr "Replaces the links that came from the subscription and keeps the ones added by hand. Works when at least one Subscription URL is set."

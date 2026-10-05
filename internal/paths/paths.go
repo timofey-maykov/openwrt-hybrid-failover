@@ -11,6 +11,9 @@ var (
 	SwitchResponseFile = "/var/run/hybrid-failover/switch-response.json"
 	// AWG2EndpointsDir holds per-iface endpoint lists for multi-IP peer failover.
 	AWG2EndpointsDir = "/var/run/hybrid-failover/awg2-endpoints"
+	// SubscriptionState remembers which links came from the subscription, so a
+	// refresh replaces them and leaves the links added by hand alone.
+	SubscriptionState = "/etc/hybrid-failover/subscription-links.json"
 )
 
 // Legacy* are on-disk paths from pre-hybrid-failover installs (used only by migrate).

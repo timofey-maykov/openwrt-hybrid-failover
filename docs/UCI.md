@@ -38,6 +38,7 @@
 | `delay_history_points` | int | `50` | Точек задержки на канал в `/var/run/hybrid-failover/delay-history.json`, от 10 до 200 |
 | `output_network_interface` | string | пусто | Читается в план engine, но native engine его не применяет |
 | `list subscription_urls` | list | - | URL подписок. `hybrid-failover subscription-refresh` или LuCI записывают ссылки в `main_section` |
+| `subscription_update_interval` | `off` / `1h` / `3h` / `6h` / `12h` / `1d` | `off` | Период cron для `hybrid-failover subscription-refresh`. Задача есть только при заданном `subscription_urls`. Обновление заменяет ссылки, записанные прошлым обновлением (список в `/etc/hybrid-failover/subscription-links.json`), и не трогает ссылки, добавленные вручную. Подписка без поддерживаемых ссылок ничего не меняет |
 | `list include_source_ips` | list | - | Устаревшее, см. `client_rule` |
 | `list exclude_source_ips` | list | - | Устаревшее, см. `client_rule` |
 | `list routing_excluded_ips` | list | - | Устаревшее, см. `client_rule` с `mode global_exclude` |
