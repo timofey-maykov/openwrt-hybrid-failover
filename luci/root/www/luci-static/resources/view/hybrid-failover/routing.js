@@ -374,7 +374,8 @@ return view.extend({
 		o.depends('proxy_config_type', 'outbound');
 		o.depends('connection_type', 'proxy');
 
-		o = s.option(form.DynamicList, 'urltest_proxy_links', _('URLTest URI'));
+		o = s.option(form.DynamicList, 'urltest_proxy_links', _('Ссылки каналов (URI)'));
+		o.description = _('Каждая ссылка (vless, hysteria2, awg2, trojan, ss, socks) становится отдельным каналом. Движок их проверяет и ведёт трафик через самый быстрый, а при отказе переключается на следующий.');
 		o.depends('proxy_config_type', 'urltest');
 		o.depends('connection_type', 'proxy');
 		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
