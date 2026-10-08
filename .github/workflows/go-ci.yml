@@ -17,7 +17,7 @@ jobs:
       - name: Test core
         env:
           GOTOOLCHAIN: local
-        run: GOFLAGS=-mod=mod go test ./...
+        run: GOFLAGS="-mod=mod -tags=with_utls" go test ./...
       - name: Native engine smoke
         run: chmod +x ./scripts/verify-smoke.sh ./scripts/verify-native.sh && ./scripts/verify-smoke.sh
       - name: Test bot

@@ -74,7 +74,7 @@ go_build_binary() {
 		cd "$workdir"
 		local ld_ver
 		ld_ver="$(tr -d '[:space:]' <"$ROOT_DIR/VERSION")"
-		env "${env_args[@]}" go build -mod=mod -trimpath \
+		env "${env_args[@]}" go build -mod=mod -trimpath -tags with_utls \
 			-ldflags="-s -w -buildid= -X github.com/tmaykov/openwrt-hybrid-failover/internal/version.Core=${ld_ver}" \
 			-o "$out" "./${pkg_path}"
 	)

@@ -56,14 +56,14 @@ Go implementation of **Hybrid Failover** for OpenWrt: `/usr/sbin/hybrid-failover
 ## Build
 
 ```sh
-go build -o hybrid-failover ./core/cmd/hybrid-failover
+go build -tags with_utls -o hybrid-failover ./core/cmd/hybrid-failover
 cd bot && go build -o hybrid-failover-bot ./cmd/hybrid-failover-bot
 ```
 
 ## Test
 
 ```sh
-go test ./...
+go test -tags with_utls ./...
 ./scripts/verify-smoke.sh
 cd bot && go test ./...
 ```
