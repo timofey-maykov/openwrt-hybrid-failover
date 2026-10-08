@@ -118,7 +118,7 @@ All UCI options are described in [UCI.md](UCI.md).
 
 At the top are the channel cards of each section: urltest state, latency, open connections, traffic and the share of expected load from the lists bound to it. The pencil next to the name renames a channel; the name is stored in `channel_names` and tied to the server, not to the position of the link.
 
-Below is the section's list table. Each list gets a channel: the pool (fastest, same as no binding), a specific channel, balance over all, direct or block. The "Если канал упал" (if the channel is down) column sets the fallback path. The "Сейчас" (now) column shows where the list goes right now, for example that the channel is down and the list uses the pool.
+Below is the section's list table. Each list gets a channel: the pool (fastest, same as no binding), a specific channel, share by channels (balance), direct or block. The "Если канал упал" (if the channel is down) column sets the fallback path. The "Сейчас" (now) column shows where the list goes right now, for example that the channel is down and the list uses the pool.
 
 **Распределить автоматически** (spread automatically) puts lists on live channels: heavy services (video) land on different channels, faster channels get more. You can adjust the result before saving. **+ Свой список** (own list) creates a `user_list` with domains and subnets and lets you pick its channel right away.
 

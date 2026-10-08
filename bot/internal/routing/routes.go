@@ -135,7 +135,7 @@ func FormatRoutes(secs []routesreport.Section) string {
 			switch l.Channel {
 			case listroutes.ChannelAuto, "":
 			case listroutes.ChannelBalance:
-				target = "балансировка"
+				target = "делится по каналам"
 			case listroutes.ChannelDirect:
 				target = "напрямую"
 			case listroutes.ChannelBlock:

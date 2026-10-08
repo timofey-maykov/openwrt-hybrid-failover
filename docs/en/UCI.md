@@ -198,13 +198,13 @@ Binds one or more lists of a section to a channel. A list with no binding goes t
 |--------|------|-------------|
 | `section` | string | Routing section |
 | `list lists` | list | List keys: a `community_lists` name (`youtube`), `user` for the section's own domains and subnets, `local` for `local_domain_lists`, `user:<name>` for a `user_list` |
-| `channel` | string | Channel id, `auto` (the pool, same as no binding), `balance` (spread over all channels), `direct` (no tunnel) or `block` |
+| `channel` | string | Channel id, `auto` (the pool, same as no binding), `balance` (sites shared between live channels by speed), `direct` (no tunnel) or `block` |
 | `on_down` | `pool` / `direct` / `block` | Where the lists go while the bound channel fails its urltest. Defaults to `pool` |
 | `enabled` | bool | Defaults to `1` |
 
 A channel counts as down when its last urltest probe failed. Before the first probe it counts as alive. When a connection through the channel cannot be opened, the engine tries the next `on_down` target right away instead of waiting for the probe.
 
-With `balance` the engine spreads connections over the live channels of the section, sticky per site: every connection to one site (the last two labels of the name, or the IP) uses one channel while that channel lives. Sites that check the session IP keep working. When the bound channel is removed from the section, its lists go back to the pool, and `validate` and the services tab warn about it.
+With `balance` the engine shares sites between the live channels of the section, sticky per site: every connection to one site (the registrable domain, or the IP) uses one channel while that channel lives and keeps its speed tier. Sites that check the session IP keep working. Channels up to 1.5x slower than the best one get a full share of sites, up to 2.5x a half share, slower ones get no new sites while others are up. Video CDNs (googlevideo.com, cdninstagram.com, fbcdn.net, telesco.pe, ttvnw.net, nflxvideo.net) are keyed by the full server name, so a video stream spreads over the channels while one video stays on one channel. When the bound channel is removed from the section, its lists go back to the pool, and `validate` and the services tab warn about it.
 
 Example:
 

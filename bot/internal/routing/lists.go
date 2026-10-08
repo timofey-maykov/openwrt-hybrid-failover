@@ -36,7 +36,7 @@ func ChannelLabel(sec routesreport.Section, id string) string {
 	case listroutes.ChannelAuto, "":
 		return "пул"
 	case listroutes.ChannelBalance:
-		return "балансировка"
+		return "делится по каналам"
 	case listroutes.ChannelDirect:
 		return "напрямую"
 	case listroutes.ChannelBlock:
