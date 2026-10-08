@@ -1122,8 +1122,11 @@ msgstr "URL测试"
 msgid "Proxy URL"
 msgstr "代理 URL"
 
-msgid "URLTest URI"
-msgstr "URL测试URI"
+msgid "Ссылки каналов (URI)"
+msgstr "通道链接（URI）"
+
+msgid "Каждая ссылка (vless, hysteria2, awg2, trojan, ss, socks) становится отдельным каналом. Движок их проверяет и ведёт трафик через самый быстрый, а при отказе переключается на следующий."
+msgstr "每条链接（vless、hysteria2、awg2、trojan、ss、socks）都会成为一个独立的通道。引擎会检测它们，让流量走最快的那一条，某条失效时自动切换到下一条。"
 
 msgid "URLTest interval"
 msgstr "URL测试间隔"

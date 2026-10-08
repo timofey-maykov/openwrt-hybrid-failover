@@ -1169,8 +1169,11 @@ msgstr "URLTest"
 msgid "Proxy URL"
 msgstr "Proxy URL"
 
-msgid "URLTest URI"
-msgstr "URLTest URI"
+msgid "Ссылки каналов (URI)"
+msgstr "Channel links (URI)"
+
+msgid "Каждая ссылка (vless, hysteria2, awg2, trojan, ss, socks) становится отдельным каналом. Движок их проверяет и ведёт трафик через самый быстрый, а при отказе переключается на следующий."
+msgstr "Each link (vless, hysteria2, awg2, trojan, ss, socks) becomes a separate channel. The engine checks them and sends traffic through the fastest one, switching to the next when one fails."
 
 msgid "URLTest interval"
 msgstr "URLTest interval"
