@@ -47,18 +47,31 @@ func (r SSH) RunCoreRPC(ctx context.Context, method string, args ...string) (str
 }
 
 func (r SSH) runShell(ctx context.Context, cmd string) (string, error) {
+	out, err := r.runShellBytes(ctx, cmd)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// RunBytes returns the command's stdout unchanged (binary safe).
+func (r SSH) RunBytes(ctx context.Context, name string, args ...string) ([]byte, error) {
+	return r.runShellBytes(ctx, shellJoin(name, args...))
+}
+
+func (r SSH) runShellBytes(ctx context.Context, cmd string) ([]byte, error) {
 	cctx, cancel := withDeadline(ctx, r.timeout)
 	defer cancel()
 
 	client, err := r.dial(cctx)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() { _ = client.Close() }()
 
 	sess, err := client.NewSession()
 	if err != nil {
-		return "", fmt.Errorf("ssh session: %w", err)
+		return nil, fmt.Errorf("ssh session: %w", err)
 	}
 	defer func() { _ = sess.Close() }()
 
@@ -75,17 +88,17 @@ func (r SSH) runShell(ctx context.Context, cmd string) (string, error) {
 	case <-cctx.Done():
 		_ = client.Close()
 		<-done
-		return "", fmt.Errorf("ssh %s: %s: timeout: %w", r.host, cmd, cctx.Err())
+		return nil, fmt.Errorf("ssh %s: %s: timeout: %w", r.host, cmd, cctx.Err())
 	case err := <-done:
 		if err != nil {
 			msg := failureDetail(stdout.String(), stderr.String())
 			if msg == "" {
 				msg = err.Error()
 			}
-			return "", fmt.Errorf("ssh %s: %s: %s", r.host, cmd, msg)
+			return nil, fmt.Errorf("ssh %s: %s: %s", r.host, cmd, msg)
 		}
 	}
-	return strings.TrimSpace(stdout.String()), nil
+	return stdout.Bytes(), nil
 }
 
 func (r SSH) dial(ctx context.Context) (*ssh.Client, error) {

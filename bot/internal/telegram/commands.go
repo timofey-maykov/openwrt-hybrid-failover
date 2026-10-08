@@ -5,18 +5,28 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/watchdog"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/routesreport"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type CommandHandler struct {
-	mgr   *routers.Manager
-	store botconfig.Store
+	mgr      *routers.Manager
+	store    botconfig.Store
+	wd       *watchdog.Watchdog
+	shellIDs map[int64]struct{}
+}
+
+// WithWatchdog attaches the watchdog whose state the monitoring screen shows.
+func (h CommandHandler) WithWatchdog(w *watchdog.Watchdog) CommandHandler {
+	h.wd = w
+	return h
 }
 
 func NewCommandHandler(mgr *routers.Manager, s botconfig.Store) CommandHandler {
@@ -97,11 +107,19 @@ func (h CommandHandler) Handle(ctx context.Context, userID int64, text string) (
 	}
 
 	prefix := h.mgr.Prefix(userID)
+	if fields[0] == "/sh" {
+		resp, err := h.shell(ctx, userID, text)
+		if err != nil {
+			return "", err
+		}
+		return routing.MaskSecrets(prefix + resp), nil
+	}
 	resp, err := h.dispatch(ctx, userID, fields)
 	if err != nil {
 		return "", err
 	}
-	return prefix + resp, nil
+	// Subscription and proxy links carry credentials; never echo them whole.
+	return routing.MaskSecrets(prefix + resp), nil
 }
 
 func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []string) (string, error) {
@@ -221,7 +239,8 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		if len(fields) < 2 {
 			return "", fmt.Errorf("использование: /set_quic on|off")
 		}
-		value, err := onOffToBoolValue(fields[1])
+		// The argument is the state of QUIC itself; the option stores the opposite.
+		value, err := quicStateToDisableValue(fields[1])
 		if err != nil {
 			return "", err
 		}
@@ -472,6 +491,46 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 			return "", err
 		}
 		return out, nil
+	case "/watch":
+		return "Мониторинг: откройте /menu → 🛡 Мониторинг", nil
+	case "/repair":
+		return h.repair(ctx, userID)
+	case "/mute":
+		return h.mute(fields)
+	case "/unmute":
+		if h.wd == nil {
+			return "", fmt.Errorf("мониторинг выключен")
+		}
+		h.wd.Unmute()
+		return "Уведомления мониторинга включены", nil
+	case "/sub_add":
+		if len(fields) != 2 {
+			return "", fmt.Errorf("использование: /sub_add <ссылка на подписку>")
+		}
+		if err := rt.AddSubscription(ctx, fields[1]); err != nil {
+			return "", err
+		}
+		return "Подписка добавлена (pending). Примените изменения: /param_apply", nil
+	case "/sub_del":
+		n, err := argInt(fields, 1, "использование: /sub_del <номер>")
+		if err != nil {
+			return "", err
+		}
+		u, err := rt.DelSubscription(ctx, n)
+		if err != nil {
+			return "", err
+		}
+		return "Подписка удалена (pending): " + routing.MaskURL(u), nil
+	case "/sub_interval":
+		if len(fields) != 2 {
+			return "", fmt.Errorf("использование: /sub_interval <1h|6h|12h|24h>")
+		}
+		if err := rt.SetSubscriptionInterval(ctx, fields[1]); err != nil {
+			return "", err
+		}
+		return "Интервал обновления подписок сохранён (pending)", nil
+	case "/rt":
+		return h.routeByIndex(ctx, rt, fields)
 	case "/config_show":
 		cfg, err := h.store.LoadPending()
 		if err != nil {
@@ -506,6 +565,9 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		}
 		return "Pending-конфиг откатан", nil
 	default:
+		if resp, handled, err := h.dispatchRouter(ctx, userID, fields); handled {
+			return resp, err
+		}
 		return "", fmt.Errorf("неизвестная команда: %s", fields[0])
 	}
 }
@@ -587,8 +649,9 @@ func (h CommandHandler) helpText(userID int64) string {
 		"/config_apply",
 		"/config_rollback",
 		"",
-		"Основная секция UCI: "+sectionKey,
 	)
+	lines = append(lines, routerHelpLines()...)
+	lines = append(lines, "", "Основная секция UCI: "+sectionKey)
 	return strings.Join(lines, "\n")
 }
 
@@ -649,7 +712,7 @@ func helpText() string {
 		"/config_rollback",
 		"",
 		"Основная секция UCI: " + sectionKey,
-	}, "\n")
+	}, "\n") + "\n\n" + strings.Join(routerHelpLines(), "\n")
 }
 
 func mainPanelText(mgr *routers.Manager) string {
@@ -891,4 +954,76 @@ func (h CommandHandler) routeCommand(ctx context.Context, rt routing.Service, fi
 		}
 	}
 	return fmt.Sprintf("%s → %s (pending).\nПроверьте /param_preview и примените /param_apply", listKey, target), nil
+}
+
+func argInt(fields []string, i int, usage string) (int, error) {
+	if len(fields) <= i {
+		return 0, fmt.Errorf("%s", usage)
+	}
+	n, err := strconv.Atoi(fields[i])
+	if err != nil {
+		return 0, fmt.Errorf("%s", usage)
+	}
+	return n, nil
+}
+
+// routeByIndex is /rt <list position> <channel>: the button form of /route.
+// The position is the one the Lists screen shows, so it is resolved against a
+// fresh report and rejected if the lists changed meanwhile.
+func (h CommandHandler) routeByIndex(ctx context.Context, rt routing.Service, fields []string) (string, error) {
+	idx, err := argInt(fields, 1, "использование: /rt <номер списка> <канал>")
+	if err != nil {
+		return "", err
+	}
+	if len(fields) < 3 {
+		return "", fmt.Errorf("использование: /rt <номер списка> <канал>")
+	}
+	secs, err := rt.ListRoutes(ctx)
+	if err != nil {
+		return "", err
+	}
+	flat := routing.FlattenLists(secs)
+	if idx < 0 || idx >= len(flat) {
+		return "", fmt.Errorf("список не найден, обновите экран")
+	}
+	f := flat[idx]
+	ch, err := routing.ResolveChannel(f.Section, fields[2])
+	if err != nil {
+		return "", err
+	}
+	if err := rt.SetListRoute(ctx, f.Section.Name, f.List.Key, ch, "pool"); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s → %s (pending)", routing.ListTitle(f.List), routing.ChannelLabel(f.Section, ch)), nil
+}
+
+func (h CommandHandler) repair(ctx context.Context, userID int64) (string, error) {
+	if h.wd == nil {
+		return "", fmt.Errorf("мониторинг выключен в конфиге бота (watchdog_enabled)")
+	}
+	inst, err := h.mgr.InstanceFor(userID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := h.wd.RepairNow(ctx, inst.ID); err != nil {
+		return "", err
+	}
+	return "Сервис перезапущен. Состояние проверится на следующем цикле.", nil
+}
+
+// mute silences watchdog notices: /mute <minutes>, default one hour.
+func (h CommandHandler) mute(fields []string) (string, error) {
+	if h.wd == nil {
+		return "", fmt.Errorf("мониторинг выключен в конфиге бота (watchdog_enabled)")
+	}
+	minutes := 60
+	if len(fields) >= 2 {
+		n, err := strconv.Atoi(fields[1])
+		if err != nil || n < 1 || n > 24*60 {
+			return "", fmt.Errorf("использование: /mute <минуты, 1..1440>")
+		}
+		minutes = n
+	}
+	h.wd.Mute(time.Duration(minutes) * time.Minute)
+	return fmt.Sprintf("Уведомления мониторинга выключены на %d мин. Починка продолжает работать.", minutes), nil
 }

@@ -23,6 +23,11 @@ func (f *fakeExec) Run(ctx context.Context, name string, args ...string) (string
 	return "", nil
 }
 
+func (f *fakeExec) RunBytes(ctx context.Context, name string, args ...string) ([]byte, error) {
+	out, err := f.Run(ctx, name, args...)
+	return []byte(out), err
+}
+
 func (f *fakeExec) RunCoreRPC(ctx context.Context, method string, args ...string) (string, error) {
 	f.calls = append(f.calls, "rpc "+method)
 	if dl, ok := ctx.Deadline(); ok {

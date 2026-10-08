@@ -14,7 +14,9 @@ import (
 
 func main() {
 	configPath := flag.String("config", "/etc/hybrid-failover-bot.json", "Path to bot config")
-	mode := flag.String("mode", "run", "run|validate-config|apply-config|rollback-config|set-pending")
+	mode := flag.String("mode", "run", "run|exec|validate-config|apply-config|rollback-config|set-pending")
+	cmd := flag.String("cmd", "", "bot command for -mode exec, e.g. \"/sysinfo\"")
+	user := flag.Int64("user", 0, "Telegram user id for -mode exec (default: first admin)")
 	key := flag.String("key", "", "pending key for set-pending")
 	value := flag.String("value", "", "pending value for set-pending")
 	flag.Parse()
@@ -27,6 +29,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+	case "exec":
+		if *cmd == "" {
+			exitIfErr(fmt.Errorf("-cmd is required"))
+		}
+		out, err := app.Exec(context.Background(), *configPath, *user, *cmd)
+		exitIfErr(err)
+		fmt.Println(out)
 	case "validate-config":
 		store := botconfig.NewStore(*configPath)
 		exitIfErr(store.ValidatePending())
