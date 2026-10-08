@@ -27,7 +27,7 @@ else
 	HF_SMOKE_BUILT=1
 	(
 		cd "$ROOT_DIR"
-		go build -mod=mod -trimpath -o "$BIN" ./core/cmd/hybrid-failover
+		go build -mod=mod -trimpath -tags with_utls -o "$BIN" ./core/cmd/hybrid-failover
 	)
 fi
 

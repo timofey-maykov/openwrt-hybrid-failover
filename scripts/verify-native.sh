@@ -15,14 +15,14 @@ if [[ -z "$BIN" ]]; then
 	else
 		BIN="$(mktemp "${TMPDIR:-/tmp}/hybrid-failover-native.XXXXXX")"
 		trap 'rm -f "$BIN"' EXIT
-		( cd "$ROOT_DIR" && go build -mod=mod -trimpath -o "$BIN" ./core/cmd/hybrid-failover )
+		( cd "$ROOT_DIR" && go build -mod=mod -trimpath -tags with_utls -o "$BIN" ./core/cmd/hybrid-failover )
 	fi
 fi
 [[ -x "$BIN" ]] || die "binary missing: $BIN"
 
 (
 	cd "$ROOT_DIR"
-	GOFLAGS=-mod=mod go test ./internal/engine/... ./internal/failover/... ./internal/lifecycle/...
+	GOFLAGS="-mod=mod -tags=with_utls" go test ./internal/engine/... ./internal/failover/... ./internal/lifecycle/...
 )
 ok "go test engine/failover/lifecycle"
 

@@ -199,4 +199,11 @@ func (c *realityConnWrapper) ConnectionState() tls.ConnectionState {
 }
 func (c *realityConnWrapper) Upstream() any { return c.UConn }
 
+// ReaderReplaceable and WriterReplaceable let sing unwrap this connection down
+// to the *utls.UConn. VLESS Vision finds the TLS connection that way (it reads
+// the TLS record buffers by reflection) and refuses to start when it only sees
+// the wrapper: "vision: not a valid supported TLS connection".
+func (c *realityConnWrapper) ReaderReplaceable() bool { return true }
+func (c *realityConnWrapper) WriterReplaceable() bool { return true }
+
 var _ aTLS.ConfigCompat = (*realityConfig)(nil)
