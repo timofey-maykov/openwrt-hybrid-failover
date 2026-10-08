@@ -31,12 +31,20 @@ func (echoServer) NewConnectionEx(ctx context.Context, conn net.Conn, source, de
 	go func() {
 		defer conn.Close()
 		_, _ = io.Copy(conn, conn)
+		if onClose != nil {
+			onClose(nil)
+		}
 	}()
 }
 
 func (echoServer) NewPacketConnectionEx(ctx context.Context, conn N.PacketConn, source, destination M.Socksaddr, onClose N.CloseHandlerFunc) {
 	go func() {
 		defer conn.Close()
+		defer func() {
+			if onClose != nil {
+				onClose(nil)
+			}
+		}()
 		for {
 			// room in front of the payload for the protocol header
 			headroom := N.CalculateFrontHeadroom(conn)
@@ -100,16 +108,20 @@ func vlessServer(t *testing.T, flow string) int {
 
 func newTestVLESS(t *testing.T, port int, flow string) Handler {
 	t.Helper()
-	uri := fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&type=tcp", vlessTestUUID, port)
+	// the server certificate is self-signed, the link says so
+	uri := fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&allowInsecure=1&type=tcp", vlessTestUUID, port)
 	if flow != "" {
 		uri += "&flow=" + flow
 	}
+	return newTestVLESSLink(t, uri)
+}
+
+func newTestVLESSLink(t *testing.T, uri string) Handler {
+	t.Helper()
 	h, err := newVLESSHandler(plan.OutboundPlan{Tag: "vless-test", ProxyURI: uri})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// the server certificate is self-signed
-	h.(*vlessHandler).tls = newSTDConfig(tlsOptions{enabled: true, serverName: "localhost", insecure: true})
 	return h
 }
 

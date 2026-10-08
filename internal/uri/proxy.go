@@ -261,13 +261,21 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 			},
 		}
 	} else if sec == "tls" {
-		ob["tls"] = map[string]any{
+		tlsMap := map[string]any{
 			"enabled":     true,
-			"server_name": q.Get("sni"),
+			"server_name": firstNonEmpty(q.Get("sni"), q.Get("peer")),
 		}
 		if fp := q.Get("fp"); fp != "" {
-			ob["tls"].(map[string]any)["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
+			tlsMap["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
 		}
+		// the same spellings xray, v2rayN and sing-box links use
+		if truthy(q.Get("insecure")) || truthy(q.Get("allowInsecure")) || truthy(q.Get("allow_insecure")) {
+			tlsMap["insecure"] = true
+		}
+		if alpn := q.Get("alpn"); alpn != "" {
+			tlsMap["alpn"] = strings.Split(alpn, ",")
+		}
+		ob["tls"] = tlsMap
 	}
 	switch netType {
 	case "ws":
@@ -283,6 +291,7 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 		ob["transport"] = map[string]any{
 			"type":                  "grpc",
 			"service_name":          q.Get("serviceName"),
+			"authority":             q.Get("authority"),
 			"idle_timeout":          normalizeGRPCDuration(q.Get("idle_timeout")),
 			"ping_timeout":          normalizeGRPCDuration(q.Get("ping_timeout")),
 			"permit_without_stream": q.Get("permit_without_stream") == "1",
