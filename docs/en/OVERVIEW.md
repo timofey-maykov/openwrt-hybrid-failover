@@ -164,7 +164,7 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 
 | Scheme | Supported | Notes |
 |--------|-----------|-------|
-| `vless://` | yes | Reality, XTLS, transport from the query |
+| `vless://` | yes | Reality, XTLS Vision, TCP and UDP (XUDP). The native engine has no ws or grpc transport, such a link will not connect |
 | `ss://` | yes | Shadowsocks |
 | `trojan://` | yes | |
 | `socks4://`, `socks4a://`, `socks5://` | yes | `enable_udp_over_tcp` if needed |

@@ -75,8 +75,26 @@ func (h *vlessHandler) DialTCP(ctx context.Context, network, address string) (ne
 	return early, nil
 }
 
+// DialUDP carries UDP over VLESS as XUDP, the same way xray and sing-box do.
+// XUDP also is the only form servers accept together with flow
+// xtls-rprx-vision. Each call opens its own connection, like the other
+// handlers do for a UDP flow.
 func (h *vlessHandler) DialUDP(ctx context.Context, network, address string) (net.PacketConn, error) {
-	return nil, fmt.Errorf("vless udp not implemented")
+	conn, err := h.dialer.DialContext(ctx, "tcp", h.server)
+	if err != nil {
+		return nil, err
+	}
+	tlsConn, err := dialTLS(ctx, conn, h.tls)
+	if err != nil {
+		return nil, err
+	}
+	dest := parseDestAddr(address)
+	pc, err := h.client.DialEarlyXUDPPacketConn(tlsConn, dest)
+	if err != nil {
+		_ = tlsConn.Close()
+		return nil, err
+	}
+	return &boundPacketConn{conn: pc, dest: dest}, nil
 }
 
 func (h *vlessHandler) Close() error { return nil }

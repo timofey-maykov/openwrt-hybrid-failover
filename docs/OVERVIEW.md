@@ -164,7 +164,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 
 | Схема | Поддержка | Примечание |
 |-------|-----------|------------|
-| `vless://` | да | Reality, XTLS, transport из query |
+| `vless://` | да | Reality, XTLS Vision, TCP и UDP (XUDP). Транспорты ws и grpc native engine не умеет, такая ссылка не подключится |
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
 | `socks4://`, `socks4a://`, `socks5://` | да | `enable_udp_over_tcp` при необходимости |
