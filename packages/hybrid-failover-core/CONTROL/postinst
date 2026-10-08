@@ -10,4 +10,10 @@ fi
 # Apply the UDP socket buffer tuning immediately; /etc/init.d/sysctl also
 # picks it up on every future boot.
 [ -f /etc/sysctl.d/20-hybrid-failover.conf ] && sysctl -p /etc/sysctl.d/20-hybrid-failover.conf >/dev/null 2>&1 || true
+# An upgrade replaces the binary under a running engine, which keeps the old
+# code in memory until it is restarted. Restart it, but only when it was
+# running, so that an upgrade never starts what the user had stopped.
+if [ -z "${IPKG_INSTROOT}" ] && [ "${PKG_UPGRADE}" = "1" ] && /etc/init.d/hybrid-failover running >/dev/null 2>&1; then
+	/etc/init.d/hybrid-failover restart >/dev/null 2>&1 || true
+fi
 exit 0

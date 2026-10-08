@@ -36,13 +36,21 @@ _apk_arch() {
 	esac
 }
 
+# _write_apk_post_install writes the maintainer script of a package. apk runs
+# post-install on a first install and post-upgrade on an upgrade, never both,
+# so the same body is written for both. With a fourth argument "upgrade" the
+# script says so in PKG_UPGRADE, the way the stock OpenWrt packages do: the
+# postinst of the package can then tell an upgrade apart, and default_postinst
+# does not enable again what the user has disabled.
 _write_apk_post_install() {
 	local postinst="${1:-}"
 	local dest="$2"
 	local pkg_name="$3"
+	local upgrade="${4:-}"
 
 	{
 		echo '#!/bin/sh'
+		[[ "$upgrade" == "upgrade" ]] && echo 'export PKG_UPGRADE=1'
 		echo '[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0'
 		echo '[ -s "${IPKG_INSTROOT}/lib/functions.sh" ] && . "${IPKG_INSTROOT}/lib/functions.sh"'
 		echo "export root=\"\${IPKG_INSTROOT}\""
@@ -105,7 +113,7 @@ _run_apk_mkpkg_docker() {
 
 	docker "${docker_args[@]}" \
 		"${APK_DOCKER_IMAGE}" \
-		sh -c "apk add -q apk-tools 2>/dev/null || true; apk mkpkg${sign_arg}${args_quoted} --script post-install:/scripts/post-install --files /pkg --output /out/${out_name}"
+		sh -c "apk add -q apk-tools 2>/dev/null || true; apk mkpkg${sign_arg}${args_quoted} --script post-install:/scripts/post-install --script post-upgrade:/scripts/post-upgrade --files /pkg --output /out/${out_name}"
 }
 
 apk_build() {
@@ -167,6 +175,8 @@ apk_build() {
 
 	_write_apk_post_install "$pkg_root/CONTROL/postinst" \
 		"$scripts_dir/post-install" "$pkg_name"
+	_write_apk_post_install "$pkg_root/CONTROL/postinst" \
+		"$scripts_dir/post-upgrade" "$pkg_name" upgrade
 
 	local -a mkpkg_args=(
 		--info "name:${pkg_name}"
@@ -184,6 +194,7 @@ apk_build() {
 		apk_bin="$(_apk_bin)"
 		_run_apk_mkpkg_native "$apk_bin" "${mkpkg_args[@]}" \
 			--script "post-install:${scripts_dir}/post-install" \
+			--script "post-upgrade:${scripts_dir}/post-upgrade" \
 			--files "$idir" \
 			--output "$out_dir/$out_name"
 	else
