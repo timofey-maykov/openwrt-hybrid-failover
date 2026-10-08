@@ -7,8 +7,6 @@
 'require ui';
 'require hybrid-failover.hf-ui as hfui';
 
-var fieldStyle = 'width:100%;max-width:100%;box-sizing:border-box;';
-
 var callServiceList = rpc.declare({
 	object: 'service',
 	method: 'list',
@@ -23,260 +21,238 @@ var callServiceRestart = rpc.declare({
 
 var BOT_SERVICE = 'hybrid-failover-bot';
 
+// Keys the bot accepts through `-mode set-pending` (botconfig.SetPendingKey).
+var FIELDS = [
+	{ key: 'token', label: _('Токен бота'), hint: _('Выдаёт @BotFather при создании бота.'), secret: true, placeholder: '123456789:ABC…' },
+	{ key: 'router_name', label: _('Имя роутера'), hint: _('Так роутер называется в уведомлениях и в панели бота. Пусто: имя хоста.'), placeholder: _('например, Дом') },
+	{ key: 'admin_ids', label: _('Администраторы'), hint: _('Telegram ID через запятую. Им доступно всё управление. Свой ID можно узнать у @userinfobot.'), list: true, placeholder: '123456789, 987654321' },
+	{ key: 'viewer_ids', label: _('Только просмотр'), hint: _('Эти пользователи видят состояние, но ничего не меняют.'), list: true, placeholder: '111111111' }
+];
+
+var ADVANCED = [
+	{ key: 'clash_api', label: _('Адрес Clash API'), def: 'http://127.0.0.1:9090' },
+	{ key: 'routing_init_script', label: _('Скрипт службы Hybrid Failover'), def: '/etc/init.d/hybrid-failover' },
+	{ key: 'probe_timeout_seconds', label: _('Таймаут проверок, сек'), def: '5', number: true },
+	{ key: 'log_path', label: _('Журнал бота'), def: '/var/log/hybrid-failover-bot.log' },
+	{ key: 'audit_path', label: _('Журнал действий'), def: '/var/log/hybrid-failover-bot.audit.log' }
+];
+
 return view.extend({
 	configFile: '/etc/hybrid-failover-bot.json',
 	botBinary: '/usr/bin/hybrid-failover-bot',
-	_actionResultEl: null,
-	_serviceBadgeEl: null,
 
-	handleAction: function(mode, title) {
-		var self = this;
-		return fs.exec(this.botBinary, [
-			'-mode', mode,
-			'-config', this.configFile
-		]).then(function(res) {
-			var output = (res.stdout || '').trim() || (res.stderr || '').trim() || _('Готово');
-			if (self._actionResultEl)
-				self._actionResultEl.textContent = (title || mode) + '\n' + output;
-			ui.addNotification(null, E('p', {}, output), res.code === 0 ? 'info' : 'danger');
-		}).catch(function(err) {
-			var msg = String(err.message || err);
-			if (self._actionResultEl)
-				self._actionResultEl.textContent = (title || mode) + '\n' + msg;
-			ui.addNotification(null, E('p', {}, _('Ошибка: ') + msg), 'danger');
-		});
-	},
-
-	refreshServiceStatus: function() {
-		var self = this;
-		return callServiceList(BOT_SERVICE).then(function(res) {
-			var svc = res && res[BOT_SERVICE];
-			var running = false;
-			var pid = '';
-			if (svc && svc.instances) {
-				for (var k in svc.instances) {
-					if (svc.instances[k].running) {
-						running = true;
-						if (svc.instances[k].pid)
-							pid = String(svc.instances[k].pid);
-						break;
-					}
-				}
-			}
-			if (self._serviceBadgeEl) {
-				var label = running ? _('running') : _('stopped');
-				if (running && pid)
-					label += ' (pid ' + pid + ')';
-				self._serviceBadgeEl.textContent = label;
-				self._serviceBadgeEl.className = 'hf-mon-badge ' + (running ? 'hf-mon-badge--ok' : 'hf-mon-badge--bad');
-			}
-		}).catch(function() {
-			if (self._serviceBadgeEl) {
-				self._serviceBadgeEl.textContent = _('недоступен');
-				self._serviceBadgeEl.className = 'hf-mon-badge hf-mon-badge--warn';
-			}
-		});
-	},
-
-	setPending: function(key, value) {
-		return fs.exec(this.botBinary, [
-			'-mode', 'set-pending',
-			'-config', this.configFile,
-			'-key', key,
-			'-value', String(value != null ? value : '')
+	load: function() {
+		return Promise.all([
+			uci.load('hybrid-failover-bot'),
+			L.resolveDefault(fs.read(this.configFile), '{}'),
+			L.resolveDefault(callServiceList(BOT_SERVICE), null)
 		]);
 	},
 
-	savePendingFromForm: function() {
-		var get = function(id) {
-			var el = document.getElementById(id);
-			return el ? el.value : '';
-		};
-		var tasks = [
-			['token', get('pdkb_token')],
-			['router_name', get('pdkb_router_name')],
-			['admin_ids', get('pdkb_admin_ids')],
-			['viewer_ids', get('pdkb_viewer_ids')],
-			['policy', get('pdkb_policy')],
-			['clash_api', get('pdkb_clash_api')],
-			['routing_init_script', get('pdkb_routing_init_script')],
-			['log_path', get('pdkb_log_path')],
-			['audit_path', get('pdkb_audit_path')],
-			['probe_timeout_seconds', get('pdkb_probe_timeout_seconds')],
-			['notify_failover_enabled', get('pdkb_notify_failover_enabled')],
-			['notify_failover_interval_seconds', get('pdkb_notify_interval')]
-		];
+	serviceState: function(res) {
+		var svc = res && res[BOT_SERVICE];
+		if (!svc)
+			return null;
+		for (var k in (svc.instances || {}))
+			if (svc.instances[k].running)
+				return true;
+		return false;
+	},
+
+	statusPills: function(running) {
+		var enabled = uci.get('hybrid-failover-bot', 'main', 'enabled') === '1';
+		var pills = [];
+		if (running === true)
+			pills.push(hfui.pill(_('Бот работает'), 'ok'));
+		else if (running === false)
+			pills.push(hfui.pill(_('Бот остановлен'), 'bad'));
+		else
+			pills.push(hfui.pill(_('Состояние неизвестно'), ''));
+		if (!enabled)
+			pills.push(hfui.pill(_('Автозапуск выключен'), 'warn'));
+		return pills;
+	},
+
+	refreshStatus: function() {
 		var self = this;
+		return L.resolveDefault(callServiceList(BOT_SERVICE), null).then(function(res) {
+			self.header.setPills(self.statusPills(self.serviceState(res)));
+		});
+	},
+
+	exec: function(args) {
+		return fs.exec(this.botBinary, args.concat([ '-config', this.configFile ])).then(function(res) {
+			if (res.code !== 0)
+				throw new Error((res.stderr || res.stdout || '').trim() || _('Ошибка'));
+			return res;
+		});
+	},
+
+	saveBotConfig: function() {
+		var self = this;
+		var tasks = [];
+		FIELDS.concat(ADVANCED).forEach(function(f) {
+			var el = document.getElementById('hfbot-' + f.key);
+			if (el && el.value !== el.getAttribute('data-initial'))
+				tasks.push([ f.key, el.value.trim() ]);
+		});
+		var alerts = document.getElementById('hfbot-alerts');
+		if (alerts && String(alerts.checked) !== alerts.getAttribute('data-initial'))
+			tasks.push([ 'notify_failover_enabled', alerts.checked ? 'true' : 'false' ]);
+		var interval = document.getElementById('hfbot-interval');
+		if (interval && interval.value !== interval.getAttribute('data-initial'))
+			tasks.push([ 'notify_failover_interval_seconds', interval.value.trim() ]);
+
+		if (!tasks.length) {
+			this.header.setResult(_('Изменений в настройках бота нет.'), 'info');
+			return Promise.resolve();
+		}
+
+		this.header.setResult(_('Сохраняю настройки бота…'), 'info');
 		var chain = Promise.resolve();
 		tasks.forEach(function(kv) {
 			chain = chain.then(function() {
-				return self.setPending(kv[0], kv[1]);
+				return self.exec([ '-mode', 'set-pending', '-key', kv[0], '-value', kv[1] ]);
 			});
 		});
 		return chain.then(function() {
-			ui.addNotification(null, E('p', {}, _('Сохранено в pending-конфиг. Нажмите «Проверить» или «Применить».')));
+			return self.exec([ '-mode', 'apply-config' ]);
+		}).then(function() {
+			return callServiceRestart(BOT_SERVICE);
+		}).then(function() {
+			document.querySelectorAll('[data-initial]').forEach(function(el) {
+				el.setAttribute('data-initial', el.type === 'checkbox' ? String(el.checked) : el.value);
+			});
+			self.header.setResult(_('Настройки бота сохранены, бот перезапущен.'), true);
+			return self.refreshStatus();
 		}).catch(function(err) {
-			ui.addNotification(null, E('p', {}, _('Ошибка сохранения: ') + (err.message || err)), 'danger');
+			// Leave nothing half-written in the bot's draft.
+			return self.exec([ '-mode', 'rollback-config' ]).catch(function() {}).then(function() {
+				self.header.setResult(_('Не сохранено: ') + String(err.message || err), false);
+			});
 		});
 	},
 
-	renderEditor: function(cfg) {
-		var self = this;
-		var mkInput = function(label, id, value, attrs) {
-			var a = attrs || {};
-			return E('div', { 'class': 'cbi-value', 'style': 'margin-bottom:12px;width:100%;' }, [
-				E('label', { 'class': 'cbi-value-title', 'for': id, 'style': 'display:block;font-weight:600;margin-bottom:6px;' }, label),
-				E('div', { 'class': 'cbi-value-field' }, [
-					E('input', Object.assign({
-						'id': id,
-						'class': 'cbi-input-text',
-						'type': 'text',
-						'value': value || '',
-						'style': fieldStyle
-					}, a))
-				])
-			]);
-		};
-
-		var policy = cfg.policy || 'outage-only';
-		return E('div', { 'class': 'cbi-section hf-mon-panel', 'style': 'width:100%;margin-top:16px;' }, [
-			E('h3', {}, _('Hybrid Failover Bot: JSON-конфиг')),
-			E('p', { 'class': 'hint' }, hfui.policyHint(policy)),
-			mkInput(_('Токен'), 'pdkb_token', cfg.token || '', { 'placeholder': '123456789:ABC...' }),
-			mkInput(_('Имя роутера (в уведомлениях и панели)'), 'pdkb_router_name', cfg.router_name || '', { 'placeholder': _('по умолчанию hostname') }),
-			mkInput(_('ID администраторов (через запятую)'), 'pdkb_admin_ids', (cfg.admin_ids || []).join(', '), { 'placeholder': '123456789, 987654321' }),
-			mkInput(_('ID только чтение (viewer_ids)'), 'pdkb_viewer_ids', (cfg.viewer_ids || []).join(', '), { 'placeholder': '111111111' }),
-			E('div', { 'class': 'cbi-value', 'style': 'margin-bottom:12px;width:100%;' }, [
-				E('label', { 'class': 'cbi-value-title', 'for': 'pdkb_policy', 'style': 'display:block;font-weight:600;margin-bottom:6px;' }, _('Политика failover')),
-				E('div', { 'class': 'cbi-value-field' }, [
-					E('select', { 'id': 'pdkb_policy', 'class': 'cbi-input-select', 'style': fieldStyle }, [
-						E('option', { 'value': 'outage-only', 'selected': policy === 'outage-only' }, _('outage-only (только при падении)')),
-						E('option', { 'value': 'prefer-primary', 'selected': policy === 'prefer-primary' }, _('prefer-primary (предпочитать основной)')),
-						E('option', { 'value': 'fastest', 'selected': policy === 'fastest' }, _('fastest (urltest passive)'))
-					])
-				])
-			]),
-			mkInput(_('URL Clash API'), 'pdkb_clash_api', cfg.clash_api || 'http://192.168.42.1:9090'),
-			mkInput(_('Скрипт init.d hybrid-failover'), 'pdkb_routing_init_script',
-				cfg.routing_init_script || '/etc/init.d/hybrid-failover'),
-			mkInput(_('Путь к логам'), 'pdkb_log_path', cfg.log_path || '/var/log/hybrid-failover-bot.log'),
-			mkInput(_('Путь к audit-логу'), 'pdkb_audit_path', cfg.audit_path || '/var/log/hybrid-failover-bot.audit.log'),
-			mkInput(_('Таймаут проверки, сек'), 'pdkb_probe_timeout_seconds', String(cfg.probe_timeout_seconds || 5), { 'type': 'number', 'min': '1', 'style': 'max-width:200px;width:100%;' }),
-			mkInput(_('Алерты failover (true/false)'), 'pdkb_notify_failover_enabled', cfg.notify_failover_enabled ? 'true' : 'false'),
-			mkInput(_('Интервал алертов, сек'), 'pdkb_notify_interval', String(cfg.notify_failover_interval_seconds || 30), { 'type': 'number', 'min': '10' }),
-			E('div', { 'style': 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;' }, [
+	field: function(f, value) {
+		var input = E('input', {
+			'id': 'hfbot-' + f.key,
+			'class': 'cbi-input-text',
+			'type': f.secret ? 'password' : (f.number ? 'number' : 'text'),
+			'value': value,
+			'data-initial': value,
+			'placeholder': f.placeholder || f.def || '',
+			'autocomplete': 'off',
+			'spellcheck': 'false'
+		});
+		var control = input;
+		if (f.secret) {
+			control = E('div', { 'class': 'hf-field__row' }, [
+				input,
 				E('button', {
-					'class': 'btn cbi-button cbi-button-save',
-					'click': ui.createHandlerFn(this, function() { return this.savePendingFromForm(); })
-				}, _('Сохранить в pending'))
-			])
+					'class': 'btn cbi-button cbi-button-neutral',
+					'click': function(ev) {
+						ev.preventDefault();
+						var show = input.type === 'password';
+						input.type = show ? 'text' : 'password';
+						ev.target.textContent = show ? _('Скрыть') : _('Показать');
+					}
+				}, _('Показать'))
+			]);
+		}
+		return E('div', { 'class': 'hf-field' }, [
+			E('label', { 'for': 'hfbot-' + f.key }, f.label),
+			control,
+			f.hint ? E('div', { 'class': 'hf-field__hint' }, f.hint) : ''
 		]);
 	},
 
-	renderActionsPanel: function() {
+	render: function(loaded) {
 		var self = this;
-		this._actionResultEl = E('pre', {
-			'class': 'hf-step-result',
-			'style': 'margin-top:12px;'
-		}, '-');
-		return E('div', { 'class': 'cbi-section hf-mon-panel', 'style': 'width:100%;' }, [
-			E('h3', {}, _('Действия с конфигом')),
-			E('div', { 'class': 'hf-mon-stepper' }, [
+		var cfg = {};
+		try { cfg = JSON.parse(loaded[1] || '{}'); } catch (e) { cfg = {}; }
+		var running = this.serviceState(loaded[2]);
+
+		var value = function(f) {
+			var v = cfg[f.key];
+			if (Array.isArray(v))
+				return v.join(', ');
+			return v == null ? '' : String(v);
+		};
+
+		this.header = hfui.pageHeader({
+			title: _('Telegram-бот'),
+			pills: this.statusPills(running),
+			actions: [
 				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
-					'click': ui.createHandlerFn(this, function() { return this.handleAction('validate-config', _('Проверить pending')); })
-				}, _('Проверить pending')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-save',
-					'click': ui.createHandlerFn(this, function() { return this.handleAction('apply-config', _('Применить')); })
-				}, _('Применить')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-negative',
-					'click': ui.createHandlerFn(this, function() { return this.handleAction('rollback-config', _('Откатить')); })
-				}, _('Откатить')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
+					'class': 'btn cbi-button cbi-button-neutral',
 					'click': ui.createHandlerFn(this, function() {
 						return callServiceRestart(BOT_SERVICE).then(function() {
-							return self.refreshServiceStatus();
-						}).then(function() {
-							if (self._actionResultEl)
-								self._actionResultEl.textContent = _('Перезапуск') + '\n' + _('Готово');
-						}).catch(function(err) {
-							var msg = String(err.message || err);
-							if (self._actionResultEl)
-								self._actionResultEl.textContent = _('Перезапуск') + '\n' + msg;
-							ui.addNotification(null, E('p', {}, msg), 'danger');
+							self.header.setResult(_('Бот перезапущен.'), true);
+							return self.refreshStatus();
 						});
 					})
-				}, _('Перезапустить бота'))
+				}, _('Перезапустить')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-apply',
+					'click': ui.createHandlerFn(this, 'saveBotConfig')
+				}, _('Сохранить настройки бота'))
+			],
+			hint: _('Бот присылает уведомления о переключениях и позволяет управлять роутером из Telegram. Настройки бота сохраняются кнопкой вверху, автозапуск службы ниже кнопкой «Применить».')
+		});
+
+		var alertsOn = !!cfg.notify_failover_enabled;
+		var intervalVal = String(cfg.notify_failover_interval_seconds || 30);
+
+		var botPanel = hfui.panel(_('Бот'), _('Подключение и доступ.'), FIELDS.map(function(f) {
+			return self.field(f, value(f));
+		}));
+
+		var alertsPanel = hfui.panel(_('Уведомления'), _('Что бот присылает администраторам сам.'), [
+			E('div', { 'class': 'hf-switch-row' }, [
+				E('div', {}, [
+					E('label', { 'for': 'hfbot-alerts' }, _('Сообщать о переключениях каналов')),
+					E('div', { 'class': 'hf-field__hint' }, _('Например, когда основной VPN упал и трафик ушёл на резерв.'))
+				]),
+				E('div', { 'class': 'cbi-checkbox' }, [
+					E('input', { 'id': 'hfbot-alerts', 'type': 'checkbox', 'checked': alertsOn ? '' : null, 'data-initial': String(alertsOn) }),
+					E('label', { 'for': 'hfbot-alerts' })
+				])
 			]),
-			this._actionResultEl
+			E('div', { 'class': 'hf-field', 'style': 'margin-top:12px;' }, [
+				E('label', { 'for': 'hfbot-interval' }, _('Не чаще чем раз в, сек')),
+				E('input', { 'id': 'hfbot-interval', 'class': 'cbi-input-text', 'type': 'number', 'min': '10', 'value': intervalVal, 'data-initial': intervalVal }),
+				E('div', { 'class': 'hf-field__hint' }, _('Защита от потока сообщений, если канал часто моргает. Не меньше 10.'))
+			]),
+			E('details', { 'class': 'hf-details' }, [
+				E('summary', {}, _('Дополнительно')),
+				E('div', {}, ADVANCED.map(function(f) { return self.field(f, value(f)); }))
+			])
 		]);
-	},
 
-	render: function() {
-		var m, s, o;
-		var self = this;
-
-		m = new form.Map('hybrid-failover-bot', _('Telegram-бот Hybrid Failover'),
-			_('Настройка бота, pending-конфиг и безопасное применение изменений.'));
-
-		s = m.section(form.NamedSection, 'main', 'bot', _('Сервис'));
+		var m = new form.Map('hybrid-failover-bot');
+		var s = m.section(form.NamedSection, 'main', 'bot', _('Служба'));
 		s.anonymous = true;
+		s.tab('main', _('Запуск'));
+		s.tab('paths', _('Файлы'));
 
-		o = s.option(form.Flag, 'enabled', _('Включить сервис'));
+		var o = s.taboption('main', form.Flag, 'enabled', _('Запускать бота вместе с роутером'));
 		o.default = o.disabled;
 
-		o = s.option(form.Value, 'binary', _('Путь к бинарнику'));
-		o.datatype = 'string';
+		o = s.taboption('paths', form.Value, 'binary', _('Программа бота'));
 		o.default = '/usr/bin/hybrid-failover-bot';
-		o.width = '100%';
-
-		o = s.option(form.Value, 'config_path', _('Путь к конфигу JSON'));
-		o.datatype = 'string';
+		o = s.taboption('paths', form.Value, 'config_path', _('Файл настроек'));
 		o.default = '/etc/hybrid-failover-bot.json';
-		o.width = '100%';
-
-		o = s.option(form.Value, 'log_path', _('Путь к лог-файлу'));
-		o.datatype = 'string';
+		o = s.taboption('paths', form.Value, 'log_path', _('Журнал'));
 		o.default = '/var/log/hybrid-failover-bot.log';
-		o.width = '100%';
 
-		self._serviceBadgeEl = E('span', { 'class': 'hf-mon-badge hf-mon-badge--info' }, '…');
-		s = m.section(form.TypedSection, 'bot_status', _('Статус сервиса'));
-		s.anonymous = true;
-		s.render = function() {
-			return E('div', { 'class': 'hf-mon-toolbar' }, [
-				E('span', {}, _('init.d hybrid-failover-bot:')),
-				self._serviceBadgeEl,
-				E('button', {
-					'class': 'btn cbi-button cbi-button-action',
-					'click': ui.createHandlerFn(self, function() { return self.refreshServiceStatus(); })
-				}, _('Обновить'))
+		return m.render().then(function(mapEl) {
+			var root = E('div', { 'class': 'hf-page hf-mon' }, [
+				self.header,
+				E('div', { 'class': 'hf-panels' }, [ botPanel, alertsPanel ]),
+				mapEl
 			]);
-		};
-
-		return fs.read(this.configFile).then(function(raw) {
-			var cfg = {};
-			try { cfg = JSON.parse(raw || '{}'); } catch (e) { cfg = {}; }
-			return m.render().then(function(mapNode) {
-				var wrap = E('div', { 'class': 'hf-mon pdkb-luci-wide', 'style': 'width:100%;max-width:100%;' }, [
-					mapNode,
-					self.renderActionsPanel(),
-					self.renderEditor(cfg)
-				]);
-				hfui.injectStyles(wrap);
-				self.refreshServiceStatus();
-				return wrap;
-			});
-		}).catch(function() {
-			return m.render().then(function(mapNode) {
-				var wrap = E('div', { 'class': 'hf-mon' }, [ mapNode, self.renderActionsPanel() ]);
-				hfui.injectStyles(wrap);
-				self.refreshServiceStatus();
-				return wrap;
-			});
+			hfui.injectStyles(root);
+			return root;
 		});
 	}
 });

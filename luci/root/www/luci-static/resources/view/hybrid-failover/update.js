@@ -3,6 +3,7 @@
 'require rpc';
 'require ui';
 'require poll';
+'require hybrid-failover.hf-ui as hfui';
 
 // Update Hybrid Failover from its GitHub releases. The check and the install
 // run in the core binary (hybrid-failover update ...); the install runs
@@ -37,6 +38,8 @@ function fmtDate(s) {
 	return isNaN(d.getTime()) ? s : d.toLocaleString();
 }
 
+var STEPS = [ 'start', 'release', 'manifest', 'download', 'install', 'restart', 'done' ];
+
 var stepNames = {
 	start: _('запуск'),
 	release: _('поиск релиза'),
@@ -46,6 +49,29 @@ var stepNames = {
 	restart: _('перезапуск служб'),
 	done: _('готово')
 };
+
+function cmpVersion(a, b) {
+	var pa = String(a || '').replace(/^v/, '').split(/[.-]/);
+	var pb = String(b || '').replace(/^v/, '').split(/[.-]/);
+	for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+		var x = parseInt(pa[i] || '0', 10), y = parseInt(pb[i] || '0', 10);
+		if (isNaN(x) || isNaN(y))
+			return 0;
+		if (x !== y)
+			return x > y ? 1 : -1;
+	}
+	return 0;
+}
+
+var UPDATE_CSS = [
+	'.hf-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }',
+	'.hf-steps li { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--hf-muted); padding: 4px 0; }',
+	'.hf-steps li::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--hf-line); flex: none; }',
+	'.hf-steps li.hf-steps--done { color: inherit; } .hf-steps li.hf-steps--done::before { background: var(--hf-ok); border-color: var(--hf-ok); }',
+	'.hf-steps li.hf-steps--now { color: inherit; font-weight: 700; } .hf-steps li.hf-steps--now::before { border-color: var(--hf-acc); background: var(--hf-acc-soft); }',
+	'.hf-steps li.hf-steps--fail { color: var(--hf-bad); font-weight: 700; } .hf-steps li.hf-steps--fail::before { background: var(--hf-bad); border-color: var(--hf-bad); }',
+	'.hf-notes { white-space: pre-wrap; font-size: 13px; line-height: 1.5; max-height: 360px; overflow: auto; margin: 0; }'
+].join('\n');
 
 return view.extend({
 	handleSaveApply: null,
@@ -59,79 +85,109 @@ return view.extend({
 		return callStatus().then(dataOf).catch(function() { return {}; });
 	},
 
-	renderInfo: function() {
+	state: function() {
 		var s = this._status || {};
 		var chk = s.check || null;
-		var st = s.state || { state: 'idle' };
-		var rows = [];
+		var newer = chk && chk.latest && s.installed && cmpVersion(chk.latest, s.installed) > 0;
+		var ahead = chk && chk.latest && s.installed && cmpVersion(s.installed, chk.latest) > 0;
+		return {
+			s: s,
+			chk: chk,
+			st: s.state || { state: 'idle' },
+			available: !!(chk && chk.available && newer !== false),
+			ahead: !!ahead
+		};
+	},
 
-		rows.push(E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td left', 'width': '33%' }, _('Установлена')),
-			E('td', { 'class': 'td left' }, E('strong', {}, s.installed || '?'))
-		]));
+	renderPills: function() {
+		var x = this.state();
+		var pills = [ hfui.pill(_('Установлена ') + (x.s.installed || '?'), 'plain') ];
+		if (x.st.state === 'running')
+			pills.push(hfui.pill(_('Идёт обновление'), 'warn'));
+		else if (!x.chk)
+			pills.push(hfui.pill(_('Обновления ещё не проверялись'), ''));
+		else if (x.chk.error)
+			pills.push(hfui.pill(_('Не удалось проверить'), 'bad'));
+		else if (x.available)
+			pills.push(hfui.pill(_('Есть обновление до ') + x.chk.latest, 'warn'));
+		else
+			pills.push(hfui.pill(_('Последняя версия'), 'ok'));
+		return pills;
+	},
+
+	renderInfo: function() {
+		var x = this.state();
+		var chk = x.chk, st = x.st;
+		var panels = [];
 
 		var latest;
 		if (!chk)
-			latest = E('em', {}, _('ещё не проверялось'));
+			latest = _('ещё не проверялось');
 		else if (chk.error)
-			latest = E('span', { 'style': 'color:#c00' }, _('ошибка проверки: ') + chk.error);
+			latest = E('span', { 'style': 'color:var(--hf-bad);' }, chk.error);
 		else
-			latest = E('span', {}, [
-				E('strong', {}, chk.latest || '?'),
-				chk.published_at ? ' (' + fmtDate(chk.published_at) + ')' : '',
-				chk.available ? E('span', { 'class': 'label notice', 'style': 'margin-left:8px' }, _('есть обновление')) :
-					E('span', { 'style': 'margin-left:8px;color:#080' }, _('установлена последняя'))
-			]);
-		rows.push(E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td left' }, _('Последняя на GitHub')),
-			E('td', { 'class': 'td left' }, latest)
+			latest = (chk.latest || '?') + (chk.published_at ? ', ' + fmtDate(chk.published_at) : '');
+
+		var note = '';
+		if (x.ahead)
+			note = E('p', { 'class': 'hf-panel__sub', 'style': 'margin-top:12px;' },
+				_('Установлена версия новее, чем при последней проверке. Нажмите «Проверить обновления», чтобы узнать свежие данные.'));
+
+		panels.push(hfui.panel(_('Версии'), _('Пакеты берутся из релизов на GitHub. Ставятся только пакеты для этого роутера, каждый файл сверяется с контрольной суммой. Настройки сохраняются.'), [
+			hfui.kvList([
+				[ _('Установлена'), x.s.installed || '?' ],
+				[ _('Последняя на GitHub'), latest ],
+				chk && chk.checked_at ? [ _('Проверено'), new Date(chk.checked_at * 1000).toLocaleString() ] : null
+			]),
+			note
 		]));
-		if (chk && chk.checked_at)
-			rows.push(E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td left' }, _('Проверено')),
-				E('td', { 'class': 'td left' }, new Date(chk.checked_at * 1000).toLocaleString())
-			]));
-
-		var children = [ E('table', { 'class': 'table' }, rows) ];
-
-		if (chk && chk.available && chk.notes)
-			children.push(E('details', { 'style': 'margin-top:10px', 'open': 'open' }, [
-				E('summary', { 'style': 'cursor:pointer;font-weight:600' }, _('Что нового в ') + chk.latest),
-				E('pre', { 'style': 'white-space:pre-wrap;font-size:12px;max-height:300px;overflow:auto' }, chk.notes)
-			]));
 
 		if (st.state && st.state !== 'idle') {
-			var color = st.state === 'failed' ? '#c00' : (st.state === 'done' ? '#080' : 'inherit');
-			var head = st.state === 'running' ? _('Идёт обновление: ') + (stepNames[st.step] || st.step || '') :
+			var cur = STEPS.indexOf(st.step);
+			if (st.state === 'done')
+				cur = STEPS.length;
+			var steps = E('ul', { 'class': 'hf-steps' }, STEPS.filter(function(k) { return k !== 'done'; }).map(function(k, i) {
+				var cls = '';
+				if (i < cur)
+					cls = 'hf-steps--done';
+				else if (i === cur)
+					cls = st.state === 'failed' ? 'hf-steps--fail' : 'hf-steps--now';
+				return E('li', { 'class': cls }, stepNames[k]);
+			}));
+			var title = st.state === 'running' ? _('Идёт обновление') :
 				st.state === 'done' ? _('Обновление до %s установлено').format(st.to || '') :
 				_('Обновление не удалось');
-			children.push(E('div', { 'style': 'margin-top:12px' }, [
-				E('p', { 'style': 'font-weight:600;color:' + color }, [
-					st.state === 'running' ? E('span', { 'class': 'spinning' }, ' ') : '',
-					head
-				]),
-				st.message ? E('p', {}, st.message) : '',
-				(st.log && st.log.length) ? E('details', {}, [
-					E('summary', { 'style': 'cursor:pointer' }, _('Журнал')),
-					E('pre', { 'style': 'white-space:pre-wrap;font-size:12px;max-height:240px;overflow:auto' }, st.log.join('\n'))
+			panels.push(hfui.panel(title, st.message || '', [
+				steps,
+				(st.log && st.log.length) ? E('details', { 'class': 'hf-details' }, [
+					E('summary', {}, _('Журнал')),
+					E('pre', { 'class': 'hf-result hf-result--info' }, st.log.join('\n'))
 				]) : ''
 			]));
 		}
-		return E('div', {}, children);
+
+		if (x.available && chk.notes)
+			panels.push(hfui.panel(_('Что нового в ') + chk.latest, '', [
+				E('pre', { 'class': 'hf-notes' }, chk.notes)
+			], { wide: true }));
+
+		return E('div', { 'class': 'hf-panels' }, panels);
 	},
 
 	refresh: function() {
 		var info = document.getElementById('hf-update-info');
 		if (info)
 			info.replaceChildren(this.renderInfo());
-		var s = this._status || {};
-		var running = s.state && s.state.state === 'running';
-		var available = s.check && s.check.available;
+		if (this._header)
+			this._header.setPills(this.renderPills());
+		var x = this.state();
+		var running = x.st.state === 'running';
 		var btnApply = document.getElementById('hf-update-apply');
 		var btnCheck = document.getElementById('hf-update-check');
 		if (btnApply) {
-			btnApply.disabled = !available || running;
-			btnApply.textContent = available ? _('Обновить до %s').format(s.check.latest) : _('Обновить');
+			btnApply.style.display = x.available ? '' : 'none';
+			btnApply.disabled = running;
+			btnApply.textContent = x.available ? _('Обновить до %s').format(x.chk.latest) : _('Обновить');
 		}
 		if (btnCheck)
 			btnCheck.disabled = running;
@@ -199,26 +255,29 @@ return view.extend({
 	render: function(status) {
 		var self = this;
 		this._status = status || {};
-
-		var node = E('div', { 'class': 'cbi-section hf-mon' }, [
-			E('h2', {}, _('Hybrid Failover: обновление')),
-			E('p', { 'class': 'hint' }, _('Проверка новых версий на GitHub и установка из релиза. Ставятся только пакеты для этого роутера, каждый файл сверяется с контрольной суммой из релиза. Настройки сохраняются.')),
-			E('div', { 'id': 'hf-update-info' }, this.renderInfo()),
-			E('div', { 'class': 'hf-mon-toolbar', 'style': 'margin-top:12px' }, [
+		this._header = hfui.pageHeader({
+			title: _('Обновление Hybrid Failover'),
+			pills: this.renderPills(),
+			actions: [
 				E('button', {
 					'id': 'hf-update-check',
 					'class': 'btn cbi-button cbi-button-action',
-					'click': ui.createHandlerFn(self, 'handleCheck')
+					'click': ui.createHandlerFn(this, 'handleCheck')
 				}, _('Проверить обновления')),
-				' ',
 				E('button', {
 					'id': 'hf-update-apply',
-					'class': 'btn cbi-button cbi-button-save',
-					'click': ui.createHandlerFn(self, 'handleApply')
+					'class': 'btn cbi-button cbi-button-apply',
+					'style': 'display:none;',
+					'click': ui.createHandlerFn(this, 'handleApply')
 				}, _('Обновить'))
-			])
+			]
+		});
+		var node = E('div', { 'class': 'hf-page hf-mon' }, [
+			E('style', { 'type': 'text/css' }, UPDATE_CSS),
+			this._header,
+			E('div', { 'id': 'hf-update-info' }, this.renderInfo())
 		]);
-
+		hfui.injectStyles(node);
 		window.setTimeout(function() {
 			self.refresh();
 			if (self._status.state && self._status.state.state === 'running')
