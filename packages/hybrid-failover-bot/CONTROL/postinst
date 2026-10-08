@@ -2,4 +2,10 @@
 [ -n "${IPKG_INSTROOT}" ] && exit 0
 chmod 755 /etc/init.d/hybrid-failover-bot 2>/dev/null || true
 /etc/init.d/hybrid-failover-bot enable 2>/dev/null || true
+# Restart a running bot after an upgrade so that the new code runs. It waits
+# a few seconds and runs on its own: the bot can be the one that started this
+# upgrade (/apk_upgrade), and killing it now would cut the transaction short.
+if [ "${PKG_UPGRADE}" = "1" ] && /etc/init.d/hybrid-failover-bot running >/dev/null 2>&1; then
+	( sleep 5; /etc/init.d/hybrid-failover-bot restart ) </dev/null >/dev/null 2>&1 &
+fi
 exit 0
