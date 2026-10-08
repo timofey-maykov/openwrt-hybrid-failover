@@ -17,6 +17,7 @@ import (
 type tlsOptions struct {
 	enabled     bool
 	serverName  string
+	alpn        []string
 	insecure    bool
 	fingerprint string
 	reality     bool
@@ -39,6 +40,7 @@ func tlsFromFields(fields map[string]any, serverHost string) (tlsOptions, error)
 	if v, ok := raw["insecure"].(bool); ok {
 		opt.insecure = v
 	}
+	opt.alpn = alpnFromField(raw["alpn"])
 	if utlsMap, ok := raw["utls"].(map[string]any); ok {
 		if fp, ok := utlsMap["fingerprint"].(string); ok {
 			opt.fingerprint = fp
@@ -97,7 +99,7 @@ func newSTDConfig(opt tlsOptions) aTLS.Config {
 	cfg := &tls.Config{
 		ServerName:         opt.serverName,
 		InsecureSkipVerify: opt.insecure,
-		NextProtos:         []string{"h2", "http/1.1"},
+		NextProtos:         nextProtosOrDefault(opt.alpn),
 	}
 	return &stdTLSConfig{cfg: cfg}
 }
@@ -127,7 +129,7 @@ func newUTLSConfig(opt tlsOptions) (aTLS.Config, error) {
 	cfg := &utls.Config{
 		ServerName:         opt.serverName,
 		InsecureSkipVerify: opt.insecure,
-		NextProtos:         []string{"h2", "http/1.1"},
+		NextProtos:         nextProtosOrDefault(opt.alpn),
 	}
 	return &utlsConfig{cfg: cfg, id: id}, nil
 }
@@ -213,4 +215,39 @@ func dialTLS(ctx context.Context, conn net.Conn, cfg aTLS.Config) (net.Conn, err
 func rootCAs() *x509.CertPool {
 	pool, _ := x509.SystemCertPool()
 	return pool
+}
+
+func nextProtosOrDefault(alpn []string) []string {
+	if len(alpn) > 0 {
+		return append([]string(nil), alpn...)
+	}
+	return []string{"h2", "http/1.1"}
+}
+
+// alpnFromField reads the alpn option, which is a list of names or one
+// comma separated string depending on where it came from.
+func alpnFromField(v any) []string {
+	var out []string
+	add := func(s string) {
+		for _, p := range strings.Split(s, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	switch t := v.(type) {
+	case string:
+		add(t)
+	case []string:
+		for _, s := range t {
+			add(s)
+		}
+	case []any:
+		for _, e := range t {
+			if s, ok := e.(string); ok {
+				add(s)
+			}
+		}
+	}
+	return out
 }
