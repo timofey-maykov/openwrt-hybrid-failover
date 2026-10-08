@@ -144,6 +144,24 @@ func (s Service) Restart(ctx context.Context) error {
 	return err
 }
 
+// HardRestart stops the service, gives it time to release sockets and nft
+// tables, and starts it again. It is the step after a plain restart failed.
+func (s Service) HardRestart(ctx context.Context) error {
+	ctx, cancel := withTimeout(ctx, restartTimeout*2)
+	defer cancel()
+	if _, err := s.runner.Run(ctx, s.initScript, "stop"); err != nil {
+		// A stopped or half-dead service may refuse stop; start is still worth a try.
+		_ = err
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(3 * time.Second):
+	}
+	_, err := s.runner.Run(ctx, s.initScript, "start")
+	return err
+}
+
 func (s Service) Validate(ctx context.Context) error {
 	_, err := s.runner.RunCoreRPC(ctx, "Validate")
 	return err

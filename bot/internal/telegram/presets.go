@@ -55,6 +55,19 @@ func onOffToBoolValue(in string) (string, error) {
 	}
 }
 
+// quicStateToDisableValue turns "QUIC on|off" into the disable_quic option:
+// QUIC off means disable_quic=1.
+func quicStateToDisableValue(in string) (string, error) {
+	v, err := onOffToBoolValue(in)
+	if err != nil {
+		return "", err
+	}
+	if v == "1" {
+		return "0", nil
+	}
+	return "1", nil
+}
+
 func parsePositiveInt(value string) (string, error) {
 	v, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || v <= 0 {

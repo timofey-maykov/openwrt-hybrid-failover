@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/config"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerctl"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerexec"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
@@ -17,6 +18,8 @@ type Instance struct {
 	ID      string
 	Name    string
 	Service routing.Service
+	// Ctl manages the router itself (system, network, Wi-Fi, firewall).
+	Ctl routerctl.Service
 }
 
 type Manager struct {
@@ -79,15 +82,16 @@ func NewManager(cfg config.Config) (*Manager, error) {
 		if warn != "" {
 			m.Warnings = append(m.Warnings, warn)
 		}
+		localExec := routerexec.NewLocal(cmdTimeout)
 		svc := routing.NewService(
-			routerexec.NewLocal(cmdTimeout),
+			localExec,
 			cfg.ClashAPI,
 			cfg.RoutingInitScript,
 			cfg.UCIPackage,
 			mainSec,
 			dur,
 		)
-		m.instances["local"] = &Instance{ID: "local", Name: cfg.Identity(), Service: svc}
+		m.instances["local"] = &Instance{ID: "local", Name: cfg.Identity(), Service: svc, Ctl: routerctl.New(localExec)}
 		m.order = []string{"local"}
 		return m, nil
 	}
@@ -146,7 +150,7 @@ func NewManager(cfg config.Config) (*Manager, error) {
 			mainSec = sec
 		}
 		svc := routing.NewService(exec, clashAPI, initScript, uciPkg, mainSec, dur)
-		m.instances[rc.ID] = &Instance{ID: rc.ID, Name: name, Service: svc}
+		m.instances[rc.ID] = &Instance{ID: rc.ID, Name: name, Service: svc, Ctl: routerctl.New(exec)}
 		m.order = append(m.order, rc.ID)
 	}
 	if len(m.order) == 0 {
@@ -238,4 +242,16 @@ func (m *Manager) Multi() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.instances) > 1
+}
+
+// NewStatic builds a manager from ready instances, for tests and embedders
+// that wire their own executors.
+func NewStatic(instances ...Instance) *Manager {
+	m := &Manager{instances: map[string]*Instance{}, selection: map[int64]string{}}
+	for i := range instances {
+		inst := instances[i]
+		m.instances[inst.ID] = &inst
+		m.order = append(m.order, inst.ID)
+	}
+	return m
 }

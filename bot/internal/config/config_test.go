@@ -96,3 +96,21 @@ func TestLoadMigratesLegacyPodkopFields(t *testing.T) {
 		t.Fatalf("log_path: got %q", cfg.LogPath)
 	}
 }
+
+func TestAllowShellIDsMustBeAdmins(t *testing.T) {
+	base := Config{Token: "t", AdminIDs: []int64{1, 2}, Policy: "outage-only"}
+	ok := base
+	ok.AllowShellIDs = []int64{2}
+	if err := ok.Validate(); err != nil {
+		t.Fatalf("admin may have /sh: %v", err)
+	}
+	bad := base
+	bad.AllowShellIDs = []int64{9}
+	if err := bad.Validate(); err == nil {
+		t.Fatal("a non-admin was allowed /sh")
+	}
+	off := base
+	if err := off.Validate(); err != nil || len(off.AllowShellIDs) != 0 {
+		t.Fatalf("shell must be off by default: %v", err)
+	}
+}

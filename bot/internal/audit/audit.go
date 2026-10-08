@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routerctl"
 )
 
 type Event struct {
@@ -29,6 +31,7 @@ func (l *Logger) Write(event Event) error {
 	defer l.mu.Unlock()
 
 	event.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	event.Details = routerctl.Redact(event.Details)
 	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err

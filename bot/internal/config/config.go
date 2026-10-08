@@ -12,10 +12,13 @@ import (
 )
 
 type Config struct {
-	Token                         string         `json:"token"`
-	RouterName                    string         `json:"router_name,omitempty"`
-	AdminIDs                      []int64        `json:"admin_ids"`
-	ViewerIDs                     []int64        `json:"viewer_ids"`
+	Token      string  `json:"token"`
+	RouterName string  `json:"router_name,omitempty"`
+	AdminIDs   []int64 `json:"admin_ids"`
+	ViewerIDs  []int64 `json:"viewer_ids"`
+	// AllowShellIDs lists the admins who may run /sh. Empty by default, which
+	// switches /sh off. It is set in the JSON file only, never from the chat.
+	AllowShellIDs                 []int64        `json:"allow_shell_ids,omitempty"`
 	LogPath                       string         `json:"log_path"`
 	AuditPath                     string         `json:"audit_path"`
 	ClashAPI                      string         `json:"clash_api"`
@@ -27,6 +30,22 @@ type Config struct {
 	NotifyFailoverEnabled         bool           `json:"notify_failover_enabled"`
 	NotifyFailoverIntervalSeconds int            `json:"notify_failover_interval_seconds"`
 	Routers                       []RouterConfig `json:"routers"`
+
+	// Watchdog: the bot checks every router on a timer, restarts a sick
+	// service and tells the admins when it could not fix it. On by default.
+	WatchdogEnabled         *bool `json:"watchdog_enabled,omitempty"`
+	WatchdogAutoRepair      *bool `json:"watchdog_auto_repair,omitempty"`
+	WatchdogIntervalSeconds int   `json:"watchdog_interval_seconds,omitempty"`
+}
+
+func (c Config) WatchdogOn() bool      { return c.WatchdogEnabled == nil || *c.WatchdogEnabled }
+func (c Config) WatchdogRepairs() bool { return c.WatchdogAutoRepair == nil || *c.WatchdogAutoRepair }
+func (c Config) WatchdogInterval() time.Duration {
+	sec := c.WatchdogIntervalSeconds
+	if sec < 10 {
+		sec = 30
+	}
+	return time.Duration(sec) * time.Second
 }
 
 // RouterConfig is one managed OpenWrt host. Remote routers use SSH (key in identity_file).
@@ -143,6 +162,17 @@ func (c Config) Validate() error {
 	}
 	if len(c.AdminIDs) == 0 {
 		return errors.New("admin_ids is required")
+	}
+	for _, id := range c.AllowShellIDs {
+		isAdmin := false
+		for _, a := range c.AdminIDs {
+			if a == id {
+				isAdmin = true
+			}
+		}
+		if !isAdmin {
+			return fmt.Errorf("allow_shell_ids: %d is not in admin_ids", id)
+		}
 	}
 	switch c.Policy {
 	case "outage-only", "prefer-primary", "fastest":

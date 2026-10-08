@@ -2,58 +2,7 @@ package telegram
 
 import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routers"
-	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
-
-func routersPanelKeyboard(mgr *routers.Manager, userID int64) tgbotapi.InlineKeyboardMarkup {
-	rows := [][]tgbotapi.InlineKeyboardButton{}
-	for _, r := range mgr.List() {
-		label := r.Name
-		if mgr.SelectedID(userID) == r.ID {
-			label = "▶ " + label
-		}
-		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(label, "cmd:/use "+r.ID),
-		))
-	}
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Сервис", "nav:service"),
-		tgbotapi.NewInlineKeyboardButtonData("Фейловер", "nav:failover"),
-	))
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Параметры", "nav:params"),
-		tgbotapi.NewInlineKeyboardButtonData("Конфиг", "nav:config"),
-	))
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("UCI (hybrid-failover)", "nav:uci"),
-	))
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 80"),
-		tgbotapi.NewInlineKeyboardButtonData("Статус", "cmd:/status"),
-	))
-	return tgbotapi.NewInlineKeyboardMarkup(rows...)
-}
-
-func mainPanelKeyboard() tgbotapi.InlineKeyboardMarkup {
-	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Сервис", "nav:service"),
-			tgbotapi.NewInlineKeyboardButtonData("Фейловер", "nav:failover"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Параметры", "nav:params"),
-			tgbotapi.NewInlineKeyboardButtonData("Конфиг", "nav:config"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("UCI (hybrid-failover)", "nav:uci"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 80"),
-			tgbotapi.NewInlineKeyboardButtonData("Статус", "cmd:/status"),
-		),
-	)
-}
 
 func paramMenuKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
@@ -115,58 +64,6 @@ func callbackToInput(data string) (string, bool) {
 	return data[len(prefix):], true
 }
 
-func serviceKeyboard() tgbotapi.InlineKeyboardMarkup {
-	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Статус", "cmd:/status"),
-			tgbotapi.NewInlineKeyboardButtonData("Перезапуск", "cmd:/routing_restart"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Логи", "cmd:/logs 100"),
-			tgbotapi.NewInlineKeyboardButtonData("Каналы", "cmd:/channels"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Проверить доступность каналов", "cmd:/health"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⬅ Назад", "nav:main"),
-		),
-	)
-}
-
-func failoverKeyboard(section string) tgbotapi.InlineKeyboardMarkup {
-	if section == "" {
-		section = paths.DefaultMainSection
-	}
-	awgTag := section + "-awg-out"
-	peerTag := section + "-1-out"
-	return tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Список", "cmd:/failover_list"),
-			tgbotapi.NewInlineKeyboardButtonData("Параметры", "cmd:/failover_params"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Применить", "cmd:/failover_apply"),
-			tgbotapi.NewInlineKeyboardButtonData("Справка", "cmd:/failover_help"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Primary VPN", "cmd:/switch "+awgTag),
-			tgbotapi.NewInlineKeyboardButtonData("Backup #1", "cmd:/switch "+peerTag),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Интервал: ввести", "input:urltest_interval"),
-			tgbotapi.NewInlineKeyboardButtonData("Tolerance: ввести", "input:urltest_tolerance"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Idle timeout: ввести", "input:urltest_idle_timeout"),
-			tgbotapi.NewInlineKeyboardButtonData("Interrupt: on/off", "input:interrupt_existing"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⬅ Назад", "nav:main"),
-		),
-	)
-}
-
 func configKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
@@ -224,6 +121,23 @@ func uciKeyboard() tgbotapi.InlineKeyboardMarkup {
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("⬅ Назад", "nav:main"),
+		),
+	)
+}
+
+func callbackToConfirmToken(data string) (string, bool) {
+	const prefix = "cfm:"
+	if len(data) <= len(prefix) || data[:len(prefix)] != prefix {
+		return "", false
+	}
+	return data[len(prefix):], true
+}
+
+func confirmTokenKeyboard(id string) tgbotapi.InlineKeyboardMarkup {
+	return tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("✅ Подтвердить", "cfm:"+id),
+			tgbotapi.NewInlineKeyboardButtonData("❌ Отмена", "nav:router"),
 		),
 	)
 }

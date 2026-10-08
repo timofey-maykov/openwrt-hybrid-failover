@@ -2,7 +2,7 @@
 
 # Hybrid Failover Bot
 
-A Telegram bot for managing Hybrid Failover on an OpenWrt router. It shows status and channels, edits the `hybrid-failover` UCI config through pending changes, applies them and sends notifications when a channel switches. Status, channel checks, history and apply all go through core RPC (`hybrid-failover rpc`), so the bot behaves the same on the local router and on a remote one over SSH.
+A Telegram bot for managing Hybrid Failover and the OpenWrt router itself (state, network, Wi-Fi, services, port forwards, updates). It shows status and channels, edits the `hybrid-failover` UCI config through pending changes, applies them and sends notifications when a channel switches. Status, channel checks, history and apply all go through core RPC (`hybrid-failover rpc`), so the bot behaves the same on the local router and on a remote one over SSH.
 
 Every installation gets its own bot, with a token from [@BotFather](https://t.me/BotFather). In LuCI the settings live under **Services → Hybrid Failover → Telegram**. Installation is covered in [docs/en/INSTALL.md](../docs/en/INSTALL.md), and the packages are in [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
 
@@ -30,6 +30,7 @@ The config file is `/etc/hybrid-failover-bot.json`. The package ships a single-r
 |-----|---------|---------|
 | `router_name` | hostname | router name shown in `/panel`, `/status` and failover notifications |
 | `viewer_ids` | `[]` | read-only users, see below |
+| `allow_shell_ids` | `[]` | who may run `/sh`, empty means off, see "Router management" |
 | `notify_failover_enabled` | `false` | send new failover events to admins |
 | `notify_failover_interval_seconds` | `30` | how often to check the history, at least 10 |
 | `log_path` | `/var/log/hybrid-failover-bot.log` | bot log |
@@ -62,7 +63,7 @@ With `notify_failover_enabled: true` the bot reads `/var/log/hybrid-failover/his
 
 ### Access
 
-Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
+Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, the read-only router state commands `/sysinfo`, `/wan`, `/devices`, `/wifi`, `/syslog`, `/dmesg`, `/services`, `/portfwd`, `/slots`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
 
 
 ## Several routers
@@ -166,6 +167,33 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/param_apply` validates and applies the pending changes. The core reloads the engine itself, no service restart is needed.
 - `/param_rollback` discards the pending changes.
 
+**Router management**
+
+The menu has a "🖥 Роутер" (Router) button, or the `/manage` command, and everything below can be done with buttons. State, internet, Wi-Fi, services and port forwards open as screens, and every device, service and forward rule has its own card with actions (drop from Wi-Fi, wake, start and stop a service, delete a rule). The commands still work typed. They act on the router itself, not on Hybrid Failover. They use the same channel (local or SSH), so they work on every router in the `routers` list. Replies start with the router name when there are several.
+
+- `/sysinfo` shows the model, system version, uptime, load, memory, space in `/overlay` and temperature.
+- `/wan` shows the interfaces with address, gateway, DNS and link speed. `/ifup <name>` and `/ifdown <name>` bring an interface up or down.
+- `/devices` lists the devices from the DHCP leases, with signal strength for those on Wi-Fi. `/wol <mac|name>` wakes a device (needs the `etherwake` or `wol` package). `/kick <mac|name>` drops a client from Wi-Fi for ten seconds.
+- `/wifi` shows the radios, channels and client counts. `/wifi_on [radio]` and `/wifi_off [radio]` switch radios on and off, all of them without a name. The state survives a reboot.
+- `/services` lists the services in `/etc/init.d`. `/service <name> start|stop|restart|reload|enable|disable` controls one. The bot itself cannot be stopped or restarted this way.
+- `/portfwd` shows port forwards. `/portfwd_add <tcp|udp|tcpudp> <port> <ip> [dest_port] [name]` adds a rule (a port can be a range such as `8000-8010`), `/portfwd_del <number|name>` removes one. Both reload the firewall. A port that is already forwarded is not added twice.
+- `/fw_restart` restarts the firewall.
+- `/syslog [N]` and `/dmesg [N]` show the last lines of the system and kernel logs, 50 by default and 500 at most. Passwords, keys and the bot token are hidden in the output.
+- `/ping <host>` and `/traceroute <host>` test connectivity from the router.
+- `/apk_check` looks for package updates, `/apk_upgrade` upgrades all packages.
+- `/backup` sends the configuration archive (`sysupgrade -b`) to the chat as a file. It holds Wi-Fi passwords, keys and the bot token, so do not forward it.
+- `/reboot` reboots the router.
+
+Beam WRT only. On other routers these commands answer that the tools are missing.
+
+- `/update_check` and `/update_apply` check for and install a new firmware through `be7000-update`.
+- `/slots` shows the firmware slots.
+- `/mode5g [single|split|mlo]` shows and changes the 5 GHz mode.
+
+**Arbitrary command**
+
+`/sh <command>` runs a line on the router through `sh -c` as root. It is off by default. To turn it on, put your Telegram ID into `allow_shell_ids` in `/etc/hybrid-failover-bot.json` itself and restart the bot. The ID must also be in `admin_ids`. `/config_set` and the LuCI page cannot change this field, so a hijacked chat cannot switch the shell on by itself. Every run asks for confirmation and the whole command goes to the audit log. Think about whether you need it, because whoever gets hold of your Telegram account gets full access to the router.
+
 **Bot config**
 
 - `/config_show` shows `policy`, `clash_api`, `log_path` and `audit_path` from the pending or the main file.
@@ -173,6 +201,10 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/config_validate` validates the pending file and says whether it differs from the main one.
 - `/config_apply` writes the pending file over the main one. Restart the bot afterwards.
 - `/config_rollback` deletes the pending file.
+
+Router commands that could cut you off, overwrite settings or send secrets out ask for confirmation both as a button and when typed. They are `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/backup`, `/sh`, `/mode5g` with a mode, and `/service` with `stop`, `restart` or `disable`. The confirmation lasts 30 seconds, belongs to you and to the router that was selected, works once, and says what will happen. If you switched routers with `/use` in the meantime, it is cancelled.
+
+The bot token and passwords are cut from the bot log, the audit log and the output of `/syslog`, `/dmesg` and `/sh`, because the Telegram client puts the token into its error text.
 
 UCI changes land in pending first, where `/param_preview` shows them before you apply or roll them back. In the panel the `/param_apply`, `/param_rollback`, `/failover_apply`, `/routing_restart`, `/config_apply` and `/config_rollback` buttons ask for confirmation, which stays valid for 30 seconds.
 

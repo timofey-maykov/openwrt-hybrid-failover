@@ -2,8 +2,11 @@ package telegram
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -14,6 +17,36 @@ import (
 // Telegram rejects messages over 4096 UTF-16 units; stay below it with room
 // for the router prefix and characters outside the BMP.
 const maxMessageRunes = 3500
+
+// pollTimeoutSeconds is the getUpdates long-poll length. The HTTP client must
+// give up well after it, so a connection that died silently is dropped within
+// seconds instead of leaving the bot deaf.
+const (
+	pollTimeoutSeconds = 30
+	HTTPTimeout        = 45 * time.Second
+)
+
+// NewHTTPClient is the client for the Telegram API. A router reloads its
+// firewall and routing while the bot is running (apply, failover), which can
+// leave an open connection dead without any error; without a deadline the
+// long poll would wait on it forever and no button would ever answer again.
+// HTTP/1.1 without keep-alive is used on purpose: nothing stale is ever reused,
+// and a timed-out request closes its own connection.
+func NewHTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy:               http.ProxyFromEnvironment,
+			DialContext:         (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 15 * time.Second}).DialContext,
+			TLSHandshakeTimeout: 10 * time.Second,
+			// A router reload leaves an idle kept-alive connection dead without
+			// telling anyone, and the next request on it hangs until the
+			// timeout. A fresh connection per request costs one handshake.
+			DisableKeepAlives: true,
+			TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{},
+		},
+	}
+}
 
 // conflictNotifyEvery limits how often admins hear about a shared token.
 const conflictNotifyEvery = time.Hour
@@ -30,7 +63,7 @@ func (b *Bot) poll(ctx context.Context, handle func(context.Context, tgbotapi.Up
 			return err
 		}
 		cfg := tgbotapi.NewUpdate(offset)
-		cfg.Timeout = 50
+		cfg.Timeout = pollTimeoutSeconds
 		updates, err := b.getUpdates(ctx, cfg)
 		if err != nil {
 			if ctx.Err() != nil {
