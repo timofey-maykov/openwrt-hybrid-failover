@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"net"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/control"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
@@ -77,38 +79,155 @@ func (f *fallbackHandler) DialUDP(ctx context.Context, network, address string) 
 	})
 }
 
-// balanceHandler spreads connections over the live members. The member for a
-// connection is picked by rendezvous hashing of the site (registrable domain or
-// IP), so one site stays on one channel while it lives and moves only when its
-// channel goes down; sites that need a stable exit IP keep working.
+// balanceHandler spreads sites over the live members. The member for a
+// connection is picked by weighted rendezvous hashing of the site (see
+// siteKey), so one site stays on one channel while it lives and moves only
+// when its channel goes down or changes speed tier; sites that need a stable
+// exit IP keep working. Faster channels get a larger share of sites, and a
+// channel far slower than the best one gets no new sites while others are up.
 type balanceHandler struct {
 	tag      string
 	members  []string
 	registry *Registry
+
+	mu    sync.Mutex
+	tiers map[string]int // last tier per member, for hysteresis
 }
 
 func (b *balanceHandler) Tag() string  { return b.tag }
 func (b *balanceHandler) Close() error { return nil }
 
-func (b *balanceHandler) order(address string) []string {
-	ctrl := b.registry.control()
-	var live, down []string
-	for _, m := range b.members {
-		if memberDown(ctrl, m) {
-			down = append(down, m)
-		} else {
-			live = append(live, m)
+// Speed tiers of a balance member relative to the fastest live member.
+const (
+	tierFast   = 0
+	tierMedium = 1
+	tierSlow   = 2
+)
+
+// A member is fast up to tierFastRatio x the best delay (or within
+// tierFastSlack of it, small absolute gaps do not matter), medium up to
+// tierMediumRatio x, slow above. tierHysteresis keeps a member in its tier
+// until the ratio crosses the bound by that factor, so probe jitter near a
+// bound does not move sites back and forth.
+const (
+	tierFastRatio   = 1.5
+	tierMediumRatio = 2.5
+	tierFastSlack   = 100 * time.Millisecond
+	tierHysteresis  = 1.15
+)
+
+var tierWeight = [...]float64{tierFast: 1, tierMedium: 0.5}
+
+func classifyTier(delay, best time.Duration, prev int, hasPrev bool) int {
+	if delay <= 0 || best <= 0 {
+		return tierFast // not probed yet: do not starve it
+	}
+	ratio := float64(delay) / float64(best)
+	fastBound, medBound := tierFastRatio, tierMediumRatio
+	if hasPrev {
+		switch prev {
+		case tierFast:
+			fastBound *= tierHysteresis
+			medBound *= tierHysteresis
+		case tierMedium:
+			fastBound /= tierHysteresis
+			medBound *= tierHysteresis
+		case tierSlow:
+			fastBound /= tierHysteresis
+			medBound /= tierHysteresis
 		}
 	}
-	key := siteKey(address)
-	rank := func(list []string) {
-		sort.SliceStable(list, func(i, j int) bool {
-			return rendezvous(key, list[i]) > rendezvous(key, list[j])
-		})
+	slack := tierFastSlack
+	if hasPrev && prev != tierFast {
+		slack = time.Duration(float64(slack) / tierHysteresis)
 	}
-	rank(live)
-	rank(down)
-	return append(live, down...)
+	switch {
+	case ratio <= fastBound || delay-best <= slack:
+		return tierFast
+	case ratio <= medBound:
+		return tierMedium
+	default:
+		return tierSlow
+	}
+}
+
+type balanceMember struct {
+	tag   string
+	down  bool
+	delay time.Duration
+}
+
+func (b *balanceHandler) snapshot() []balanceMember {
+	ctrl := b.registry.control()
+	out := make([]balanceMember, 0, len(b.members))
+	for _, m := range b.members {
+		bm := balanceMember{tag: m, down: memberDown(ctrl, m)}
+		if ctrl != nil {
+			if d := ctrl.Delay(m); d.OK {
+				bm.delay = d.Delay
+			}
+		}
+		out = append(out, bm)
+	}
+	return out
+}
+
+func (b *balanceHandler) order(address string) []string {
+	return b.rank(siteKey(address), b.snapshot())
+}
+
+// rank orders members for one site: fast and medium live members by weighted
+// rendezvous score, then slow live members, then members whose last probe
+// failed. Dial errors fall through the list in this order.
+func (b *balanceHandler) rank(key string, members []balanceMember) []string {
+	var best time.Duration
+	for _, m := range members {
+		if !m.down && m.delay > 0 && (best == 0 || m.delay < best) {
+			best = m.delay
+		}
+	}
+	b.mu.Lock()
+	if b.tiers == nil {
+		b.tiers = make(map[string]int)
+	}
+	type scored struct {
+		tag   string
+		score float64
+	}
+	var picked, slow, down []scored
+	for _, m := range members {
+		if m.down {
+			down = append(down, scored{m.tag, float64(rendezvous(key, m.tag))})
+			continue
+		}
+		prev, ok := b.tiers[m.tag]
+		t := classifyTier(m.delay, best, prev, ok)
+		if m.delay > 0 {
+			b.tiers[m.tag] = t
+		}
+		if t == tierSlow {
+			slow = append(slow, scored{m.tag, float64(rendezvous(key, m.tag))})
+			continue
+		}
+		picked = append(picked, scored{m.tag, weightedScore(key, m.tag, tierWeight[t])})
+	}
+	b.mu.Unlock()
+
+	out := make([]string, 0, len(members))
+	for _, group := range [][]scored{picked, slow, down} {
+		sort.SliceStable(group, func(i, j int) bool { return group[i].score > group[j].score })
+		for _, s := range group {
+			out = append(out, s.tag)
+		}
+	}
+	return out
+}
+
+// weightedScore is weighted rendezvous hashing: a member with weight w wins
+// a share of keys proportional to w.
+func weightedScore(key, member string, w float64) float64 {
+	u := (float64(rendezvous(key, member)>>11) + 0.5) / (1 << 53)
+	return -w / math.Log(u)
 }
 
 func (b *balanceHandler) DialTCP(ctx context.Context, network, address string) (net.Conn, error) {
@@ -142,6 +261,26 @@ func dialMembers[T any](group string, order []string, dial func(tag string) (T, 
 // siteKey: last two labels of a host name (three for short second-level ones
 // like co.uk or com.ru are not worth a suffix list here; a site split over two
 // channels still works), or the IP itself.
+// perHostSites are CDNs where one registrable domain carries the traffic of
+// a whole service through many servers. Keying them by the full host spreads
+// that service over the channels, while one server (one video, one media
+// shard) still stays on one channel.
+var perHostSites = map[string]bool{
+	"googlevideo.com":  true, // YouTube video
+	"cdninstagram.com": true,
+	"fbcdn.net":        true,
+	"telesco.pe":       true, // Telegram media
+	"ttvnw.net":        true, // Twitch video
+	"nflxvideo.net":    true, // Netflix video
+}
+
+// Second-level labels used under country TLDs (example.co.uk, example.com.au).
+var secondLevelLabels = map[string]bool{
+	"co": true, "com": true, "net": true, "org": true, "gov": true, "edu": true, "ac": true,
+}
+
+// siteKey is what one channel is kept for: the registrable domain of the
+// host (or the IP), the full host for perHostSites.
 func siteKey(address string) string {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -152,10 +291,18 @@ func siteKey(address string) string {
 		return host
 	}
 	labels := strings.Split(host, ".")
-	if len(labels) > 2 {
-		labels = labels[len(labels)-2:]
+	n := 2
+	if len(labels) >= 3 && len(labels[len(labels)-1]) == 2 && secondLevelLabels[labels[len(labels)-2]] {
+		n = 3
 	}
-	return strings.Join(labels, ".")
+	if len(labels) <= n {
+		return host
+	}
+	site := strings.Join(labels[len(labels)-n:], ".")
+	if perHostSites[site] {
+		return host
+	}
+	return site
 }
 
 func rendezvous(key, member string) uint64 {
@@ -163,7 +310,18 @@ func rendezvous(key, member string) uint64 {
 	_, _ = h.Write([]byte(key))
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(member))
-	return h.Sum64()
+	return mix64(h.Sum64())
+}
+
+// mix64 is the splitmix64 finalizer. FNV alone leaves the high bits of
+// hashes for similar member names correlated, which skews the weighted pick.
+func mix64(x uint64) uint64 {
+	x ^= x >> 30
+	x *= 0xbf58476d1ce4e5b9
+	x ^= x >> 27
+	x *= 0x94d049bb133111eb
+	x ^= x >> 31
+	return x
 }
 
 // TrafficStat is what went through one leaf outbound since the engine started.
