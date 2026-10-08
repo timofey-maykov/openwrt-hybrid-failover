@@ -1666,3 +1666,1089 @@ msgstr "once a day"
 
 msgid "Заменяет ссылки, пришедшие из подписки, ссылки, добавленные вручную, остаются. Работает, если указан хотя бы один Subscription URL."
 msgstr "Replaces the links that came from the subscription and keeps the ones added by hand. Works when at least one Subscription URL is set."
+
+msgid "Последняя проверка не прошла"
+msgstr "Last check failed"
+
+msgid "нет связи"
+msgstr "down"
+
+msgid "Задержка по последней проверке"
+msgstr "Latency from the last check"
+
+msgid "Разбор ссылки"
+msgstr "Link details"
+
+msgid "Вставьте ссылку. Несколько ссылок можно вставить сразу, каждую с новой строки."
+msgstr "Paste a link. You can paste several at once, one per line."
+
+msgid "Не похоже на ссылку канала: "
+msgstr "This does not look like a channel link: "
+
+msgid "Конфигурация Amnezia"
+msgstr "Amnezia config"
+
+msgid "Перетащите, чтобы поменять порядок"
+msgstr "Drag to reorder"
+
+msgid "Выше"
+msgstr "Move up"
+
+msgid "Ниже"
+msgstr "Move down"
+
+msgid "Показать или изменить ссылку"
+msgstr "Show or edit the link"
+
+msgid "Сохранить ссылку"
+msgstr "Save link"
+
+msgid "Разобрать"
+msgstr "Decode"
+
+msgid "Копировать"
+msgstr "Copy"
+
+msgid "Каналов пока нет. Вставьте ссылку ниже."
+msgstr "No channels yet. Paste a link below."
+
+msgid "Каналов: "
+msgstr "Channels: "
+
+msgid "на связи: "
+msgstr "up: "
+
+msgid "Выбрано: "
+msgstr "Selected: "
+
+msgid "Ничего не выбрано"
+msgstr "Nothing selected"
+
+msgid "Состояние недоступно"
+msgstr "Status unavailable"
+
+msgid "Движок работает"
+msgstr "Engine running"
+
+msgid "Движок остановлен"
+msgstr "Engine stopped"
+
+msgid "Сейчас через: "
+msgstr "Now via: "
+
+msgid "Ещё ▾"
+msgstr "More ▾"
+
+msgid "Только проверить конфигурацию"
+msgstr "Only check the config"
+
+msgid "Обновить списки сервисов"
+msgstr "Update service lists"
+
+msgid "Обновление списков"
+msgstr "List update"
+
+msgid "Обновление подписок"
+msgstr "Subscription update"
+
+msgid "Копировать секцию…"
+msgstr "Copy section…"
+
+msgid "Вернуть прошлую конфигурацию"
+msgstr "Restore previous config"
+
+msgid "Откат"
+msgstr "Rollback"
+
+msgid "Проверить и применить"
+msgstr "Check and apply"
+
+msgid "Изменения начинают работать после «Проверить и применить». Перед применением конфигурация проверяется, с ошибкой она не применится."
+msgstr "Changes take effect after “Check and apply”. The config is checked first and is not applied if it has errors."
+
+msgid "Конфигурация в порядке."
+msgstr "Config is OK."
+
+msgid "Копировать секцию"
+msgstr "Copy section"
+
+msgid "Какую секцию копировать"
+msgstr "Section to copy"
+
+msgid "Имя новой секции (латиница, без пробелов)"
+msgstr "New section name (Latin letters, no spaces)"
+
+msgid "Копирование секции"
+msgstr "Section copy"
+
+msgid "Общие настройки"
+msgstr "General settings"
+
+msgid "Основное"
+msgstr "Basic"
+
+msgid "DNS"
+msgstr "DNS"
+
+msgid "Подписки"
+msgstr "Subscriptions"
+
+msgid "Списки"
+msgstr "Lists"
+
+msgid "Clash API"
+msgstr "Clash API"
+
+msgid "Дополнительно"
+msgstr "Advanced"
+
+msgid "Hybrid Failover включён"
+msgstr "Hybrid Failover enabled"
+
+msgid "Отключить QUIC"
+msgstr "Disable QUIC"
+
+msgid "Приложения перейдут с QUIC на обычный HTTPS. Через туннель так обычно стабильнее."
+msgstr "Apps fall back from QUIC to regular HTTPS, which is usually more stable through the tunnel."
+
+msgid "Отключить IPv6 в домашней сети"
+msgstr "Disable IPv6 on LAN"
+
+msgid "Выключает RA и DHCPv6 и убирает AAAA-ответы в dnsmasq. Без этого Instagram и другие сервисы могут уходить мимо туннеля по IPv6. «Частный DNS» на телефоне всё равно нужно выключить вручную."
+msgstr "Turns off RA and DHCPv6 and filters AAAA answers in dnsmasq. Without it Instagram and other services can bypass the tunnel over IPv6. Private DNS on the phone still has to be turned off by hand."
+
+msgid "Не менять настройки dnsmasq и DHCP"
+msgstr "Do not change dnsmasq and DHCP settings"
+
+msgid "Устройства в обход"
+msgstr "Bypass devices"
+
+msgid "Трафик этих адресов никогда не идёт в туннель. Отдельные правила для устройств на вкладке «Клиенты»."
+msgstr "Traffic from these addresses never goes into the tunnel. Per-device rules are on the Clients tab."
+
+msgid "Протокол DNS"
+msgstr "DNS protocol"
+
+msgid "DNS over HTTPS (DoH)"
+msgstr "DNS over HTTPS (DoH)"
+
+msgid "DNS over TLS (DoT)"
+msgstr "DNS over TLS (DoT)"
+
+msgid "Обычный DNS (UDP)"
+msgstr "Plain DNS (UDP)"
+
+msgid "Нужен, чтобы найти сам DNS-сервер, если он задан именем."
+msgstr "Used to resolve the DNS server itself when it is given by name."
+
+msgid "Время жизни DNS-ответов, сек"
+msgstr "DNS answer TTL, s"
+
+msgid "Ссылки на подписки"
+msgstr "Subscription links"
+
+msgid "Каналы из подписки появляются в списке каналов основной секции."
+msgstr "Channels from the subscription appear in the channel list of the main section."
+
+msgid "Обновлять подписки"
+msgstr "Update subscriptions"
+
+msgid "вручную"
+msgstr "manually"
+
+msgid "Заменяются только каналы из подписки. Добавленные вручную остаются."
+msgstr "Only channels from the subscription are replaced. Channels added by hand stay."
+
+msgid "Как часто обновлять списки сервисов"
+msgstr "Service list update interval"
+
+msgid "Например 12h или 1d."
+msgstr "For example 12h or 1d."
+
+msgid "Скачивать списки через туннель"
+msgstr "Download lists through the tunnel"
+
+msgid "Через какую секцию скачивать"
+msgstr "Section to download through"
+
+msgid "Адрес Clash API"
+msgstr "Clash API address"
+
+msgid "Веб-панель Yacd"
+msgstr "Yacd web panel"
+
+msgid "Открыть панель"
+msgstr "Open panel"
+
+msgid "Доступ из интернета"
+msgstr "Access from the internet"
+
+msgid "API будет слушать 0.0.0.0 и станет доступен снаружи. Не включайте без необходимости."
+msgstr "The API will listen on 0.0.0.0 and be reachable from outside. Do not enable unless needed."
+
+msgid "Секрет API"
+msgstr "API secret"
+
+msgid "Основная секция"
+msgstr "Main section"
+
+msgid "Исходящий интерфейс"
+msgstr "Outgoing interface"
+
+msgid "автоматически"
+msgstr "automatic"
+
+msgid "Как часто проверять основной VPN"
+msgstr "Main VPN check interval"
+
+msgid "Для режима VPN с резервными каналами. Проверка самих каналов настраивается в секции."
+msgstr "For VPN mode with backup channels. Channel checks are set in the section."
+
+msgid "Webhook при переключении"
+msgstr "Webhook on switch"
+
+msgid "Строк в журнале переключений"
+msgstr "Switch log lines"
+
+msgid "Точек на графике задержек"
+msgstr "Latency chart points"
+
+msgid "Файл кэша"
+msgstr "Cache file"
+
+msgid "Секция решает, какой трафик и через какие каналы идёт. Обычно хватает одной основной секции."
+msgstr "A section decides which traffic goes through which channels. One main section is usually enough."
+
+msgid "Добавить секцию"
+msgstr "Add section"
+
+msgid "Подключение"
+msgstr "Connection"
+
+msgid "Проверка каналов"
+msgstr "Channel checks"
+
+msgid "Что направлять"
+msgstr "What to route"
+
+msgid "Внешние списки"
+msgstr "External lists"
+
+msgid "Секция включена"
+msgstr "Section enabled"
+
+msgid "Через что вести трафик"
+msgstr "Route traffic via"
+
+msgid "Через прокси-каналы"
+msgstr "Proxy channels"
+
+msgid "Через VPN-интерфейс"
+msgstr "VPN interface"
+
+msgid "Как заданы каналы"
+msgstr "Channel setup"
+
+msgid "Несколько ссылок, работает самая быстрая"
+msgstr "Several links, the fastest one is used"
+
+msgid "Одна ссылка"
+msgstr "Single link"
+
+msgid "JSON outbound sing-box"
+msgstr "sing-box outbound JSON"
+
+msgid "Ссылка"
+msgstr "Link"
+
+msgid "Резервные каналы, если VPN упал"
+msgstr "Backup channels when the VPN is down"
+
+msgid "Когда переключаться"
+msgstr "When to switch"
+
+msgid "Только когда VPN упал"
+msgstr "Only when the VPN is down"
+
+msgid "Сразу возвращаться на VPN, когда он поднялся"
+msgstr "Return to the VPN as soon as it is back"
+
+msgid "Всегда через самый быстрый канал"
+msgstr "Always use the fastest channel"
+
+msgid "Подробнее о режимах на странице «Обзор»."
+msgstr "More about the modes on the Overview page."
+
+msgid "Неудачных проверок до переключения"
+msgstr "Failed checks before switching"
+
+msgid "Удачных проверок до возврата"
+msgstr "Successful checks before returning"
+
+msgid "Каждая ссылка (vless, hysteria2, awg2, trojan, ss, socks) становится отдельным каналом. Движок их проверяет, ведёт трафик через самый быстрый, а при отказе переключается на следующий."
+msgstr "Each link (vless, hysteria2, awg2, trojan, ss, socks) becomes its own channel. The engine checks them, sends traffic through the fastest one and moves to the next one if it fails."
+
+msgid "Каналов пока нет. Вставьте ссылку ниже или добавьте подписку в общих настройках."
+msgstr "No channels yet. Paste a link below or add a subscription in the general settings."
+
+msgid "Резервные каналы"
+msgstr "Backup channels"
+
+msgid "Чем выше канал, тем раньше он используется"
+msgstr "Channels higher in the list are used first"
+
+msgid "Используются, когда VPN недоступен. Подходят и ссылки vpn:// и awg2://. Для AmneziaWG 3.1 на роутере нужны kmod-amneziawg и amneziawg-tools 3.1 или новее."
+msgstr "Used when the VPN is unavailable. vpn:// and awg2:// links work too. AmneziaWG 3.1 needs kmod-amneziawg and amneziawg-tools 3.1 or newer on the router."
+
+msgid "Резервных каналов нет. Вставьте ссылку ниже."
+msgstr "No backup channels. Paste a link below."
+
+msgid "UDP поверх TCP для Shadowsocks и SOCKS"
+msgstr "UDP over TCP for Shadowsocks and SOCKS"
+
+msgid "Как часто проверять"
+msgstr "Check interval"
+
+msgid "Например 30s, 1m или 5m."
+msgstr "For example 30s, 1m or 5m."
+
+msgid "Порог переключения, мс"
+msgstr "Switch threshold, ms"
+
+msgid "Канал меняется, только если другой быстрее хотя бы на столько. Так трафик не прыгает между почти равными каналами."
+msgstr "The channel changes only if another one is faster by at least this much, so traffic does not jump between nearly equal channels."
+
+msgid "Адрес для проверки"
+msgstr "Check URL"
+
+msgid "Пауза проверок без трафика"
+msgstr "Pause checks when idle"
+
+msgid "Если трафика нет так долго, каналы перестают проверяться до первого запроса."
+msgstr "If there is no traffic for this long, checks stop until the next request."
+
+msgid "Рвать соединения при смене канала"
+msgstr "Drop connections on channel switch"
+
+msgid "Открытые соединения сразу переходят на новый канал. Иначе они доживают на старом."
+msgstr "Open connections move to the new channel right away. Otherwise they finish on the old one."
+
+msgid "Готовые списки сервисов"
+msgstr "Service lists"
+
+msgid "Домены и адреса из выбранных списков пойдут через эту секцию."
+msgstr "Domains and addresses from the selected lists go through this section."
+
+msgid "Свои домены"
+msgstr "Own domains"
+
+msgid "Нет"
+msgstr "None"
+
+msgid "Списком"
+msgstr "As a list"
+
+msgid "Текстом"
+msgstr "As text"
+
+msgid "Свои IP и подсети"
+msgstr "Own IPs and subnets"
+
+msgid "IP и подсети"
+msgstr "IPs and subnets"
+
+msgid "Устройства целиком через туннель"
+msgstr "Devices fully through the tunnel"
+
+msgid "Весь трафик этих устройств или подсетей идёт через секцию, без разбора по спискам."
+msgstr "All traffic of these devices or subnets goes through the section, regardless of the lists."
+
+msgid "Списки доменов по ссылке"
+msgstr "Domain lists by URL"
+
+msgid "Списки подсетей по ссылке"
+msgstr "Subnet lists by URL"
+
+msgid "Файлы доменов на роутере"
+msgstr "Domain files on the router"
+
+msgid "Файлы подсетей на роутере"
+msgstr "Subnet files on the router"
+
+msgid "Свой DNS для серверов секции"
+msgstr "Own DNS for section servers"
+
+msgid "Адреса серверов VPN будут определяться через указанный DNS."
+msgstr "VPN server addresses will be resolved through this DNS."
+
+msgid "Проверяю конфигурацию…"
+msgstr "Checking the config…"
+
+msgid "Конфигурация с ошибкой, ничего не применено."
+msgstr "The config has errors, nothing was applied."
+
+msgid "Проверка прошла, применяю…"
+msgstr "Check passed, applying…"
+
+msgid "Применено."
+msgstr "Applied."
+
+msgid "Не удалось применить."
+msgstr "Could not apply."
+
+msgid "в порядке"
+msgstr "OK"
+
+msgid "есть проблемы"
+msgstr "problems found"
+
+msgid "выполняется…"
+msgstr "running…"
+
+msgid "Проверить"
+msgstr "Check"
+
+msgid "Резервная копия"
+msgstr "Backup"
+
+msgid "Файл %s скачан"
+msgstr "File %s downloaded"
+
+msgid "Роутер не отдал файл"
+msgstr "The router did not return the file"
+
+msgid "Запустите проверку, и здесь появится результат."
+msgstr "Run a check and the result will appear here."
+
+msgid "Ответ целиком"
+msgstr "Full response"
+
+msgid "Проверки ничего не меняют в настройках"
+msgstr "Checks do not change any settings"
+
+msgid "Полная проверка"
+msgstr "Full check"
+
+msgid "Полная проверка смотрит движок, перехват трафика, DNS и конфигурацию сразу. Занимает до минуты."
+msgstr "The full check looks at the engine, traffic interception, DNS and the config at once. It takes up to a minute."
+
+msgid "Отдельные проверки"
+msgstr "Individual checks"
+
+msgid "Если полная проверка нашла проблему, здесь можно перепроверить одну часть."
+msgstr "If the full check found a problem, recheck one part here."
+
+msgid "Конфигурация"
+msgstr "Config"
+
+msgid "Собирает конфигурацию из настроек и проверяет, что движок её примет."
+msgstr "Builds the config from the settings and checks that the engine accepts it."
+
+msgid "Перехват трафика"
+msgstr "Traffic interception"
+
+msgid "Проверяет, что правила nftables, которые заворачивают трафик в движок, на месте."
+msgstr "Checks that the nftables rules that send traffic to the engine are in place."
+
+msgid "Проверяет, что домены из списков получают служебные адреса и пойдут в туннель."
+msgstr "Checks that domains from the lists get service addresses and will go through the tunnel."
+
+msgid "Резервная копия настроек"
+msgstr "Settings backup"
+
+msgid "Копия всех настроек Hybrid Failover. Пригодится перед экспериментами или переносом на другой роутер."
+msgstr "A copy of all Hybrid Failover settings. Useful before experiments or when moving to another router."
+
+msgid "Скачать копию"
+msgstr "Download backup"
+
+msgid "Копия сохранена на роутере"
+msgstr "Backup saved on the router"
+
+msgid "Не удалось сохранить копию"
+msgstr "Could not save the backup"
+
+msgid "Сохранить на роутере"
+msgstr "Save on the router"
+
+msgid "Восстановить из копии"
+msgstr "Restore from backup"
+
+msgid "Файл копии на роутере"
+msgstr "Backup file on the router"
+
+msgid "Текущие настройки будут заменены настройками из файла."
+msgstr "The current settings will be replaced with the settings from the file."
+
+msgid "Заменить текущие настройки настройками из %s?"
+msgstr "Replace the current settings with the settings from %s?"
+
+msgid "Восстановление"
+msgstr "Restore"
+
+msgid "Настройки восстановлены"
+msgstr "Settings restored"
+
+msgid "Не удалось восстановить"
+msgstr "Could not restore"
+
+msgid "Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через один туннель. Список без привязки идет через пул секции, как раньше: самый быстрый живой канал. Если выбранный канал упал, список временно уходит туда, что указано в колонке «Если канал упал»."
+msgstr "Bind service lists to your channels so heavy traffic does not all go through one tunnel. A list without a binding goes through the section pool as before: the fastest live channel. If the chosen channel is down, the list temporarily goes where the “If the channel is down” column says."
+
+msgid "Нет секций vpn или proxy с каналами. Добавьте секцию на вкладке «Маршрутизация»."
+msgstr "There are no vpn or proxy sections with channels. Add a section on the Routing tab."
+
+msgid "Привязка «%s» указывает на канал, которого больше нет. Ее списки сейчас идут через пул."
+msgstr "The binding “%s” points to a channel that no longer exists. Its lists now go through the pool."
+
+msgid "В секции один канал: привязки к каналу не разгрузят его. Добавьте ссылки в urltest или резервные каналы."
+msgstr "The section has only one channel, so bindings will not take load off it. Add links to the channel group or backup channels."
+
+msgid "Тяжелые сервисы раскладываются по разным живым каналам, быстрые каналы получают больше"
+msgstr "Heavy services are spread over different live channels, faster channels get more"
+
+msgid "В секции нет списков. Включите сервисы на вкладке «Маршрутизация» или добавьте свой список."
+msgstr "The section has no lists. Enable services on the Routing tab or add your own list."
+
+msgid "Название привязано к серверу и ключу, а не к позиции в списке, так что переживет перестановку ссылок."
+msgstr "The name is tied to the server and key, not to the position in the list, so it survives reordering."
+
+msgid "По одному на строку или через пробел. Поддомены входят: example.com покрывает www.example.com."
+msgstr "One per line or separated by spaces. Subdomains are included: example.com covers www.example.com."
+
+msgid "Выделите участок графика мышью, чтобы приблизить, двойной клик возвращает масштаб. Клик по каналу в легенде или по плитке оставляет только его, Ctrl/Cmd+клик скрывает или показывает."
+msgstr "Select a part of the chart with the mouse to zoom in, double-click resets the zoom. Click a channel in the legend or a tile to show only it, Ctrl/Cmd+click hides or shows it."
+
+msgid "Графики пишет нативный движок раз в 2 секунды для каналов секций vpn и proxy. Проверьте, что движок запущен (Обзор), и подождите несколько секунд."
+msgstr "The native engine records the charts every 2 seconds for channels of vpn and proxy sections. Check that the engine is running (Overview) and wait a few seconds."
+
+msgid "Установлена "
+msgstr "Installed "
+
+msgid "Идёт обновление"
+msgstr "Updating"
+
+msgid "Обновления ещё не проверялись"
+msgstr "Updates not checked yet"
+
+msgid "Не удалось проверить"
+msgstr "Check failed"
+
+msgid "Есть обновление до "
+msgstr "Update available: "
+
+msgid "Последняя версия"
+msgstr "Latest version"
+
+msgid "Установлена версия новее, чем при последней проверке. Нажмите «Проверить обновления», чтобы узнать свежие данные."
+msgstr "The installed version is newer than at the last check. Click “Check for updates” to refresh."
+
+msgid "Версии"
+msgstr "Versions"
+
+msgid "Пакеты берутся из релизов на GitHub. Ставятся только пакеты для этого роутера, каждый файл сверяется с контрольной суммой. Настройки сохраняются."
+msgstr "Packages come from GitHub releases. Only packages for this router are installed, and every file is checked against its checksum. Settings are kept."
+
+msgid "Установить Hybrid Failover %s? Службы будут перезапущены, связь с роутером может пропасть на несколько секунд."
+msgstr "Install Hybrid Failover %s? Services will restart and the connection to the router may drop for a few seconds."
+
+msgid "Обновление Hybrid Failover"
+msgstr "Hybrid Failover update"
+
+msgid "Токен бота"
+msgstr "Bot token"
+
+msgid "Выдаёт @BotFather при создании бота."
+msgstr "@BotFather gives it when you create the bot."
+
+msgid "Имя роутера"
+msgstr "Router name"
+
+msgid "Так роутер называется в уведомлениях и в панели бота. Пусто: имя хоста."
+msgstr "How the router is named in notifications and in the bot panel. Empty: the hostname."
+
+msgid "например, Дом"
+msgstr "for example, Home"
+
+msgid "Администраторы"
+msgstr "Administrators"
+
+msgid "Telegram ID через запятую. Им доступно всё управление. Свой ID можно узнать у @userinfobot."
+msgstr "Telegram IDs separated by commas. They get full control. You can find your ID with @userinfobot."
+
+msgid "Только просмотр"
+msgstr "View only"
+
+msgid "Эти пользователи видят состояние, но ничего не меняют."
+msgstr "These users see the status but cannot change anything."
+
+msgid "Скрипт службы Hybrid Failover"
+msgstr "Hybrid Failover service script"
+
+msgid "Таймаут проверок, сек"
+msgstr "Check timeout, s"
+
+msgid "Журнал бота"
+msgstr "Bot log"
+
+msgid "Журнал действий"
+msgstr "Action log"
+
+msgid "Бот работает"
+msgstr "Bot running"
+
+msgid "Бот остановлен"
+msgstr "Bot stopped"
+
+msgid "Состояние неизвестно"
+msgstr "Status unknown"
+
+msgid "Автозапуск выключен"
+msgstr "Autostart off"
+
+msgid "Изменений в настройках бота нет."
+msgstr "No changes in the bot settings."
+
+msgid "Сохраняю настройки бота…"
+msgstr "Saving bot settings…"
+
+msgid "Настройки бота сохранены, бот перезапущен."
+msgstr "Bot settings saved, bot restarted."
+
+msgid "Не сохранено: "
+msgstr "Not saved: "
+
+msgid "Скрыть"
+msgstr "Hide"
+
+msgid "Telegram-бот"
+msgstr "Telegram bot"
+
+msgid "Бот перезапущен."
+msgstr "Bot restarted."
+
+msgid "Перезапустить"
+msgstr "Restart"
+
+msgid "Сохранить настройки бота"
+msgstr "Save bot settings"
+
+msgid "Бот присылает уведомления о переключениях и позволяет управлять роутером из Telegram. Настройки бота сохраняются кнопкой вверху, автозапуск службы ниже кнопкой «Применить»."
+msgstr "The bot sends switch notifications and lets you manage the router from Telegram. Bot settings are saved with the button at the top, the service autostart below with “Apply”."
+
+msgid "Бот"
+msgstr "Bot"
+
+msgid "Подключение и доступ."
+msgstr "Connection and access."
+
+msgid "Уведомления"
+msgstr "Notifications"
+
+msgid "Что бот присылает администраторам сам."
+msgstr "What the bot sends to administrators on its own."
+
+msgid "Сообщать о переключениях каналов"
+msgstr "Report channel switches"
+
+msgid "Например, когда основной VPN упал и трафик ушёл на резерв."
+msgstr "For example, when the main VPN went down and traffic moved to a backup."
+
+msgid "Не чаще чем раз в, сек"
+msgstr "At most once every, s"
+
+msgid "Защита от потока сообщений, если канал часто моргает. Не меньше 10."
+msgstr "Prevents a flood of messages when a channel flaps. At least 10."
+
+msgid "Служба"
+msgstr "Service"
+
+msgid "Запуск"
+msgstr "Startup"
+
+msgid "Файлы"
+msgstr "Files"
+
+msgid "Запускать бота вместе с роутером"
+msgstr "Start the bot with the router"
+
+msgid "Программа бота"
+msgstr "Bot program"
+
+msgid "Файл настроек"
+msgstr "Settings file"
+
+msgid "Переключить вручную"
+msgstr "Switch manually"
+
+msgid "В режиме «Самый быстрый канал» канал выбирается сам, вручную переключить нельзя."
+msgstr "In “Fastest channel” mode the channel is chosen automatically and cannot be switched by hand."
+
+msgid "Направить трафик секции «%s» через:"
+msgstr "Route traffic of section “%s” through:"
+
+msgid "Проверки и данные"
+msgstr "Checks and data"
+
+msgid "Проверить каналы сейчас"
+msgstr "Check channels now"
+
+msgid "Проверить DNS"
+msgstr "Check DNS"
+
+msgid "Сводка"
+msgstr "Summary"
+
+msgid "Переключения"
+msgstr "Switches"
+
+msgid "Проверить сейчас"
+msgstr "Check now"
+
+msgid "Последние переключения"
+msgstr "Recent switches"
+
+msgid "Обновлено в "
+msgstr "Updated at "
+
+msgid "Страница обновляется каждые 5 секунд"
+msgstr "The page refreshes every 5 seconds"
+
+msgid "Весь трафик через туннель"
+msgstr "All traffic through the tunnel"
+
+msgid "Весь трафик через Hybrid Failover, дальше по спискам"
+msgstr "All traffic through Hybrid Failover, then by lists"
+
+msgid "Не трогать (DNS и трафик мимо)"
+msgstr "Leave alone (DNS and traffic bypass)"
+
+msgid "Всегда напрямую"
+msgstr "Always direct"
+
+msgid "весь трафик через туннель"
+msgstr "all traffic through the tunnel"
+
+msgid "по спискам, включая обращения по IP"
+msgstr "by lists, including direct IP access"
+
+msgid "не трогать"
+msgstr "leave alone"
+
+msgid "всегда напрямую"
+msgstr "always direct"
+
+msgid "Движок не запущен. Правила начнут действовать после запуска."
+msgstr "The engine is not running. Rules take effect after it starts."
+
+msgid "Отдельных правил нет: все устройства идут по общим правилам секций."
+msgstr "No device rules: all devices follow the section rules."
+
+msgid "Устройство"
+msgstr "Device"
+
+msgid "Что делаем"
+msgstr "Action"
+
+msgid "Часть правил взята из старых настроек секций («Устройства в обход», «Устройства целиком через туннель»). Как только здесь появится хоть одно правило, старые перестанут учитываться."
+msgstr "Some rules come from the old section settings (“Bypass devices”, “Devices fully through the tunnel”). As soon as one rule is added here, the old ones stop counting."
+
+msgid "Нет подключённых устройств без правила. Можно добавить строку вручную в таблице ниже."
+msgstr "No connected devices without a rule. You can add a row by hand in the table below."
+
+msgid "Через какую секцию"
+msgstr "Through which section"
+
+msgid "Правило для %s добавлено. Нажмите «Применить» внизу страницы."
+msgstr "Rule for %s added. Click “Apply” at the bottom of the page."
+
+msgid "Добавить устройство из сети"
+msgstr "Add a device from the network"
+
+msgid "Что делать с устройством"
+msgstr "What to do with the device"
+
+msgid "Правила"
+msgstr "Rules"
+
+msgid "Добавить строку"
+msgstr "Add row"
+
+msgid "IP или подсеть"
+msgstr "IP or subnet"
+
+msgid "Имя"
+msgstr "Name"
+
+msgid "Что делать"
+msgstr "Action"
+
+msgid "Правил: "
+msgstr "Rules: "
+
+msgid "Отдельные правила для устройств домашней сети. Например, приставку можно целиком пустить через туннель, а рабочий ноутбук оставить напрямую. После изменений нажмите «Применить» внизу страницы."
+msgstr "Separate rules for devices on your home network. For example, send a game console fully through the tunnel and keep a work laptop direct. After changes, click “Apply” at the bottom of the page."
+
+msgid "Всё, что делает устройство, идёт через выбранную секцию. Подходит для приставок и телевизоров."
+msgstr "Everything the device does goes through the chosen section. Good for consoles and TVs."
+
+msgid "Через туннель идут только сервисы из списков, но даже обращения напрямую по IP проходят проверку."
+msgstr "Only services from the lists go through the tunnel, but even direct IP access is checked."
+
+msgid "Hybrid Failover не трогает устройство: его DNS не подменяется, трафик в туннель не попадает."
+msgstr "Hybrid Failover leaves the device alone: its DNS is not replaced and its traffic never reaches the tunnel."
+
+msgid "Даже сервисы из списков идут с этого устройства напрямую, мимо туннеля."
+msgstr "Even services from the lists go direct from this device, bypassing the tunnel."
+
+msgid "Что действует сейчас"
+msgstr "In effect now"
+
+msgid "Так правила видит работающий движок. Несохранённые изменения здесь появятся после применения."
+msgstr "How the running engine sees the rules. Unsaved changes show up here after applying."
+
+msgid "Проверить сохранённую конфигурацию"
+msgstr "Check the saved config"
+
+msgid "Изменения вступают в силу после «Сохранить и применить». Если после применения связь с роутером пропадёт, LuCI сам вернёт прошлые настройки."
+msgstr "Changes take effect after “Save and apply”. If the connection to the router drops after applying, LuCI restores the previous settings itself."
+
+msgid "Сохранённая конфигурация в порядке."
+msgstr "The saved config is OK."
+
+msgid "Записываю изменения…"
+msgstr "Writing changes…"
+
+msgid "Изменений нет. Проверяю и применяю сохранённую конфигурацию…"
+msgstr "No changes. Checking and applying the saved config…"
+
+msgid "Сохранённая конфигурация с ошибкой, ничего не применено."
+msgstr "The saved config has errors, nothing was applied."
+
+msgid "Самый быстрый из группы"
+msgstr "Fastest in the group"
+
+msgid "Основной VPN"
+msgstr "Main VPN"
+
+msgid "Резерв только при падении VPN"
+msgstr "Backup only when the VPN is down"
+
+msgid "Предпочитать VPN"
+msgstr "Prefer the VPN"
+
+msgid "Самый быстрый канал"
+msgstr "Fastest channel"
+
+msgid "выбор самого быстрого"
+msgstr "picking the fastest"
+
+msgid "на основном VPN"
+msgstr "on the main VPN"
+
+msgid "на резервном канале"
+msgstr "on a backup channel"
+
+msgid "отвечает"
+msgstr "responding"
+
+msgid "не отвечает"
+msgstr "not responding"
+
+msgid "на связи"
+msgstr "up"
+
+msgid "не проверен"
+msgstr "not checked"
+
+msgid "Группа"
+msgstr "Group"
+
+msgid "Сейчас через него"
+msgstr "In use now"
+
+msgid "Резерв"
+msgstr "Backup"
+
+msgid "движок остановлен"
+msgstr "engine stopped"
+
+msgid "%d из %d на связи"
+msgstr "%d of %d up"
+
+msgid "соединение установлено"
+msgstr "connected"
+
+msgid "Каналов нет. Добавьте ссылки на странице «Маршрутизация»."
+msgstr "No channels. Add links on the Routing page."
+
+msgid "режим: "
+msgstr "mode: "
+
+msgid "Задержки по последней фоновой проверке. «Проверить сейчас» проверит все каналы заново."
+msgstr "Latency from the last background check. “Check now” checks all channels again."
+
+msgid "Трафик идёт через VPN, пока он отвечает. Если VPN упал, включается резервный канал."
+msgstr "Traffic goes through the VPN while it responds. If the VPN goes down, a backup channel takes over."
+
+msgid "Как только VPN снова отвечает, трафик сразу возвращается на него."
+msgstr "As soon as the VPN responds again, traffic returns to it right away."
+
+msgid "Трафик всегда идёт через самый быстрый из живых каналов."
+msgstr "Traffic always goes through the fastest live channel."
+
+msgid "Всё работает"
+msgstr "All good"
+
+msgid "Есть предупреждения"
+msgstr "Warnings"
+
+msgid "Не работает"
+msgstr "Not working"
+
+msgid "Трафик идёт через туннель"
+msgstr "Traffic goes through the tunnel"
+
+msgid "Движок, перехват трафика и DNS работают."
+msgstr "The engine, traffic interception and DNS are working."
+
+msgid "Работает с предупреждениями"
+msgstr "Working with warnings"
+
+msgid "Трафик идёт, но что-то требует внимания. Подробности ниже."
+msgstr "Traffic flows, but something needs attention. Details below."
+
+msgid "Туннель не работает"
+msgstr "The tunnel is not working"
+
+msgid "Движок или перехват трафика не отвечают. Запустите полную проверку на странице «Диагностика»."
+msgstr "The engine or traffic interception is not responding. Run the full check on the Diagnostics page."
+
+msgid "Не удалось получить состояние с роутера."
+msgstr "Could not get the status from the router."
+
+msgid "пропущен"
+msgstr "skipped"
+
+msgid "Движок"
+msgstr "Engine"
+
+msgid "Правила nftables, которые заворачивают трафик в движок"
+msgstr "nftables rules that send traffic to the engine"
+
+msgid "Сейчас через"
+msgstr "Now via"
+
+msgid "Каналы на связи"
+msgstr "Channels up"
+
+msgid "Состояние"
+msgstr "State"
+
+msgid "Активный тег"
+msgstr "Active tag"
+
+msgid "сбоев"
+msgstr "failures"
+
+msgid "успехов"
+msgstr "successes"
+
+msgid "Технические подробности"
+msgstr "Technical details"
+
+msgid "Как работает"
+msgstr "How it works"
+
+msgid "На этом канале"
+msgstr "On this channel for"
+
+msgid "не было"
+msgstr "none"
+
+msgid "Задержка VPN"
+msgstr "VPN latency"
+
+msgid "Проверен"
+msgstr "Checked"
+
+msgid "каждые "
+msgstr "every "
+
+msgid "Порог переключения"
+msgstr "Switch threshold"
+
+msgid "Пауза без трафика"
+msgstr "Idle pause"
+
+msgid "Адрес проверки"
+msgstr "Check URL"
+
+msgid "Проверки"
+msgstr "Checks"
+
+msgid "Динамика"
+msgstr "Trend"
+
+msgid "возврат на резерв после перезапуска"
+msgstr "back to backup after restart"
+
+msgid "основной VPN перестал отвечать"
+msgstr "main VPN stopped responding"
+
+msgid "основной VPN снова отвечает"
+msgstr "main VPN responds again"
+
+msgid "выбор самого быстрого резерва"
+msgstr "picked the fastest backup"
+
+msgid "синхронизация с основным VPN"
+msgstr "synced to the main VPN"
+
+msgid "синхронизация с резервом"
+msgstr "synced to the backup"
+
+msgid "канал перестал отвечать"
+msgstr "channel stopped responding"
+
+msgid "Переключений пока не было."
+msgstr "No switches yet."
+
+msgid "Откуда"
+msgstr "From"
+
+msgid "Куда"
+msgstr "To"
+
+msgid "Закрыть"
+msgstr "Close"
+
+msgid "Проверка пройдена"
+msgstr "Check passed"
+
+msgid "Проверка не пройдена"
+msgstr "Check failed"
+
+msgid "Правила перехвата трафика (nftables) на месте"
+msgstr "Traffic interception rules (nftables) are in place"
+
+msgid "Правила перехвата трафика (nftables) не найдены"
+msgstr "Traffic interception rules (nftables) not found"
+
+msgid "DNS отдаёт fake-IP, домены из списков пойдут в туннель"
+msgstr "DNS returns fake-IP, domains from the lists will go through the tunnel"
+
+msgid "DNS не отдаёт fake-IP, домены из списков могут идти мимо туннеля"
+msgstr "DNS does not return fake-IP, domains from the lists may bypass the tunnel"
+
+msgid "Активный канал: "
+msgstr "Active channel: "
+
+msgid "по быстрым каналам"
+msgstr "over the fast channels"
+
+msgid "Делить по каналам"
+msgstr "Share by channels"
+
+msgid "Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через один туннель. Список без привязки идет через пул секции, как раньше: самый быстрый живой канал. «Делить по каналам» закрепляет каждый сайт за одним из живых каналов: быстрые получают больше сайтов, а канал намного медленнее лучшего новых сайтов не получает. Видео YouTube, Instagram и Telegram делится по серверам, один ролик целиком идет через один канал. Если выбранный канал упал, список временно уходит туда, что указано в колонке «Если канал упал»."
+msgstr "Bind service lists to your channels so heavy traffic does not all go through one tunnel. A list without a binding goes through the section pool as before: the fastest live channel. “Share by channels” pins each site to one of the live channels: faster channels get more sites, and a channel much slower than the best one gets no new sites. YouTube, Instagram and Telegram video is split by server, one video goes through one channel. If the chosen channel is down, the list temporarily goes where the “If the channel is down” column says."

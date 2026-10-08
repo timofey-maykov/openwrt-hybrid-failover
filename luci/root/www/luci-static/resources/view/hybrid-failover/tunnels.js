@@ -3,6 +3,7 @@
 'require fs';
 'require ui';
 'require hybrid-failover.hf-charts as hfc';
+'require hybrid-failover.hf-ui as hfui';
 
 var FINE_FILE = '/var/run/hybrid-failover/channel-metrics.json';
 var COARSE_FILE = '/var/run/hybrid-failover/channel-metrics-24h.json';
@@ -32,11 +33,12 @@ var KIND_LABEL = {
 var CSS = [
 	'.hft { max-width: 1440px; margin: 0 auto 28px; }',
 	'.hft-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 14px; }',
-	'.hft-bar h2 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; flex: 1 1 auto; }',
+	'.hft-bar h2.hf-head__title { margin: 0; flex: 1 1 auto; }',
+	'.hft-bar.hf-head { gap: 8px 14px; padding: 14px 18px; }',
 	'.hft-seg { display: inline-flex; border: 1px solid var(--border-color, rgba(127,127,127,.35)); border-radius: 6px; overflow: hidden; }',
 	'.hft-seg button { appearance: none; border: 0; background: transparent; color: inherit; padding: 5px 10px; font-size: 12px; cursor: pointer; border-right: 1px solid var(--border-color, rgba(127,127,127,.25)); }',
 	'.hft-seg button:last-child { border-right: 0; }',
-	'.hft-seg button.on { background: #3d71d9; color: #fff; }',
+	'.hft-seg button.on { background: var(--nb-accent, #3d71d9); color: var(--nb-on-accent, #fff); }',
 	'.hft-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }',
 	'.hft-ctl select { min-width: 0; width: auto; padding: 3px 6px; height: auto; font-size: 12px; }',
 	'.hft-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; opacity: .85; }',
@@ -134,7 +136,8 @@ return view.extend({
 		catch (e) {}
 
 		hfc.injectCSS();
-		var root = E('div', { 'class': 'hft' });
+		var root = E('div', { 'class': 'hft hf-page' });
+		hfui.injectStyles(root);
 		root.appendChild(E('style', { 'type': 'text/css' }, CSS));
 		hfc.applyTheme(root, hfc.theme());
 		this.root = root;
@@ -188,8 +191,8 @@ return view.extend({
 			}
 		}, _('Пауза'));
 
-		root.appendChild(E('div', { 'class': 'hft-bar' }, [
-			E('h2', {}, _('Каналы: графики')),
+		root.appendChild(E('div', { 'class': 'hft-bar hf-head' }, [
+			E('h2', { 'class': 'hf-head__title' }, _('Графики')),
 			this.liveEl,
 			this.zoomBtn,
 			E('label', { 'class': 'hft-ctl' }, [_('Секция'), this.sectionSel]),

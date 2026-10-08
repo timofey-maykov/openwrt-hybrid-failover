@@ -131,6 +131,397 @@ var HF_CSS = [
 	'}'
 ].join('\n');
 
+// Shared look of all Hybrid Failover pages: page header with live state,
+// pills, the "More" menu, result box, panels and chips. Colours come from
+// the Nimbus theme tokens with fallbacks for the stock themes.
+var HF_PAGE_CSS = [
+	'.hf-page, .hf-mon { --hf-acc: var(--nb-accent, #4f46e5); --hf-acc-soft: var(--nb-accent-soft, rgba(79,70,229,.1)); --hf-ok: var(--nb-success, #16a34a); --hf-ok-soft: var(--nb-success-soft, rgba(22,163,74,.1)); --hf-bad: var(--nb-danger, #dc2626); --hf-bad-soft: var(--nb-danger-soft, rgba(220,38,38,.09)); --hf-warn: var(--nb-warning, #d97706); --hf-warn-soft: var(--nb-warning-soft, rgba(217,119,6,.11)); --hf-line: var(--nb-border, rgba(127,127,127,.25)); --hf-surface: var(--nb-surface-2, rgba(127,127,127,.05)); --hf-card: var(--nb-surface, transparent); --hf-muted: var(--nb-text-2, inherit); --hf-mono: var(--font-mono, ui-monospace, Menlo, Consolas, monospace); }',
+	'.hf-head { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; justify-content: space-between; padding: 18px 20px; margin-bottom: 18px; border: 1px solid var(--hf-line); border-radius: var(--nb-radius-lg, 14px); background: var(--hf-card); box-shadow: var(--nb-shadow-sm, none); }',
+	'.hf-head__info { flex: 1 1 320px; min-width: 0; }',
+	'.hf-head__title { margin: 0 0 8px; font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; }',
+	'.hf-head__state { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }',
+	'.hf-head__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }',
+	'.hf-head__hint { flex: 1 1 100%; margin: 0; font-size: 12.5px; color: var(--hf-muted); }',
+	'.hf-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--hf-surface); border: 1px solid var(--hf-line); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }',
+	'.hf-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--hf-muted); flex: none; }',
+	'.hf-pill--ok { color: var(--hf-ok); background: var(--hf-ok-soft); border-color: transparent; } .hf-pill--ok::before { background: var(--hf-ok); }',
+	'.hf-pill--bad { color: var(--hf-bad); background: var(--hf-bad-soft); border-color: transparent; } .hf-pill--bad::before { background: var(--hf-bad); }',
+	'.hf-pill--warn { color: var(--hf-warn); background: var(--hf-warn-soft); border-color: transparent; } .hf-pill--warn::before { background: var(--hf-warn); }',
+	'.hf-pill--plain::before { display: none; }',
+	'.hf-more { position: relative; }',
+	'.hf-more__menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 260px; padding: 6px; border-radius: var(--nb-radius, 10px); border: 1px solid var(--hf-line); background: var(--nb-surface, #fff); box-shadow: var(--nb-shadow-lg, 0 10px 30px rgba(0,0,0,.2)); display: none; }',
+	'.hf-more--open .hf-more__menu { display: block; }',
+	'.hf-more__menu button { display: block; width: 100%; white-space: nowrap; text-align: left; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }',
+	'.hf-more__menu button:hover { background: var(--nb-hover, rgba(127,127,127,.1)); }',
+	'.hf-more__menu .hf-more__danger { color: var(--hf-bad); }',
+	'.hf-result { display: none; margin: 0; padding: 10px 12px; max-height: 260px; overflow: auto; border-radius: 8px; font: 12px/1.5 var(--hf-mono); white-space: pre-wrap; word-break: break-word; background: var(--hf-surface); border: 1px solid var(--hf-line); }',
+	'.hf-head .hf-result { flex: 1 1 100%; }',
+	'.hf-result--ok { display: block; border-color: var(--hf-ok); }',
+	'.hf-result--bad { display: block; border-color: var(--hf-bad); }',
+	'.hf-result--info { display: block; }',
+	'.hf-panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 18px; }',
+	'.hf-panel { border: 1px solid var(--hf-line); border-radius: var(--nb-radius-lg, 14px); background: var(--hf-card); padding: 18px 20px; box-shadow: var(--nb-shadow-sm, none); min-width: 0; }',
+	'.hf-panel__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }',
+	'.hf-panel__title { margin: 0; font-size: 15px; font-weight: 700; }',
+	'.hf-panel__sub { margin: 4px 0 0; font-size: 12.5px; color: var(--hf-muted); line-height: 1.45; }',
+	'.hf-panel__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }',
+	'.hf-panel--wide { grid-column: 1 / -1; }',
+	'.hf-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }',
+	'.hf-checks li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: var(--hf-surface); font-size: 13px; line-height: 1.4; }',
+	'.hf-checks__mark { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; background: var(--hf-ok); }',
+	'.hf-checks li.hf-checks--bad .hf-checks__mark { background: var(--hf-bad); }',
+	'.hf-checks__empty { font-size: 13px; color: var(--hf-muted); padding: 10px 0; }',
+	'.hf-kv { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 13px; }',
+	'.hf-kv dt { color: var(--hf-muted); margin: 0; }',
+	'.hf-kv dd { margin: 0; font-weight: 600; word-break: break-word; }',
+	'.hf-details { margin-top: 14px; font-size: 13px; }',
+	'.hf-details > summary { cursor: pointer; color: var(--hf-muted); font-size: 12.5px; }',
+	'.hf-details[open] > summary { margin-bottom: 10px; }',
+	'.hf-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }',
+	'.hf-field > label { font-size: 13px; font-weight: 600; }',
+	'.hf-field__hint { font-size: 12px; color: var(--hf-muted); line-height: 1.4; }',
+	'.hf-field input[type=text], .hf-field input[type=password], .hf-field input[type=number], .hf-field select, .hf-field textarea { width: 100%; box-sizing: border-box; }',
+	'.hf-field__row { display: flex; gap: 8px; align-items: center; }',
+	'.hf-field__row > input { flex: 1 1 auto; }',
+	'.hf-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--hf-line); }',
+	'.hf-switch-row:first-child { border-top: 0; padding-top: 0; }',
+	'.hf-switch-row label { font-size: 13px; font-weight: 600; }',
+	'.hf-switch-row .hf-field__hint { margin-top: 2px; font-weight: 400; }',
+	'.hf-empty { padding: 22px; text-align: center; font-size: 13px; color: var(--hf-muted); border: 1px dashed var(--hf-line); border-radius: 10px; }',
+	'.hf-proto { flex: none; display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 700; letter-spacing: .03em; color: var(--hf-acc); background: var(--hf-acc-soft); }',
+	'.hf-stat { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: var(--hf-surface); border: 1px solid var(--hf-line); min-width: 0; }',
+	'.hf-stat__label { font-size: 12px; color: var(--hf-muted); }',
+	'.hf-stat__value { font-size: 15px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }',
+	'.hf-chname { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }',
+	'.hf-stat--ok .hf-stat__value { color: var(--hf-ok); } .hf-stat--bad .hf-stat__value { color: var(--hf-bad); } .hf-stat--warn .hf-stat__value { color: var(--hf-warn); }',
+	'.hf-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 16px; }',
+	'@media (max-width: 640px) { .hf-head__actions { width: 100%; } .hf-head__actions > .btn, .hf-head__actions > .hf-more { flex: 1 1 auto; } .hf-head__actions > .hf-more > .btn { width: 100%; } .hf-panel { padding: 14px; } .hf-kv { grid-template-columns: 1fr; gap: 2px; } .hf-kv dd { margin-bottom: 8px; } }'
+].join('\n');
+
+var PROTO_LABELS = {
+	vless: 'VLESS', vmess: 'VMess', trojan: 'Trojan', ss: 'Shadowsocks', shadowsocks: 'Shadowsocks',
+	hy2: 'Hysteria2', hysteria2: 'Hysteria2', hysteria: 'Hysteria', tuic: 'TUIC',
+	awg: 'AmneziaWG', awg2: 'AmneziaWG', amneziawg: 'AmneziaWG', wg: 'WireGuard', wireguard: 'WireGuard',
+	socks: 'SOCKS', socks5: 'SOCKS', http: 'HTTP', https: 'HTTPS', vpn: 'Amnezia', direct: 'VPN'
+};
+
+function protoLabel(type) {
+	var t = String(type || '').toLowerCase();
+	return PROTO_LABELS[t] || (t ? t.toUpperCase() : '');
+}
+
+function safeDecode(s) {
+	try {
+		return decodeURIComponent(String(s).replace(/\+/g, ' '));
+	} catch (e) {
+		return String(s);
+	}
+}
+
+function b64decode(s) {
+	try {
+		s = String(s).replace(/-/g, '+').replace(/_/g, '/');
+		while (s.length % 4)
+			s += '=';
+		return decodeURIComponent(escape(atob(s)));
+	} catch (e) {
+		return null;
+	}
+}
+
+function splitHostPort(hp) {
+	hp = String(hp || '').replace(/\/.*$/, '');
+	var m = hp.match(/^\[([^\]]+)\](?::(\d+))?$/);
+	if (m)
+		return { host: m[1], port: m[2] || '' };
+	var i = hp.lastIndexOf(':');
+	if (i > 0 && /^\d+$/.test(hp.slice(i + 1)))
+		return { host: hp.slice(0, i), port: hp.slice(i + 1) };
+	return { host: hp, port: '' };
+}
+
+// Pulls what a person needs to tell links apart. Secrets (user ids, keys,
+// passwords) are never part of the result.
+function parseLink(raw) {
+	var s = String(raw || '').trim();
+	var out = { scheme: '', proto: '?', host: '', port: '', name: '', params: {} };
+	var m = s.match(/^([a-z0-9+.-]+):\/\/(.*)$/i);
+	if (!m)
+		return out;
+	out.scheme = m[1].toLowerCase();
+	out.proto = protoLabel(out.scheme);
+	var rest = m[2];
+
+	if (out.scheme === 'vmess') {
+		try {
+			var o = JSON.parse(b64decode(rest.replace(/[#?].*$/, '')));
+			out.host = String(o.add || '');
+			out.port = String(o.port || '');
+			out.name = String(o.ps || '');
+			if (o.net) out.params.type = String(o.net);
+			if (o.tls) out.params.security = String(o.tls);
+			if (o.sni) out.params.sni = String(o.sni);
+			return out;
+		} catch (e) {}
+	}
+	if (out.scheme === 'vpn')
+		return out;
+
+	var hash = rest.indexOf('#');
+	if (hash >= 0) {
+		out.name = safeDecode(rest.slice(hash + 1));
+		rest = rest.slice(0, hash);
+	}
+	var q = rest.indexOf('?');
+	if (q >= 0) {
+		rest.slice(q + 1).split('&').forEach(function(kv) {
+			if (!kv)
+				return;
+			var eq = kv.indexOf('=');
+			var k = eq >= 0 ? kv.slice(0, eq) : kv;
+			out.params[safeDecode(k).toLowerCase()] = eq >= 0 ? safeDecode(kv.slice(eq + 1)) : '';
+		});
+		rest = rest.slice(0, q);
+	}
+	var at = rest.lastIndexOf('@');
+	var hp = at >= 0 ? rest.slice(at + 1) : rest;
+	if (at < 0 && out.scheme === 'ss') {
+		var dec = b64decode(rest.replace(/\/.*$/, ''));
+		if (dec && dec.lastIndexOf('@') >= 0)
+			hp = dec.slice(dec.lastIndexOf('@') + 1);
+	}
+	var h = splitHostPort(hp);
+	out.host = h.host;
+	out.port = h.port;
+	return out;
+}
+
+function linkFacts(p) {
+	var facts = [];
+	var pr = p.params || {};
+	if (pr.security && pr.security !== 'none')
+		facts.push(pr.security === 'reality' ? 'REALITY' : pr.security.toUpperCase());
+	if (pr.type && pr.type !== 'tcp')
+		facts.push(pr.type === 'ws' ? 'WebSocket' : (pr.type === 'grpc' ? 'gRPC' : pr.type));
+	if (pr.flow && /vision/.test(pr.flow))
+		facts.push('Vision');
+	if (pr.sni || pr.peer)
+		facts.push('SNI ' + (pr.sni || pr.peer));
+	return facts;
+}
+
+// Channel names by engine tag, from list_routes: the user's own name or the
+// generated "protocol host" one. Same names as on the Services page.
+function channelNamesFrom(res) {
+	var d = unwrapData(res);
+	var map = {};
+	var sections = (d && d.sections) || [];
+	sections.forEach(function(sec) {
+		(sec.channels || []).forEach(function(c) {
+			if (c.tag && c.name)
+				map[c.tag] = c.name;
+		});
+	});
+	return map;
+}
+
+// Human name of a status channel: own name, else protocol and server, never
+// the raw link or the internal tag.
+var _channelNames = {};
+
+function setChannelNames(map) {
+	_channelNames = map || {};
+}
+
+function channelTitle(ch, names) {
+	if (!ch)
+		return '';
+	names = names || _channelNames;
+	if (names && ch.name && names[ch.name])
+		return names[ch.name];
+	if (ch.type === 'urltest')
+		return _('Самый быстрый из группы');
+	if (ch.type === 'direct' || /-awg-out$/.test(ch.name || ''))
+		return _('Основной VPN');
+	var d = String(ch.display || ch.name || '').replace(/\s*\([^)]*-out\)$/, '');
+	var p = parseLink(d);
+	if (p.scheme)
+		return p.proto + ' ' + p.host + (p.port ? ':' + p.port : '');
+	var proto = protoLabel(ch.type);
+	if (proto && d.indexOf('://') < 0)
+		return proto + ' ' + d;
+	return d.length > 42 ? d.slice(0, 40) + '…' : d;
+}
+
+// Splits a channel name into protocol badge and the rest, so cards do not
+// show "Hysteria2 hysteria2 1.2.3.4" when the generated name starts with it.
+var NAME_PROTOS = { hysteria2: 'Hysteria2', hy2: 'Hysteria2', awg: 'AmneziaWG', awg2: 'AmneziaWG', vless: 'VLESS', vmess: 'VMess', trojan: 'Trojan', ss: 'Shadowsocks', shadowsocks: 'Shadowsocks', socks: 'SOCKS', socks5: 'SOCKS', tuic: 'TUIC', wireguard: 'WireGuard', hysteria: 'Hysteria' };
+
+function channelParts(ch, names) {
+	var title = channelTitle(ch, names);
+	var proto = (ch && ch.type && ch.type !== 'urltest' && ch.type !== 'direct') ? protoLabel(ch.type) : '';
+	var m = String(title).match(/^(\S+)\s+(.+)$/);
+	if (m && NAME_PROTOS[m[1].toLowerCase()]) {
+		proto = NAME_PROTOS[m[1].toLowerCase()];
+		title = m[2];
+	}
+	else if (m && proto && m[1].toLowerCase() === proto.toLowerCase())
+		title = m[2];
+	return { proto: proto, title: title };
+}
+
+function channelLabelNode(ch) {
+	var parts = channelParts(ch);
+	return E('span', { 'class': 'hf-chname' }, [
+		parts.proto ? E('span', { 'class': 'hf-proto' }, parts.proto) : '',
+		E('span', {}, parts.title)
+	]);
+}
+
+function tagTitle(tag, data, names) {
+	if (!tag)
+		return '';
+	names = names || _channelNames;
+	var chans = (data && data.channels) || [];
+	for (var i = 0; i < chans.length; i++)
+		if (chans[i].name === tag)
+			return channelTitle(chans[i], names);
+	if (names && names[tag])
+		return names[tag];
+	if (/-urltest-out$/.test(tag))
+		return _('Самый быстрый из группы');
+	if (/-awg-out$/.test(tag))
+		return _('Основной VPN');
+	if (tag === 'direct')
+		return _('Напрямую');
+	return tag;
+}
+
+function policyName(policy) {
+	switch (policy) {
+	case 'outage-only':
+		return _('Резерв только при падении VPN');
+	case 'prefer-primary':
+		return _('Предпочитать VPN');
+	case 'fastest':
+		return _('Самый быстрый канал');
+	default:
+		return policy || '-';
+	}
+}
+
+function modeName(mode) {
+	switch (mode) {
+	case 'urltest':
+		return _('выбор самого быстрого');
+	case 'primary':
+		return _('на основном VPN');
+	case 'backup':
+		return _('на резервном канале');
+	default:
+		return mode || '-';
+	}
+}
+
+function pill(text, state, title) {
+	return E('span', {
+		'class': 'hf-pill' + (state ? ' hf-pill--' + state : ''),
+		'title': title || null
+	}, text);
+}
+
+// Page header used by every page: title, live state pills, actions, hint and
+// a result box that page actions write into.
+function pageHeader(opts) {
+	opts = opts || {};
+	var result = E('pre', { 'class': 'hf-result' });
+	var node = E('div', { 'class': 'hf-head' }, [
+		E('div', { 'class': 'hf-head__info' }, [
+			E('h2', { 'class': 'hf-head__title' }, opts.title || ''),
+			E('div', { 'class': 'hf-head__state' }, opts.pills || [])
+		]),
+		E('div', { 'class': 'hf-head__actions' }, opts.actions || []),
+		opts.hint ? E('p', { 'class': 'hf-head__hint' }, opts.hint) : '',
+		result
+	]);
+	node.setResult = function(text, state) {
+		result.textContent = text || '';
+		result.className = 'hf-result' + (text ? ' hf-result--' + (state === true ? 'ok' : state === false ? 'bad' : (state || 'info')) : '');
+	};
+	node.setPills = function(pills) {
+		var el = node.querySelector('.hf-head__state');
+		emptyNode(el);
+		(pills || []).forEach(function(p) { el.appendChild(p); });
+	};
+	return node;
+}
+
+var _moreCloser = false;
+
+function moreMenu(label, items) {
+	var menu = E('div', { 'class': 'hf-more__menu' });
+	var wrap = E('div', { 'class': 'hf-more' }, [
+		E('button', {
+			'class': 'btn cbi-button cbi-button-neutral',
+			'click': function(ev) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				wrap.classList.toggle('hf-more--open');
+			}
+		}, label || _('Ещё ▾')),
+		menu
+	]);
+	if (!_moreCloser) {
+		_moreCloser = true;
+		document.addEventListener('click', function() {
+			document.querySelectorAll('.hf-more--open').forEach(function(el) { el.classList.remove('hf-more--open'); });
+		});
+	}
+	items.forEach(function(it) {
+		if (!it)
+			return;
+		menu.appendChild(E('button', {
+			'class': it.danger ? 'hf-more__danger' : '',
+			'click': ui.createHandlerFn(null, function(ev) {
+				wrap.classList.remove('hf-more--open');
+				return it.fn(ev);
+			})
+		}, it.label));
+	});
+	return wrap;
+}
+
+function panel(title, sub, children, opts) {
+	opts = opts || {};
+	return E('div', { 'class': 'hf-panel' + (opts.wide ? ' hf-panel--wide' : ''), 'id': opts.id || null }, [
+		E('div', { 'class': 'hf-panel__head' }, [
+			E('div', {}, [
+				E('h3', { 'class': 'hf-panel__title' }, title),
+				sub ? E('p', { 'class': 'hf-panel__sub' }, sub) : ''
+			]),
+			opts.aside || ''
+		])
+	].concat(children || []));
+}
+
+function stat(label, value, state, title) {
+	return E('div', { 'class': 'hf-stat' + (state ? ' hf-stat--' + state : ''), 'title': title || null }, [
+		E('span', { 'class': 'hf-stat__label' }, label),
+		E('span', { 'class': 'hf-stat__value' }, value)
+	]);
+}
+
+function kvList(rows) {
+	var dl = E('dl', { 'class': 'hf-kv' });
+	rows.forEach(function(r) {
+		if (!r)
+			return;
+		dl.appendChild(E('dt', {}, r[0]));
+		dl.appendChild(E('dd', {}, (r[1] != null && r[1].nodeType) ? [ r[1] ] : String(r[1] != null && r[1] !== '' ? r[1] : '-')));
+	});
+	return dl;
+}
+
 var rpcStatus = rpc.declare({ object: 'hybrid-failover', method: 'status' });
 var rpcHealth = rpc.declare({ object: 'hybrid-failover', method: 'health' });
 var rpcHistory = rpc.declare({ object: 'hybrid-failover', method: 'history' });
@@ -142,6 +533,7 @@ var rpcGlobalCheck = rpc.declare({ object: 'hybrid-failover', method: 'global_ch
 var rpcListClients = rpc.declare({ object: 'hybrid-failover', method: 'list_clients' });
 var rpcDhcpLeases = rpc.declare({ object: 'hybrid-failover', method: 'dhcp_leases' });
 var rpcMetrics = rpc.declare({ object: 'hybrid-failover', method: 'metrics' });
+var rpcListRoutes = rpc.declare({ object: 'hybrid-failover', method: 'list_routes' });
 
 // LuCI default XHR timeout is 20s; health/global-check can need more on slow links.
 function withRpcTimeout(seconds, fn) {
@@ -284,7 +676,7 @@ function primaryProbeBadge(ctrl) {
 		return '-';
 	if (!primaryProbeApplicable(ctrl))
 		return '-';
-	return badge(!!ctrl.primary_ok, 'OK', 'FAIL');
+	return badge(!!ctrl.primary_ok, _('отвечает'), _('не отвечает'));
 }
 
 function channelKind(ch) {
@@ -319,10 +711,10 @@ function channelAliveState(ch, probed, ctrl, data) {
 function channelStatusBadge(ch, probed, ctrl, data) {
 	var st = channelAliveState(ch, probed, ctrl, data);
 	if (st === 'up')
-		return badge(true, 'UP', 'DOWN');
+		return badge(true, _('на связи'), '');
 	if (st === 'down')
-		return badge(false, 'UP', 'DOWN');
-	return badgeWarn(_('н/д'));
+		return badge(false, '', _('нет связи'));
+	return badgeWarn(_('не проверен'));
 }
 
 function channelIsActiveReserve(ch, ctrl) {
@@ -341,19 +733,19 @@ function channelIsActiveReserve(ch, ctrl) {
 function channelRoleLabel(ch, ctrl) {
 	var kind = channelKind(ch);
 	if (kind === 'primary')
-		return _('Primary VPN');
+		return _('Основной VPN');
 	if (kind === 'urltest')
-		return _('URLTest группа');
+		return _('Группа');
 	if (channelIsActiveReserve(ch, ctrl))
-		return _('активный резерв');
-	return _('резерв');
+		return _('Сейчас через него');
+	return _('Резерв');
 }
 
 function channelsReserveSummary(channels, data, probed) {
 	if (!channels || !channels.length)
 		return '';
 	if (!proxyRunning(data))
-		return _('engine down');
+		return _('движок остановлен');
 	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
 	var alive = 0, total = 0;
 	for (var i = 0; i < channels.length; i++) {
@@ -365,52 +757,52 @@ function channelsReserveSummary(channels, data, probed) {
 	}
 	if (!total)
 		return '';
-	return alive + '/' + total + ' ' + _('живы');
+	return _('%d из %d на связи').format(alive, total);
 }
 
 function buildChannelOverviewCard(ch, probed, ctrl, data) {
 	var kind = channelKind(ch);
 	var alive = channelAliveState(ch, probed, ctrl, data);
 	var cardCls = 'hf-ent-channel-card hf-ent-channel-card--' + alive;
-	if (channelIsActiveReserve(ch, ctrl) && kind === 'reserve')
+	var activeRes = channelIsActiveReserve(ch, ctrl) && kind === 'reserve';
+	if (activeRes)
 		cardCls += ' hf-ent-channel-card--active';
 	var metaParts = [];
-	if (ch.type)
-		metaParts.push(ch.type);
 	if (ch.delay_ms && ch.delay_ms > 0)
-		metaParts.push(ch.delay_ms + ' ms');
+		metaParts.push(ch.delay_ms + ' ' + _('мс'));
 	else if (ch.detail && alive === 'up')
-		metaParts.push(_('handshake'));
+		metaParts.push(_('соединение установлено'));
 	var body = [
 		E('div', { 'class': 'hf-ent-channel-card__head' }, [
 			E('span', { 'class': 'hf-ent-channel-card__role' }, channelRoleLabel(ch, ctrl)),
 			channelStatusBadge(ch, probed, ctrl, data)
 		]),
-		E('div', { 'class': 'hf-ent-channel-card__name' }, ch.display || ch.name),
+		E('div', { 'class': 'hf-ent-channel-card__name' }, channelLabelNode(ch)),
 		E('div', { 'class': 'hf-ent-channel-card__meta' }, metaParts.join(' · ') || '-')
 	];
-	if (channelIsActiveReserve(ch, ctrl) && kind === 'reserve')
-		body.push(E('div', { 'class': 'hf-ent-channel-card__flag' }, _('активный резерв')));
 	if (kind === 'primary' && ctrl && ctrl.last_error && ctrl.primary_ok === false)
 		body.push(E('div', { 'class': 'hf-ent-channel-card__err' }, ctrl.last_error));
-	else if (ch.detail) {
-		var detailCls = alive === 'up' ? 'hf-ent-channel-card__flag' : 'hf-ent-channel-card__err';
-		var detailStyle = alive === 'unknown' ? 'color:#9a6700;' : '';
-		body.push(E('div', { 'class': detailCls, 'style': detailStyle }, ch.detail));
-	}
+	else if (ch.detail && alive !== 'up')
+		body.push(E('div', { 'class': 'hf-ent-channel-card__err', 'style': alive === 'unknown' ? 'color:var(--hf-warn);' : '' }, ch.detail));
 	return E('div', { 'class': cardCls }, body);
 }
 
 function buildChannelsOverview(channels, data, probed, opts) {
 	opts = opts || {};
 	var ctrl = controllerForSection(data, opts.section);
+	var head = E('div', { 'class': 'hf-ent-section-head' }, [
+		E('h3', {}, _('Каналы')),
+		typeof opts.onProbe === 'function' ? E('button', {
+			'class': 'btn cbi-button cbi-button-action',
+			'id': 'hf-btn-probe-overview',
+			'click': opts.onProbe
+		}, _('Проверить сейчас')) : ''
+	]);
 	if (!channels || !channels.length) {
 		return E('div', { 'class': 'hf-ent-card hf-ent-channels' }, [
-			E('div', { 'class': 'hf-ent-section-head' }, [
-				E('h3', {}, _('Каналы failover'))
-			]),
+			head,
 			E('p', { 'class': 'hf-mon-empty' },
-				_('Каналы не найдены. Включите VPN+failover в секции маршрутизации.'))
+				_('Каналов нет. Добавьте ссылки на странице «Маршрутизация».'))
 		]);
 	}
 
@@ -428,22 +820,9 @@ function buildChannelsOverview(channels, data, probed, opts) {
 	var summaryParts = [];
 	var reserveSummary = channelsReserveSummary(channels, data, probed);
 	if (reserveSummary)
-		summaryParts.push(_('Резервы') + ': ' + reserveSummary);
+		summaryParts.push(reserveSummary);
 	if (ctrl && ctrl.mode)
-		summaryParts.push(_('Режим') + ': ' + ctrl.mode);
-	if (ctrl && ctrl.urltest_member)
-		summaryParts.push(_('URLTest member') + ': ' + ctrl.urltest_member);
-	else if (ctrl && ctrl.active && ctrl.mode === 'backup')
-		summaryParts.push(_('Активный') + ': ' + activeOutboundDisplay(data, opts.section));
-
-	var headChildren = [E('h3', {}, _('Каналы failover'))];
-	if (typeof opts.onProbe === 'function') {
-		headChildren.push(E('button', {
-			'class': 'btn cbi-button cbi-button-save',
-			'id': 'hf-btn-probe-overview',
-			'click': opts.onProbe
-		}, _('Live probe')));
-	}
+		summaryParts.push(_('режим: ') + modeName(ctrl.mode));
 
 	var grid = E('div', { 'class': 'hf-ent-channel-grid' });
 	for (var p = 0; p < primary.length; p++)
@@ -451,21 +830,12 @@ function buildChannelsOverview(channels, data, probed, opts) {
 	for (var r = 0; r < reserves.length; r++)
 		grid.appendChild(buildChannelOverviewCard(reserves[r], probed, ctrl, data));
 
-	var footer = '';
-	if (!probed) {
-		footer = E('p', { 'class': 'hint', 'style': 'margin:10px 0 0;font-size:12px;' },
-			isNativeEngine(data)
-				? _('AWG2: handshake. HTTP urltest выбирает канал. Ручное переключение пинит selector, не urltest.')
-				: _('Статус из кэша Clash. Live probe обновит проверку всех каналов.'));
-	}
-
 	return E('div', { 'class': 'hf-ent-card hf-ent-channels' }, [
-		E('div', { 'class': 'hf-ent-section-head' }, headChildren),
-		summaryParts.length
-			? E('p', { 'class': 'hf-ent-channels__summary' }, summaryParts.join(' · '))
-			: '',
+		head,
+		summaryParts.length ? E('p', { 'class': 'hf-ent-channels__summary' }, summaryParts.join(' · ')) : '',
 		grid,
-		footer
+		!probed ? E('p', { 'class': 'hint', 'style': 'margin:10px 0 0;font-size:12px;' },
+			_('Задержки по последней фоновой проверке. «Проверить сейчас» проверит все каналы заново.')) : ''
 	]);
 }
 
@@ -524,11 +894,11 @@ function formatRelativeTime(raw) {
 function policyHint(policy) {
 	switch (policy) {
 	case 'outage-only':
-		return _('VPN пока probe OK; при сбоях — резервы');
+		return _('Трафик идёт через VPN, пока он отвечает. Если VPN упал, включается резервный канал.');
 	case 'prefer-primary':
-		return _('Предпочитать VPN; быстрый возврат');
+		return _('Как только VPN снова отвечает, трафик сразу возвращается на него.');
 	case 'fastest':
-		return _('Выбор самого быстрого канала (urltest)');
+		return _('Трафик всегда идёт через самый быстрый из живых каналов.');
 	default:
 		return policy || '-';
 	}
@@ -660,42 +1030,23 @@ function wrapTable(tableEl) {
 }
 
 function buildStatusPill(state) {
-	var label, cls;
 	switch (state) {
 	case 'up':
-		label = _('В норме');
-		cls = 'hf-ent-pill hf-ent-pill--ok';
-		break;
+		return pill(_('Всё работает'), 'ok');
 	case 'degraded':
-		label = _('Деградация');
-		cls = 'hf-ent-pill hf-ent-pill--warn';
-		break;
+		return pill(_('Есть предупреждения'), 'warn');
 	case 'down':
-		label = _('Недоступно');
-		cls = 'hf-ent-pill hf-ent-pill--bad';
-		break;
+		return pill(_('Не работает'), 'bad');
 	default:
-		label = _('Неизвестно');
-		cls = 'hf-ent-pill hf-ent-pill--neutral';
+		return pill(_('Нет данных'), '');
 	}
-	return E('span', { 'class': cls }, [
-		E('span', { 'class': 'hf-ent-pill__dot' }),
-		label
-	]);
 }
 
 function buildEnterpriseMeta(data) {
 	var m = data && data.meta;
-	var parts = [];
-	if (m && m.core_version)
-		parts.push('v' + m.core_version);
-	if (data && data.engine_mode)
-		parts.push(String(data.engine_mode));
-	if (m && m.uci_schema)
-		parts.push('schema ' + m.uci_schema);
-	if (!parts.length)
-		return E('span', { 'class': 'hint', 'style': 'font-size:12px;' }, '-');
-	return E('span', { 'class': 'hint', 'style': 'font-size:12px;' }, parts.join(' · '));
+	if (!m || !m.core_version)
+		return '';
+	return pill('v' + m.core_version, 'plain');
 }
 
 function buildStatusHero(data, opts) {
@@ -705,46 +1056,44 @@ function buildStatusHero(data, opts) {
 		(state === 'up' ? 'ok' : state === 'degraded' ? 'warn' : state === 'down' ? 'bad' : 'neutral');
 	var title, sub;
 	if (state === 'up') {
-		title = _('Маршрутизация активна');
-		sub = _('Критичные компоненты в норме.');
+		title = _('Трафик идёт через туннель');
+		sub = _('Движок, перехват трафика и DNS работают.');
 	} else if (state === 'degraded') {
-		title = _('Частичная деградация');
-		sub = _('Сервис работает с предупреждениями.');
+		title = _('Работает с предупреждениями');
+		sub = _('Трафик идёт, но что-то требует внимания. Подробности ниже.');
 	} else if (state === 'down') {
-		title = _('Маршрутизация недоступна');
-		sub = isNativeEngine(data)
-			? _('Engine, nft или control plane не отвечают.')
-			: _('sing-box, nft или Clash API не отвечают.');
+		title = _('Туннель не работает');
+		sub = _('Движок или перехват трафика не отвечают. Запустите полную проверку на странице «Диагностика».');
 	} else {
 		title = _('Нет данных');
-		sub = _('Не удалось получить статус с роутера.');
+		sub = _('Не удалось получить состояние с роутера.');
 	}
 	var main = E('div', { 'class': 'hf-ent-hero__main' }, [
 		E('p', { 'class': 'hf-ent-hero__title' }, title),
 		E('p', { 'class': 'hf-ent-hero__sub' }, sub)
 	]);
-	var activeDisp = activeOutboundDisplay(data, opts.section);
-	if (activeDisp) {
-		main.appendChild(E('div', { 'class': 'hf-ent-hero__active' }, [
-			_('Активный канал') + ': ',
-			E('span', { 'class': 'hf-mon-tag' }, activeDisp)
-		]));
-	}
 	var errs = visibleErrors(data);
-	if (errs.length) {
-		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:8px;color:#c0392b;' },
-			errs.join(' · ')));
+	if (errs.length)
+		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:8px;color:var(--hf-bad);' }, errs.join(' · ')));
+	if (opts.primaryError)
+		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:6px;color:var(--hf-bad);' },
+			_('Основной VPN') + ': ' + opts.primaryError));
+	return E('div', { 'class': heroCls }, [main]);
+}
+
+// The channel traffic really goes through: the member a URLTest group picked,
+// not the group itself.
+function activeChannelTag(data, section) {
+	var fo = data && data.failover;
+	var ctrl = controllerForSection(data, section);
+	var tag = activeOutboundTag(data, section);
+	if (/-urltest-out$/.test(tag || '')) {
+		if (ctrl && ctrl.urltest_member)
+			return ctrl.urltest_member;
+		if (fo && fo.urltest_now)
+			return fo.urltest_now;
 	}
-	if (opts.primaryError) {
-		main.appendChild(E('div', { 'class': 'hf-ent-hero__sub', 'style': 'margin-top:6px;color:#c0392b;' },
-			_('Primary') + ': ' + opts.primaryError));
-	}
-	var links = E('div', { 'class': 'hf-ent-hero__links' }, [
-		E('a', { 'href': L.url('admin/services/hybrid-failover/routing') }, _('Маршрутизация')),
-		E('a', { 'href': L.url('admin/services/hybrid-failover/diagnostics') }, _('Диагностика')),
-		E('a', { 'href': L.url('admin/services/hybrid-failover/clients') }, _('Клиенты'))
-	]);
-	return E('div', { 'class': heroCls }, [main, links]);
+	return tag;
 }
 
 function buildTabBar(tabs, activeId, onSelect) {
@@ -817,71 +1166,42 @@ function buildSummaryBanner(data, opts) {
 }
 
 function buildMetricCards(data, section) {
-	var fakeipState = 'neutral';
-	var fakeipVal = _('н/д');
+	var dnsState = '', dnsVal = _('не проверен');
 	if (data) {
 		if (data.fakeip_skipped)
-			fakeipVal = _('пропущено');
+			dnsVal = _('пропущен');
 		else if (data.fakeip_ok != null) {
-			fakeipState = data.fakeip_ok ? 'ok' : 'bad';
-			fakeipVal = data.fakeip_ok ? 'OK' : _('ошибка');
+			dnsState = data.fakeip_ok ? 'ok' : 'bad';
+			dnsVal = data.fakeip_ok ? _('в порядке') : _('ошибка');
 		}
 	}
-	var policyVal = '-';
-	if (data && data.failover && data.failover.policy)
-		policyVal = data.failover.policy;
-	else {
-		var ctrlPol = controllerForSection(data, section);
-		if (ctrlPol && ctrlPol.policy)
-			policyVal = ctrlPol.policy;
-	}
-	var engineLabel = isNativeEngine(data) ? 'Engine' : 'sing-box';
-	var controlLabel = isNativeEngine(data) ? _('Control') : 'Clash API';
-	var engineRunning = proxyRunning(data);
-	var controlRunning = controlOk(data);
-	var activeTag = activeOutboundTag(data, section);
-	var activeState = activeTag ? 'ok' : 'neutral';
 	var ctrl = controllerForSection(data, section);
+	var policy = (data && data.failover && data.failover.policy) || (ctrl && ctrl.policy) || '';
+	var engineRunning = proxyRunning(data);
+	var tag = activeChannelTag(data, section);
+	var activeState = tag ? 'ok' : '';
 	if (ctrl && primaryProbeApplicable(ctrl) && ctrl.mode === 'backup' && !ctrl.primary_ok)
 		activeState = 'warn';
-	return E('div', { 'class': 'hf-mon-grid' }, [
-		card(engineLabel, engineRunning ? _('работает') : _('остановлен'),
-			engineRunning ? 'ok' : 'bad'),
-		card('nft / tproxy', data && data.nft_ok ? 'OK' : _('ошибка'),
-			data && data.nft_ok ? 'ok' : 'bad'),
-		card(controlLabel, controlRunning ? 'OK' : _('недоступен'),
-			controlRunning ? 'ok' : 'bad'),
-		card('fakeip DNS', fakeipVal, fakeipState),
-		card(_('Политика'), policyVal, 'info'),
-		card(_('Активный outbound'), activeOutboundDisplay(data, section) || activeTag || '-', activeState),
-		card(_('Резервы'), (function() {
-			var ch = data && data.channels;
-			if (!ch || !ch.length)
-				return '-';
-			var sum = channelsReserveSummary(ch, data, false);
-			return sum || '-';
-		})(), (function() {
-			var ch = data && data.channels;
-			if (!ch || !ch.length)
-				return 'neutral';
-			var ctrl = controllerForSection(data, section);
-			var alive = 0, total = 0;
-			for (var i = 0; i < ch.length; i++) {
-				if (channelKind(ch[i]) !== 'reserve')
-					continue;
-				total++;
-				if (channelAliveState(ch[i], false, ctrl, data) === 'up')
-					alive++;
-			}
-			if (!total)
-				return 'neutral';
-			if (alive === total)
-				return 'ok';
-			if (alive === 0)
-				return 'bad';
-			return 'warn';
-		})())
-	]);
+	var ch = (data && data.channels) || [];
+	var alive = 0, total = 0;
+	for (var i = 0; i < ch.length; i++) {
+		if (channelKind(ch[i]) !== 'reserve')
+			continue;
+		total++;
+		if (channelAliveState(ch[i], false, ctrl, data) === 'up')
+			alive++;
+	}
+	var stats = [
+		stat(_('Движок'), engineRunning ? _('работает') : _('остановлен'), engineRunning ? 'ok' : 'bad'),
+		stat(_('Перехват трафика'), data && data.nft_ok ? _('в порядке') : _('ошибка'), data && data.nft_ok ? 'ok' : 'bad', _('Правила nftables, которые заворачивают трафик в движок')),
+		stat(_('DNS (fake-IP)'), dnsVal, dnsState),
+		stat(_('Сейчас через'), tag ? tagTitle(tag, data) : '-', activeState),
+		stat(_('Каналы на связи'), total ? (alive + ' / ' + total) : '-', !total ? '' : (alive === total ? 'ok' : (alive ? 'warn' : 'bad'))),
+		stat(_('Режим'), policyName(policy), '', policyHint(policy))
+	];
+	if (!isNativeEngine(data))
+		stats.splice(2, 0, stat('Clash API', controlOk(data) ? _('в порядке') : _('недоступен'), controlOk(data) ? 'ok' : 'bad'));
+	return E('div', { 'class': 'hf-stats' }, stats);
 }
 
 function buildOutageFlowDiagram(mode) {
@@ -898,11 +1218,11 @@ function buildControllerTable(controllers, sectionFilter, dryRun) {
 		return '';
 	var thead = E('tr', {}, [
 		E('th', {}, _('Секция')),
-		E('th', {}, _('Policy')),
-		E('th', {}, _('Режим')),
-		E('th', {}, _('Активный')),
-		E('th', {}, _('Primary')),
-		E('th', {}, _('Probe')),
+		E('th', {}, _('Политика')),
+		E('th', {}, _('Состояние')),
+		E('th', {}, _('Активный тег')),
+		E('th', {}, _('Основной VPN')),
+		E('th', {}, _('Проверка')),
 		E('th', {}, _('Счётчики'))
 	]);
 	var tbody = E('tbody');
@@ -910,9 +1230,6 @@ function buildControllerTable(controllers, sectionFilter, dryRun) {
 		var c = controllers[i];
 		if (sectionFilter && c.section !== sectionFilter)
 			continue;
-		var failTh = 2, recTh = 2;
-		var streakText = streakChip(c.fail_streak, failTh, _('fail')) + ' · ' +
-			streakChip(c.recover_streak, recTh, _('recover'));
 		var probeInfo = [];
 		if (c.last_probe_at)
 			probeInfo.push(formatRelativeTime(c.last_probe_at));
@@ -920,12 +1237,12 @@ function buildControllerTable(controllers, sectionFilter, dryRun) {
 			probeInfo.push(c.last_error);
 		tbody.appendChild(E('tr', {}, [
 			E('td', {}, c.section || '-'),
-			E('td', {}, c.policy ? badgeInfo(c.policy) : '-'),
+			E('td', {}, c.policy || '-'),
 			E('td', {}, c.mode || '-'),
 			E('td', {}, E('span', { 'class': 'hf-mon-tag' }, c.active || '-')),
 			E('td', {}, primaryProbeBadge(c)),
 			E('td', { 'title': c.last_error || '' }, probeInfo.join(' · ') || '-'),
-			E('td', {}, streakText)
+			E('td', {}, streakChip(c.fail_streak, 2, _('сбоев')) + ' · ' + streakChip(c.recover_streak, 2, _('успехов')))
 		]));
 	}
 	var hintEl = '';
@@ -934,15 +1251,12 @@ function buildControllerTable(controllers, sectionFilter, dryRun) {
 		for (var h = 0; h < dryRun.length; h++) {
 			if (sectionFilter && dryRun[h].section !== sectionFilter)
 				continue;
-			ul.appendChild(E('li', {}, [
-				E('strong', {}, dryRun[h].section + ': '),
-				dryRun[h].suggestion
-			]));
+			ul.appendChild(E('li', {}, [ E('strong', {}, dryRun[h].section + ': '), dryRun[h].suggestion ]));
 		}
 		hintEl = ul;
 	}
-	return E('div', { 'class': 'hf-mon-section' }, [
-		E('h3', {}, _('Контроллер failover')),
+	return E('details', { 'class': 'hf-details' }, [
+		E('summary', {}, _('Технические подробности')),
 		wrapTable(E('table', { 'class': 'hf-mon-table' }, [E('thead', {}, [thead]), tbody])),
 		hintEl
 	]);
@@ -953,67 +1267,49 @@ function buildFailoverPanels(data, sectionFilter) {
 	var ctrl = null;
 	if (data && data.controller) {
 		for (var ci = 0; ci < data.controller.length; ci++) {
-			if (sectionFilter && data.controller[ci].section === sectionFilter) {
-				ctrl = data.controller[ci];
-				break;
-			}
-			if (!sectionFilter && fo && data.controller[ci].section === fo.section) {
-				ctrl = data.controller[ci];
+			var c = data.controller[ci];
+			if ((sectionFilter && c.section === sectionFilter) || (!sectionFilter && fo && c.section === fo.section)) {
+				ctrl = c;
 				break;
 			}
 		}
 		if (!ctrl && data.controller.length)
 			ctrl = data.controller[0];
 	}
-	var displayPolicy = (ctrl && ctrl.policy) || (fo && fo.policy) || '';
+	var policy = (ctrl && ctrl.policy) || (fo && fo.policy) || '';
+	var tag = activeChannelTag(data, sectionFilter);
 	var routeRows = [
 		[_('Секция'), (ctrl && ctrl.section) || (fo && fo.section) || sectionFilter || '-'],
-		[_('Политика'), displayPolicy || '-'],
-		[_('Описание'), policyHint(displayPolicy)],
-		[_('Selector'), fo && fo.selector_now ? E('span', { 'class': 'hf-mon-tag' }, fo.selector_now) :
-			(ctrl && ctrl.active ? E('span', { 'class': 'hf-mon-tag' }, ctrl.active) : '-')],
-		[_('URLTest'), (function() {
-			var val = fo && fo.urltest_now;
-			if (!val && ctrl && ctrl.urltest_member)
-				val = ctrl.urltest_member;
-			if (!val && ctrl && ctrl.active) {
-				if (ctrl.active.indexOf('-urltest-out') !== -1)
-					val = ctrl.active;
-				else if (ctrl.active.indexOf('-awg-out') === -1 && ctrl.active !== ((ctrl.section || '') + '-out'))
-					val = ctrl.active;
-			}
-			return val ? E('span', { 'class': 'hf-mon-tag' }, val) : '-';
-		})()]
+		[_('Режим'), policyName(policy)],
+		[_('Как работает'), policyHint(policy)],
+		[_('Сейчас через'), tag ? tagTitle(tag, data) : '-'],
+		[_('На этом канале'), ctrl && ctrl.active_since ? formatRelativeTime(ctrl.active_since) : '-'],
+		[_('Последнее переключение'), ctrl && ctrl.last_switch_at ? formatRelativeTime(ctrl.last_switch_at) : _('не было')]
 	];
-	var ctrlRows = [
-		[_('Режим'), ctrl ? ctrl.mode : '-'],
-		[_('Primary probe'), primaryProbeBadge(ctrl)],
-		[_('Задержка primary'), primaryProbeApplicable(ctrl) && ctrl.primary_delay_ms ? (ctrl.primary_delay_ms + ' ms') : '-'],
-		[_('Последний probe'), primaryProbeApplicable(ctrl) && ctrl.last_probe_at ? formatRelativeTime(ctrl.last_probe_at) : '-'],
-		[_('На канале с'), ctrl && ctrl.active_since ? formatRelativeTime(ctrl.active_since) : '-'],
-		[_('Последнее переключение'), ctrl && ctrl.last_switch_at ? formatRelativeTime(ctrl.last_switch_at) : '-']
-	];
-	if (primaryProbeApplicable(ctrl) && ctrl.last_error)
-		ctrlRows.push([_('Ошибка probe'), E('span', { 'style': 'color:#c0392b;' }, ctrl.last_error)]);
-	var paramRows = [];
+	var checkRows = [];
+	if (primaryProbeApplicable(ctrl)) {
+		checkRows.push([_('Основной VPN'), primaryProbeBadge(ctrl)]);
+		if (ctrl.primary_delay_ms)
+			checkRows.push([_('Задержка VPN'), ctrl.primary_delay_ms + ' ' + _('мс')]);
+		if (ctrl.last_probe_at)
+			checkRows.push([_('Проверен'), formatRelativeTime(ctrl.last_probe_at)]);
+		if (ctrl.last_error)
+			checkRows.push([_('Ошибка'), E('span', { 'style': 'color:var(--hf-bad);' }, ctrl.last_error)]);
+	}
 	if (fo) {
 		if (fo.check_interval)
-			paramRows.push([_('URLTest interval'), fo.check_interval]);
+			checkRows.push([_('Проверка каналов'), _('каждые ') + fo.check_interval]);
 		if (fo.tolerance)
-			paramRows.push([_('Tolerance'), fo.tolerance + ' ms']);
+			checkRows.push([_('Порог переключения'), fo.tolerance + ' ' + _('мс')]);
 		if (fo.idle_timeout)
-			paramRows.push([_('Idle timeout'), fo.idle_timeout]);
+			checkRows.push([_('Пауза без трафика'), fo.idle_timeout]);
 		if (fo.testing_url)
-			paramRows.push([_('Probe URL'), E('span', { 'class': 'hf-mon-tag' }, fo.testing_url)]);
+			checkRows.push([_('Адрес проверки'), E('span', { 'class': 'hf-mon-tag' }, fo.testing_url)]);
 	}
 	return E('div', {}, [
-		ctrl ? buildOutageFlowDiagram(ctrl.mode) : '',
-		E('div', { 'class': 'hf-mon-panels' }, [
-			buildKvPanel(_('Маршрут'), routeRows),
-			E('div', {}, [
-				buildKvPanel(_('Контроллер'), ctrlRows),
-				paramRows.length ? buildKvPanel(_('URLTest'), paramRows) : ''
-			])
+		E('div', { 'class': 'hf-panels', 'style': 'margin-top:16px;' }, [
+			panel(_('Маршрут'), '', [ kvList(routeRows) ]),
+			checkRows.length ? panel(_('Проверки'), '', [ kvList(checkRows) ]) : ''
 		]),
 		buildControllerTable(data && data.controller, sectionFilter, data && data.dry_run)
 	]);
@@ -1021,88 +1317,82 @@ function buildFailoverPanels(data, sectionFilter) {
 
 function buildChannelsTable(channels, probed, serverDelayData, nativeEngine, data) {
 	if (!channels || !channels.length)
-		return E('p', { 'class': 'hf-mon-empty' },
-			_('Каналы не найдены. Включите VPN+failover в секции маршрутизации.'));
+		return E('p', { 'class': 'hf-mon-empty' }, _('Каналов нет. Добавьте ссылки на странице «Маршрутизация».'));
 
 	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
 	var maxMs = maxChannelDelay(channels);
 	var thead = E('tr', {}, [
-		E('th', {}, _('Статус')),
+		E('th', {}, _('Состояние')),
 		E('th', {}, _('Канал')),
-		E('th', {}, _('Тип')),
 		E('th', {}, _('Задержка')),
-		E('th', {}, _('Тренд')),
+		E('th', {}, _('Динамика')),
 		E('th', {}, _('Роль'))
 	]);
 	var tbody = E('tbody');
 	for (var i = 0; i < channels.length; i++) {
 		var ch = channels[i];
-		var rowCls = ch.selected ? 'hf-mon-row--active' : '';
-		var role = channelRoleLabel(ch, ctrl);
 		var statusCell = channelStatusBadge(ch, probed, ctrl, data);
-		if (ch.detail && channelAliveState(ch, probed, ctrl, data) !== 'up') {
-			statusCell = E('div', {}, [
-				statusCell,
-				E('div', { 'style': 'font-size:11px;opacity:.75;margin-top:2px;' }, ch.detail)
-			]);
-		}
-		tbody.appendChild(E('tr', { 'class': rowCls }, [
+		if (ch.detail && channelAliveState(ch, probed, ctrl, data) !== 'up')
+			statusCell = E('div', {}, [ statusCell, E('div', { 'style': 'font-size:11px;opacity:.75;margin-top:2px;' }, ch.detail) ]);
+		tbody.appendChild(E('tr', { 'class': ch.selected ? 'hf-mon-row--active' : '' }, [
 			E('td', {}, statusCell),
-			E('td', {}, [
-				E('div', {}, ch.display || ch.name),
-				E('div', { 'class': 'hf-mon-tag', 'style': 'opacity:.7;' }, ch.name)
-			]),
-			E('td', {}, ch.type || '-'),
+			E('td', {}, channelLabelNode(ch)),
 			E('td', {}, latencyBar(ch.delay_ms || 0, maxMs)),
 			E('td', {}, buildSparklineSVG(ch.name, serverDelayData)),
-			E('td', {}, role)
+			E('td', {}, channelRoleLabel(ch, ctrl))
 		]));
 	}
-	if (!probed)
-		tbody.appendChild(E('tr', {}, [
-			E('td', { 'colspan': '6', 'style': 'font-size:12px;opacity:.7;' },
-				nativeEngine
-					? _('Данные из engine. Нажмите «Live probe» для актуальной проверки.')
-					: _('Данные из кэша Clash. Нажмите «Live probe» для актуальной проверки.'))
-		]));
-
-	return wrapTable(E('table', { 'class': 'hf-mon-table' }, [E('thead', {}, [thead]), tbody]));
+	return E('div', {}, [
+		wrapTable(E('table', { 'class': 'hf-mon-table' }, [E('thead', {}, [thead]), tbody])),
+		!probed ? E('p', { 'class': 'hint', 'style': 'font-size:12px;margin:6px 0 0;' },
+			_('Задержки по последней фоновой проверке. «Проверить сейчас» проверит все каналы заново.')) : ''
+	]);
 }
 
-function buildHistoryTable(events, sectionFilter, limit) {
+var SWITCH_REASONS = {
+	'manual': _('вручную'),
+	'restore backup': _('возврат на резерв после перезапуска'),
+	'primary outage': _('основной VPN перестал отвечать'),
+	'primary recovered': _('основной VPN снова отвечает'),
+	'backup urltest': _('выбор самого быстрого резерва'),
+	'sync primary': _('синхронизация с основным VPN'),
+	'sync backup': _('синхронизация с резервом'),
+	'urltest failover': _('канал перестал отвечать')
+};
+
+function switchReason(r) {
+	return SWITCH_REASONS[String(r || '')] || r || '-';
+}
+
+function buildHistoryTable(events, sectionFilter, limit, data) {
 	if (!events || !events.length)
-		return E('p', { 'class': 'hf-mon-empty' }, _('Событий failover пока не было.'));
+		return E('div', { 'class': 'hf-empty' }, _('Переключений пока не было.'));
 
 	var list = events.slice().reverse();
-	if (sectionFilter) {
-		list = list.filter(function(ev) {
-			return (ev.section || ev.Section) === sectionFilter;
-		});
-	}
+	if (sectionFilter)
+		list = list.filter(function(ev) { return (ev.section || ev.Section) === sectionFilter; });
 	limit = limit || 15;
 	if (list.length > limit)
 		list = list.slice(0, limit);
 
 	var thead = E('tr', {}, [
 		E('th', {}, _('Время')),
-		E('th', {}, _('Секция')),
-		E('th', {}, _('Переход')),
+		E('th', {}, _('Откуда')),
+		E('th', {}, _('Куда')),
 		E('th', {}, _('Причина')),
-		E('th', {}, _('Policy')),
-		E('th', {}, _('Probe'))
+		E('th', {}, _('Задержка'))
 	]);
 	var tbody = E('tbody');
 	for (var i = 0; i < list.length; i++) {
 		var ev = list[i];
-		var from = ev.from || ev.From || '-';
-		var to = ev.to || ev.To || '-';
+		var from = ev.from || ev.From || '';
+		var to = ev.to || ev.To || '';
 		tbody.appendChild(E('tr', {}, [
-			E('td', {}, formatEventTime(ev.time || ev.Time)),
-			E('td', {}, ev.section || ev.Section || '-'),
-			E('td', {}, E('span', { 'class': 'hf-mon-tag' }, from + ' → ' + to)),
-			E('td', {}, ev.reason || ev.Reason || '-'),
-			E('td', {}, ev.policy || ev.Policy || '-'),
-			E('td', {}, ev.probe_ms ? (ev.probe_ms + ' ms') : '-')
+			E('td', { 'title': formatEventTime(ev.time || ev.Time) }, formatRelativeTime(ev.time || ev.Time)),
+			E('td', { 'title': from }, from ? tagTitle(from, data) : '-'),
+			E('td', { 'title': to }, to ? tagTitle(to, data) : '-'),
+			E('td', {}, switchReason(ev.reason || ev.Reason)),
+			E('td', {}, ev.probe_ms ? (ev.probe_ms + ' ' + _('мс')) : '-')
 		]));
 	}
 	return wrapTable(E('table', { 'class': 'hf-mon-table' }, [E('thead', {}, [thead]), tbody]));
@@ -1154,8 +1444,8 @@ function showModal(title, bodyNodes, onConfirm, opts) {
 			E('button', {
 				'class': 'btn cbi-button cbi-button-neutral',
 				'click': function() { document.body.removeChild(backdrop); }
-			}, _('Отмена')),
-			E('button', {
+			}, onConfirm ? _('Отмена') : _('Закрыть')),
+			!onConfirm ? '' : E('button', {
 				'class': 'btn cbi-button cbi-button-apply',
 				'click': function() {
 					// A rejected promise from onConfirm keeps the dialog open
@@ -1201,7 +1491,6 @@ function parseChecklist(data) {
 			return items;
 		}
 	}
-	// global-check: { ok, report: { nft_ok, engine_running, ... } }
 	if (d && d.report && typeof d.report === 'object') {
 		d = Object.assign({}, d.report, {
 			ok: d.ok,
@@ -1209,37 +1498,34 @@ function parseChecklist(data) {
 			errors: d.errors || d.report.errors
 		});
 	}
-	if (d.errors && Array.isArray(d.errors)) {
-		d.errors.forEach(function(e) { items.push({ ok: false, text: String(e) }); });
-	}
 	if (d.ok === true || d.ok === false)
-		items.unshift({ ok: !!d.ok, text: d.message || (d.ok ? 'OK' : 'FAIL') });
-	if (d.engine_running != null)
-		items.push({ ok: !!d.engine_running, text: 'engine: ' + (d.engine_running ? 'running' : 'stopped') });
-	else if (d.singbox_running != null)
-		items.push({ ok: !!d.singbox_running, text: 'engine: ' + (d.singbox_running ? 'running' : 'stopped') });
+		items.push({ ok: !!d.ok, text: d.message || (d.ok ? _('Проверка пройдена') : _('Проверка не пройдена')) });
+	if (d.engine_running != null || d.singbox_running != null) {
+		var run = d.engine_running != null ? d.engine_running : d.singbox_running;
+		items.push({ ok: !!run, text: run ? _('Движок работает') : _('Движок остановлен') });
+	}
 	if (d.nft_ok != null)
-		items.push({ ok: !!d.nft_ok, text: 'nft: ' + (d.nft_ok ? 'OK' : 'FAIL') });
+		items.push({ ok: !!d.nft_ok, text: d.nft_ok ? _('Правила перехвата трафика (nftables) на месте') : _('Правила перехвата трафика (nftables) не найдены') });
 	if (d.fakeip_ok != null)
-		items.push({ ok: !!d.fakeip_ok, text: 'fakeip: ' + (d.fakeip_ok ? 'OK' : 'FAIL') });
+		items.push({ ok: !!d.fakeip_ok, text: d.fakeip_ok ? _('DNS отдаёт fake-IP, домены из списков пойдут в туннель') : _('DNS не отдаёт fake-IP, домены из списков могут идти мимо туннеля') });
 	if (!isNativeEngine(d) && d.clash_ok != null)
-		items.push({ ok: !!d.clash_ok, text: 'Clash API: ' + (d.clash_ok ? 'OK' : 'FAIL') });
+		items.push({ ok: !!d.clash_ok, text: 'Clash API: ' + (d.clash_ok ? _('в порядке') : _('недоступен')) });
 	if (d.active_outbound)
-		items.push({ ok: true, text: 'active: ' + d.active_outbound });
+		items.push({ ok: true, text: _('Активный канал: ') + tagTitle(d.active_outbound, d) });
+	if (d.errors && Array.isArray(d.errors))
+		d.errors.forEach(function(e) { items.push({ ok: false, text: String(e) }); });
 	return items;
 }
 
 function renderChecklist(items) {
 	if (!items.length)
-		return E('p', { 'class': 'hf-mon-empty' }, '-');
-	var ul = E('ul', { 'class': 'hf-mon-checklist' });
-	items.forEach(function(it) {
-		ul.appendChild(E('li', {}, [
-			it.ok ? '✓ ' : '✗ ',
-			it.text
-		]));
-	});
-	return ul;
+		return E('div', { 'class': 'hf-checks__empty' }, '-');
+	return E('ul', { 'class': 'hf-checks' }, items.map(function(it) {
+		return E('li', { 'class': it.ok ? '' : 'hf-checks--bad' }, [
+			E('span', { 'class': 'hf-checks__mark' }, it.ok ? '✓' : '!'),
+			E('span', {}, it.text)
+		]);
+	}));
 }
 
 function notifyRpcResult(title, res) {
@@ -1254,7 +1540,7 @@ function notifyRpcResult(title, res) {
 }
 
 function injectStyles(parent) {
-	parent.appendChild(E('style', { 'type': 'text/css' }, HF_CSS));
+	parent.appendChild(E('style', { 'type': 'text/css' }, HF_CSS + '\n' + HF_PAGE_CSS));
 }
 
 return baseclass.extend({
@@ -1271,7 +1557,8 @@ return baseclass.extend({
 		globalCheck: rpcGlobalCheckLong,
 		listClients: rpcListClients,
 		dhcpLeases: rpcDhcpLeases,
-		metrics: rpcMetrics
+		metrics: rpcMetrics,
+		listRoutes: rpcListRoutes
 	},
 	emptyNode: emptyNode,
 	unwrapData: unwrapData,
@@ -1317,5 +1604,23 @@ return baseclass.extend({
 	parseChecklist: parseChecklist,
 	renderChecklist: renderChecklist,
 	notifyRpcResult: notifyRpcResult,
-	injectStyles: injectStyles
+	injectStyles: injectStyles,
+	protoLabel: protoLabel,
+	parseLink: parseLink,
+	linkFacts: linkFacts,
+	channelNamesFrom: channelNamesFrom,
+	channelTitle: channelTitle,
+	channelParts: channelParts,
+	channelLabelNode: channelLabelNode,
+	setChannelNames: setChannelNames,
+	activeChannelTag: activeChannelTag,
+	tagTitle: tagTitle,
+	policyName: policyName,
+	modeName: modeName,
+	pill: pill,
+	pageHeader: pageHeader,
+	moreMenu: moreMenu,
+	panel: panel,
+	stat: stat,
+	kvList: kvList
 });

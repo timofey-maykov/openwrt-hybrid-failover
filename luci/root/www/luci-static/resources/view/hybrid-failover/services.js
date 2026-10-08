@@ -113,8 +113,11 @@ return view.extend({
 		this.root = E('div', { 'class': 'hfs' });
 		hfui.injectStyles(this.root);
 		this.root.appendChild(E('style', { 'type': 'text/css' }, CSS));
-		this.root.appendChild(E('h2', {}, _('Сервисы и каналы')));
-		this.root.appendChild(E('p', { 'class': 'hfs-intro' }, _('Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через один туннель. Список без привязки идет через пул секции, как раньше: самый быстрый живой канал. Если выбранный канал упал, список временно уходит туда, что указано в колонке «Если канал упал».')));
+		this.root.classList.add('hf-page');
+		this.root.appendChild(hfui.pageHeader({
+			title: _('Сервисы и каналы'),
+			hint: _('Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через один туннель. Список без привязки идет через пул секции, как раньше: самый быстрый живой канал. «Делить по каналам» закрепляет каждый сайт за одним из живых каналов: быстрые получают больше сайтов, а канал намного медленнее лучшего новых сайтов не получает. Видео YouTube, Instagram и Telegram делится по серверам, один ролик целиком идет через один канал. Если выбранный канал упал, список временно уходит туда, что указано в колонке «Если канал упал».')
+		}));
 		if (!this.report.length) {
 			this.root.appendChild(E('div', { 'class': 'hfs-warn' }, _('Нет секций vpn или proxy с каналами. Добавьте секцию на вкладке «Маршрутизация».')));
 			return this.root;
@@ -299,7 +302,7 @@ return view.extend({
 		case 'direct':
 			return E('span', { 'class': 'hfs-now' + (b.channel === 'direct' ? '' : ' hfs-now--warn') }, b.channel === 'direct' ? _('напрямую') : _('канал упал, идет напрямую'));
 		case 'balance':
-			return E('span', { 'class': 'hfs-now' }, _('по всем каналам'));
+			return E('span', { 'class': 'hfs-now' }, _('по быстрым каналам'));
 		case 'block':
 			return E('span', { 'class': 'hfs-now hfs-now--bad' }, _('заблокировано'));
 		}
@@ -330,7 +333,7 @@ return view.extend({
 			sec.channels.forEach(function(c) {
 				opts.push(E('option', { 'value': c.id }, c.name + (c.up === false ? ' ' + _('(недоступен)') : '')));
 			});
-			opts.push(E('option', { 'value': 'balance' }, _('Балансировка по всем')));
+			opts.push(E('option', { 'value': 'balance' }, _('Делить по каналам')));
 			opts.push(E('option', { 'value': 'direct' }, _('Напрямую, без туннеля')));
 			opts.push(E('option', { 'value': 'block' }, _('Блокировать')));
 			if (cur !== 'auto' && !sec.channels.some(function(c) { return c.id === cur; }) && ['balance', 'direct', 'block'].indexOf(cur) < 0)
@@ -444,7 +447,7 @@ return view.extend({
 			existing ? (uci.get(PKG, existing, 'subnets_text') || '') : '');
 		var chOpts = [E('option', { 'value': 'auto' }, _('Пул (самый быстрый)'))].concat(sec.channels.map(function(c) {
 			return E('option', { 'value': c.id }, c.name);
-		}), [E('option', { 'value': 'balance' }, _('Балансировка по всем')), E('option', { 'value': 'direct' }, _('Напрямую'))]);
+		}), [E('option', { 'value': 'balance' }, _('Делить по каналам')), E('option', { 'value': 'direct' }, _('Напрямую'))]);
 		var ch = E('select', { 'class': 'cbi-input-select' }, chOpts);
 		ch.value = l ? (this.stateFor(sec).lists[l.key] || 'auto') : 'auto';
 
