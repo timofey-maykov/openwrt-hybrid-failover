@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -142,6 +143,7 @@ type ApplyOptions struct {
 // recording each step in the state file. It runs in the foreground; see
 // StartBackground for the LuCI path.
 func (c *Client) Apply(ctx context.Context, env *Env, opt ApplyOptions) (err error) {
+	leaveServiceCgroup()
 	st := State{State: "running", From: opt.Installed, PID: os.Getpid(), StartedAt: time.Now().Unix()}
 	step := func(name, msg string) {
 		st.Step, st.Message = name, msg
@@ -228,12 +230,32 @@ func (c *Client) Apply(ctx context.Context, env *Env, opt ApplyOptions) (err err
 			fmt.Printf("  %s: %v %s\n", strings.Join(cmd, " "), rerr, strings.TrimSpace(lastLines(out, 3)))
 		}
 	}
-	if env.installed(ctx, "hybrid-failover-bot") {
-		_, _ = env.run(ctx, "/etc/init.d/hybrid-failover-bot", "restart")
-	}
 	_ = os.RemoveAll(dir)
+	// The bot goes last, after the result is on disk: when the update was
+	// started from the bot, stopping the bot can take this process with it
+	// (procd kills the instance's whole cgroup), and the new bot reports the
+	// outcome it finds in the state file. procd performs the restart itself,
+	// so it completes whatever happens to us.
 	step("done", "installed "+st.To)
+	st.State, st.FinishedAt = "done", time.Now().Unix()
+	_ = c.writeJSON("state.json", st)
+	if env.installed(ctx, "hybrid-failover-bot") {
+		if _, rerr := env.run(ctx, "ubus", "call", "rc", "init", `{"name":"hybrid-failover-bot","action":"restart"}`); rerr != nil {
+			_, _ = env.run(ctx, "/etc/init.d/hybrid-failover-bot", "restart")
+		}
+	}
 	return nil
+}
+
+// cgroupProcs is the root cgroup's process list; a var so tests can point it
+// at a file.
+var cgroupProcs = "/sys/fs/cgroup/cgroup.procs"
+
+// leaveServiceCgroup moves this process to the root cgroup. An update
+// started from the bot or from LuCI runs inside that service's cgroup, and
+// procd kills the whole cgroup when it stops the service, update included.
+func leaveServiceCgroup() {
+	_ = os.WriteFile(cgroupProcs, []byte(strconv.Itoa(os.Getpid())), 0)
 }
 
 func lastLines(s string, n int) string {
