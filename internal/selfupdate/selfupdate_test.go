@@ -262,11 +262,20 @@ func TestApplyRestartsTheBotLastViaProcdAfterRecordingDone(t *testing.T) {
 
 func TestLeaveServiceCgroupWritesOwnPID(t *testing.T) {
 	old := cgroupProcs
-	cgroupProcs = filepath.Join(t.TempDir(), "cgroup.procs")
 	t.Cleanup(func() { cgroupProcs = old })
+	cgroupProcs = filepath.Join(t.TempDir(), "cgroup.procs")
+	if err := os.WriteFile(cgroupProcs, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	leaveServiceCgroup()
 	b, err := os.ReadFile(cgroupProcs)
 	if err != nil || string(b) != strconv.Itoa(os.Getpid()) {
 		t.Fatalf("got %q, %v", string(b), err)
+	}
+	// Without a cgroup file (not Linux, or no cgroup v2) it must do nothing.
+	cgroupProcs = filepath.Join(t.TempDir(), "absent")
+	leaveServiceCgroup()
+	if _, err := os.Stat(cgroupProcs); err == nil {
+		t.Fatal("must not create the file")
 	}
 }

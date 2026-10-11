@@ -255,7 +255,12 @@ var cgroupProcs = "/sys/fs/cgroup/cgroup.procs"
 // started from the bot or from LuCI runs inside that service's cgroup, and
 // procd kills the whole cgroup when it stops the service, update included.
 func leaveServiceCgroup() {
-	_ = os.WriteFile(cgroupProcs, []byte(strconv.Itoa(os.Getpid())), 0)
+	f, err := os.OpenFile(cgroupProcs, os.O_WRONLY, 0) // never created: no cgroup fs, nothing to leave
+	if err != nil {
+		return
+	}
+	_, _ = f.WriteString(strconv.Itoa(os.Getpid()))
+	_ = f.Close()
 }
 
 func lastLines(s string, n int) string {
