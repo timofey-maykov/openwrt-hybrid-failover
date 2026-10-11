@@ -738,7 +738,10 @@ function channelRoleLabel(ch, ctrl) {
 		return _('Группа');
 	if (channelIsActiveReserve(ch, ctrl))
 		return _('Сейчас через него');
-	return _('Резерв');
+	// A proxy is a backup only while a primary VPN is being managed around it
+	// (outage-only / prefer-primary). In a proxy section, or under fastest,
+	// it is a channel like any other.
+	return primaryProbeApplicable(ctrl) ? _('Резерв') : _('Канал');
 }
 
 function channelsReserveSummary(channels, data, probed) {
