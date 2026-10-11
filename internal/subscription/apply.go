@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/channels"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
@@ -70,22 +71,33 @@ func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKe
 type ownedLinks struct {
 	Section string   `json:"section"`
 	Links   []string `json:"links"`
+	// Names are the channel_names entries (id=Name) the refresh wrote, so the
+	// next one replaces them and leaves names given by hand alone.
+	Names []string `json:"names,omitempty"`
 }
 
 func loadOwned(section string) []string {
+	return loadOwnedState(section).Links
+}
+
+func loadOwnedState(section string) ownedLinks {
 	raw, err := os.ReadFile(paths.SubscriptionState)
 	if err != nil {
-		return nil
+		return ownedLinks{}
 	}
 	var st ownedLinks
 	if json.Unmarshal(raw, &st) != nil || st.Section != section {
-		return nil
+		return ownedLinks{}
 	}
-	return st.Links
+	return st
 }
 
 func saveOwned(section string, links []string) {
-	raw, err := json.Marshal(ownedLinks{Section: section, Links: links})
+	saveOwnedState(ownedLinks{Section: section, Links: links, Names: loadOwnedState(section).Names})
+}
+
+func saveOwnedState(st ownedLinks) {
+	raw, err := json.Marshal(st)
 	if err != nil {
 		return
 	}
@@ -138,4 +150,86 @@ func mergeLinks(existing, incoming []string) []string {
 		out = append(out, link)
 	}
 	return out
+}
+
+// ApplyLinks writes the links like ApplyToUCI and names their channels after
+// the panel's server names (channel_names, id=Name). Names the user set by
+// hand stay; names from the previous refresh are replaced.
+func ApplyLinks(uciPath, mainSection string, links []Link, merge bool) (listKey string, err error) {
+	uris := make([]string, 0, len(links))
+	for _, l := range links {
+		uris = append(uris, l.URI)
+	}
+	listKey, err = ApplyToUCI(uciPath, mainSection, uris, merge)
+	if err != nil {
+		return "", err
+	}
+	if err := applyNames(uciPath, mainSection, links); err != nil {
+		return listKey, err
+	}
+	return listKey, nil
+}
+
+func applyNames(uciPath, mainSection string, links []Link) error {
+	pkg, err := uci.Load(uciPath)
+	if err != nil {
+		return err
+	}
+	sec := pkg.Section(mainSection)
+	if sec == nil {
+		return fmt.Errorf("section not found")
+	}
+	st := loadOwnedState(mainSection)
+	final, owned := planNames(sec.GetList("channel_names"), st.Names, links)
+	key := paths.UCIPackage + "." + mainSection + ".channel_names"
+	if _, err := uci.Exec("delete", key); err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
+		return fmt.Errorf("uci delete %s: %w", key, err)
+	}
+	for _, entry := range final {
+		if _, err := uci.Exec("add_list", key+"="+entry); err != nil {
+			return fmt.Errorf("uci add_list %s: %w", key, err)
+		}
+	}
+	if _, err := uci.Exec("commit", paths.UCIPackage); err != nil {
+		return fmt.Errorf("uci commit: %w", err)
+	}
+	st.Section, st.Names = mainSection, owned
+	if st.Links == nil {
+		st.Links = loadOwned(mainSection)
+	}
+	saveOwnedState(st)
+	return nil
+}
+
+// planNames merges the panel's server names into channel_names. Entries the
+// previous refresh wrote (ownedNames) are dropped first; an entry set by hand
+// for the same channel wins over the panel's. It returns the full list to
+// write and the part of it that the refresh now owns.
+func planNames(existing, ownedNames []string, links []Link) (final, owned []string) {
+	kept := dropOwned(existing, ownedNames)
+	manual := map[string]struct{}{}
+	for _, entry := range kept {
+		if id, _, ok := strings.Cut(entry, "="); ok {
+			manual[strings.TrimSpace(id)] = struct{}{}
+		}
+	}
+	final = append([]string(nil), kept...)
+	seen := map[string]struct{}{}
+	for _, l := range links {
+		if l.Name == "" {
+			continue
+		}
+		id := channels.ID(l.URI)
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		if _, ok := manual[id]; ok {
+			continue
+		}
+		entry := id + "=" + l.Name
+		final = append(final, entry)
+		owned = append(owned, entry)
+	}
+	return final, owned
 }
