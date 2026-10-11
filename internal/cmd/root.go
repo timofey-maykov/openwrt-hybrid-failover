@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/clash"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
@@ -374,6 +375,8 @@ func runRPC(args []string) int {
 		return runRPCMetrics()
 	case "ListRoutes", "list_routes":
 		return runRPCListRoutes()
+	case "SubscriptionStatus", "subscription_status":
+		return runRPCSubscriptionStatus()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown rpc method %q\n", method)
 		return 2
@@ -522,21 +525,27 @@ func runSubscriptionRefresh(args []string) int {
 		return 0
 	}
 	f := subscription.NewFetcher()
-	links, err := f.FetchURLs(urls)
+	res, err := f.Fetch(urls)
 	if err != nil {
+		if !*dryRun {
+			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err.Error(), Sources: res.Sources})
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	links := res.Links
 	fmt.Printf("subscription: fetched %d links for section %q\n", len(links), mainSection)
 	if *dryRun {
 		fmt.Println("subscription: dry-run, UCI not modified")
 		return 0
 	}
-	listKey, err := subscription.ApplyToUCI(*uciPath, mainSection, links, *merge)
+	listKey, err := subscription.ApplyLinks(*uciPath, mainSection, links, *merge)
 	if err != nil {
+		_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err.Error(), Sources: res.Sources})
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), OK: true, Sources: res.Sources})
 	fmt.Printf("subscription: wrote %d links to %s.%s\n", len(links), mainSection, listKey)
 	if res, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{UCIPath: *uciPath}); err != nil {
 		fmt.Fprintln(os.Stderr, err)

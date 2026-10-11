@@ -295,6 +295,7 @@ function method_dhcp_leases() {
 		reload: method_call(null, ['reload']),
 		list_update: method_call('ListUpdate', null),
 		subscription_refresh: method_call('SubscriptionRefresh', null),
+		subscription_status: method_call('SubscriptionStatus', null),
 		list_clients: method_call('ListClients', null),
 		delay_history: method_call('DelayHistory', null),
 		backup_download: method_call('BackupDownload', null),

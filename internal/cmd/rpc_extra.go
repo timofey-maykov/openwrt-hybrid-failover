@@ -22,8 +22,10 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/failover"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/netlink"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/partner"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subscription"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -41,12 +43,14 @@ func buildStatusReport(health bool) diag.Report {
 		report = diag.EnrichReport(report, clashURL, mainSection, sec)
 	}
 	schema := ""
+	var settings *uci.Section
 	if pkg, err := uci.Load(paths.UCIConfig); err == nil {
-		if settings := pkg.Section("settings"); settings != nil {
+		if settings = pkg.Section("settings"); settings != nil {
 			schema = settings.Get("config_schema_version", "")
 		}
 	}
 	report.Meta = diag.BuildMeta(schema)
+	report.Meta.PartnerURL = partner.URL(settings)
 	for _, h := range failover.BuildDryRunHints(states) {
 		report.DryRun = append(report.DryRun, diag.DryRunHint{Section: h.Section, Suggestion: h.Suggestion})
 	}
@@ -389,4 +393,39 @@ func runRPCMetrics() int {
 
 func escapeProm(s string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(s, `\`, `\\`), `"`, `\"`)
+}
+
+// subscriptionStatusReport is what the bot and LuCI show about subscriptions:
+// the outcome of the last refresh plus the settings that frame it.
+type subscriptionStatusReport struct {
+	OK         bool                  `json:"ok"`
+	Configured int                   `json:"configured"`
+	Interval   string                `json:"interval"`
+	PartnerURL string                `json:"partner_url,omitempty"`
+	Refreshed  bool                  `json:"refreshed"`
+	UpdatedAt  string                `json:"updated_at,omitempty"`
+	Error      string                `json:"error,omitempty"`
+	Sources    []subscription.Source `json:"sources"`
+}
+
+func runRPCSubscriptionStatus() int {
+	out := subscriptionStatusReport{OK: true, Sources: []subscription.Source{}}
+	var settings *uci.Section
+	if pkg, err := uci.Load(paths.UCIConfig); err == nil {
+		if settings = pkg.Section("settings"); settings != nil {
+			out.Configured = len(settings.GetList("subscription_urls"))
+			out.Interval = settings.Get("subscription_update_interval", "off")
+		}
+	}
+	out.PartnerURL = partner.URL(settings)
+	if st, ok := subscription.ReadStatus(); ok {
+		out.Refreshed = true
+		out.UpdatedAt = st.UpdatedAt.UTC().Format(time.RFC3339)
+		out.Error = st.Error
+		if st.Sources != nil {
+			out.Sources = st.Sources
+		}
+	}
+	emitJSON(out)
+	return 0
 }

@@ -12,6 +12,9 @@ type MetaInfo struct {
 	CoreVersion    string `json:"core_version,omitempty"`
 	SingboxVersion string `json:"singbox_version,omitempty"`
 	UCISchema      string `json:"uci_schema_version,omitempty"`
+	// PartnerURL is where a subscription for this router can be obtained
+	// (settings.partner_url, empty when turned off).
+	PartnerURL string `json:"partner_url,omitempty"`
 }
 
 func BuildMeta(schemaVersion string) MetaInfo {
