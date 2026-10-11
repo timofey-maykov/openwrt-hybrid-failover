@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
+	chanlist "github.com/tmaykov/openwrt-hybrid-failover/internal/channels"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/outbound"
@@ -360,13 +361,13 @@ func nativeVPNChannels(section string, sec *uci.Section, activeOutbound, urltest
 
 	seenAWG := make(map[string]struct{})
 	links := sec.GetList("failover_proxy_links")
+	names := chanlist.Names(sec)
 	for i, link := range links {
 		if skipDuplicateAWG2Link(seenAWG, link) {
 			continue
 		}
 		tag := singbox.PeerTag(section, i+1)
-		display := shortProxyLabel(link) + " (" + tag + ")"
-		ch := nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
+		ch := nativeChannel(tag, channelLabel(names, link, tag), proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
 		applyAWG2ChannelOverlay(&ch, section, sec, tag)
 		channels = append(channels, ch)
 	}
@@ -379,17 +380,26 @@ func nativeProxyURLTestChannels(section string, sec *uci.Section, activeOutbound
 	channels = append(channels, nativeChannel(urltestGroup, "URLTest", "urltest", activeOutbound, urltestMember, urltestGroup, probed, delays[urltestGroup]))
 	seenAWG := make(map[string]struct{})
 	links := sec.GetList("urltest_proxy_links")
+	names := chanlist.Names(sec)
 	for i, link := range links {
 		if skipDuplicateAWG2Link(seenAWG, link) {
 			continue
 		}
 		tag := singbox.PeerTag(section, i+1)
-		display := shortProxyLabel(link) + " (" + tag + ")"
-		ch := nativeChannel(tag, display, proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
+		ch := nativeChannel(tag, channelLabel(names, link, tag), proxyScheme(link), activeOutbound, urltestMember, urltestGroup, probed, delays[tag])
 		applyAWG2ChannelOverlay(&ch, section, sec, tag)
 		channels = append(channels, ch)
 	}
 	return channels
+}
+
+// channelLabel is the display of a link channel: the name the user or the
+// subscription panel gave it (channel_names), else a short form of the link.
+func channelLabel(names map[string]string, link, tag string) string {
+	if n := names[chanlist.ID(link)]; n != "" {
+		return n + " (" + tag + ")"
+	}
+	return shortProxyLabel(link) + " (" + tag + ")"
 }
 
 func overlayReportAWG2(channels []ChannelStatus, section string, sec *uci.Section) {
