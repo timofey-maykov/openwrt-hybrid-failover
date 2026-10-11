@@ -37,7 +37,7 @@
 					"pending_rollback", "switch_proxy", "restore_uci",
 					"list_update", "subscription_refresh", "update_check", "update_apply"
 				],
-				"service": [ "restart" ]
+				"service": [ "restart" ], "rc": [ "init" ]
 			}
 		}
 	}

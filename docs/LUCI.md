@@ -227,7 +227,7 @@ Validate и apply работают с файлом `/etc/config/hybrid-failover`
 | **Проверить pending** | `-mode validate-config`: проверяет pending-конфиг |
 | **Применить** | `-mode apply-config`: проверяет pending, копирует его в `/etc/hybrid-failover-bot.json` и удаляет `.pending` |
 | **Откатить** | `-mode rollback-config`: удаляет `.pending` |
-| **Перезапустить бота** | `service restart hybrid-failover-bot` через ubus |
+| **Перезапустить бота** | `/etc/init.d/hybrid-failover-bot restart` через ubus `rc init`; поднимает бота и тогда, когда он был выключен при загрузке |
 
 Бот читает конфиг только при старте, и **Применить** его не перезапускает. После применения нажмите **Перезапустить бота**, иначе он продолжит работать со старыми настройками.
 
