@@ -123,6 +123,9 @@ return view.extend({
 			return this.root;
 		}
 		this.report.forEach(function(sec) {
+			sec.channels = sec.channels || [];
+			sec.lists = sec.lists || [];
+			sec.bindings = sec.bindings || [];
 			self.root.appendChild(self.renderSection(sec));
 		});
 		return this.root;

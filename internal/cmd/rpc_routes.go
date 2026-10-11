@@ -37,7 +37,12 @@ func buildRoutesReport(pkg *uci.Package, snap engine.RuntimeSnapshot, metrics ch
 		if typ != "vpn" && typ != "proxy" {
 			continue
 		}
-		rs := routesreport.Section{Name: name, Type: typ}
+		rs := routesreport.Section{
+			Name: name, Type: typ,
+			Channels: []routesreport.Channel{},
+			Lists:    []routesreport.List{},
+			Bindings: []routesreport.Binding{},
+		}
 		tags := make(map[string]engine.ChannelRuntime)
 		for _, ch := range snap.Channels {
 			if ch.Section == name {
