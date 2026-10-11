@@ -13,6 +13,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/audit"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/security"
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/watchdog"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 )
 
@@ -63,6 +64,34 @@ func New(api *tgbotapi.BotAPI, auth security.Authorizer, auditLogger *audit.Logg
 // NotifyAdmins sends text to every admin chat (used by the watchdog).
 func (b *Bot) NotifyAdmins(text string) { b.notifyAdmins(text) }
 
+// NotifyAdminsWithButtons sends a notice with keys under it: bot commands
+// (callback data) or links.
+func (b *Bot) NotifyAdminsWithButtons(text string, rows [][]watchdog.Button) {
+	var kb [][]tgbotapi.InlineKeyboardButton
+	for _, r := range rows {
+		var row []tgbotapi.InlineKeyboardButton
+		for _, bt := range r {
+			switch {
+			case bt.URL != "":
+				row = append(row, tgbotapi.NewInlineKeyboardButtonURL(bt.Text, bt.URL))
+			case bt.Data != "" && len(bt.Data) <= maxCallbackData:
+				row = append(row, btn(bt.Text, bt.Data))
+			}
+		}
+		if len(row) > 0 {
+			kb = append(kb, row)
+		}
+	}
+	for _, id := range b.adminIDs {
+		if len(kb) == 0 {
+			b.sendChunks(id, text, nil)
+			continue
+		}
+		k := tgbotapi.NewInlineKeyboardMarkup(kb...)
+		b.sendChunks(id, text, &k)
+	}
+}
+
 func (b *Bot) Run(ctx context.Context) error {
 	b.registerCommands()
 	return b.poll(ctx, b.dispatchUpdate)
@@ -79,6 +108,7 @@ func (b *Bot) registerCommands() {
 		tgbotapi.BotCommand{Command: "system", Description: "Статус, логи, обслуживание"},
 		tgbotapi.BotCommand{Command: "manage", Description: "Управление роутером"},
 		tgbotapi.BotCommand{Command: "watch", Description: "Мониторинг и авточинка"},
+		tgbotapi.BotCommand{Command: "version", Description: "Версия и обновление"},
 		tgbotapi.BotCommand{Command: "health", Description: "Проверить каналы сейчас"},
 		tgbotapi.BotCommand{Command: "help", Description: "Список всех команд"},
 	)
@@ -386,6 +416,9 @@ func (b *Bot) editNavPanel(ctx context.Context, chatID int64, messageID int, nav
 	if nav == "watch_check" {
 		b.editOrReplyWithKeyboard(chatID, messageID, "⏳ Проверяю роутер…", nil)
 	}
+	if nav == "update_check" {
+		b.editOrReplyWithKeyboard(chatID, messageID, "⏳ Спрашиваю GitHub о релизах…", nil)
+	}
 	if nav == "channels_probe" {
 		// Fresh probes take a while; say so instead of leaving a frozen button.
 		b.editOrReplyWithKeyboard(chatID, messageID, "⏳ Проверяю каналы…", nil)
@@ -489,7 +522,7 @@ func (b *Bot) requiresConfirmation(cmd string) bool {
 	case "/param_apply", "/param_rollback", "/failover_apply", "/routing_restart", "/config_apply", "/config_rollback":
 		return true
 	}
-	return cmd == "/repair" || strings.HasPrefix(cmd, "/sub_del ")
+	return cmd == "/repair" || cmd == "/upgrade" || strings.HasPrefix(cmd, "/upgrade ") || strings.HasPrefix(cmd, "/sub_del ")
 }
 
 func (b *Bot) setConfirm(userID int64, cmd string) {

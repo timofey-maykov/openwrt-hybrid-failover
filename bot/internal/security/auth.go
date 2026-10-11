@@ -49,7 +49,7 @@ func isReadOnlyCommand(cmd string) bool {
 	}
 	switch fields[0] {
 	case "/start", "/help", "/panel", "/quick", "/wizard", "/status", "/health",
-		"/channels", "/routes", "/menu", "/watch", "/subs", "/lists", "/settings", "/system", "/history", "/failover_history", "/failover_list",
+		"/channels", "/routes", "/menu", "/watch", "/version", "/upgrade_status", "/subs", "/lists", "/settings", "/system", "/history", "/failover_history", "/failover_list",
 		"/uci_show", "/uci_sections", "/param_list", "/params", "/logs",
 		// Router selection only changes what this user looks at.
 		"/routers", "/use", "/router", "/check_channels", "/clients",

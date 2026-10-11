@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/diag"
 )
 
@@ -32,6 +33,12 @@ type fakeRouter struct {
 	hard      int
 	restartFn func(*fakeRouter, string)
 	logs      string
+
+	sub          routing.SubscriptionStatus
+	subErr       error
+	upd          routing.UpdateCheck
+	updErr       error
+	updateChecks int
 }
 
 func (f *fakeRouter) StatusReport(context.Context) (diag.Report, error) {
@@ -62,6 +69,25 @@ func (f *fakeRouter) HardRestart(context.Context) error {
 
 func (f *fakeRouter) Logs(context.Context, int) (string, error) { return f.logs, nil }
 
+func (f *fakeRouter) SubscriptionStatus(context.Context) (routing.SubscriptionStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.subErr != nil {
+		return routing.SubscriptionStatus{}, f.subErr
+	}
+	return f.sub, nil
+}
+
+func (f *fakeRouter) CheckUpdate(context.Context) (routing.UpdateCheck, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateChecks++
+	if f.updErr != nil {
+		return routing.UpdateCheck{}, f.updErr
+	}
+	return f.upd, nil
+}
+
 func (f *fakeRouter) heal() {
 	f.rep, f.statusErr = okReport(), nil
 }
@@ -79,6 +105,7 @@ func newRig(t *testing.T, cfg Config) *rig {
 	g := &rig{r: &fakeRouter{rep: okReport()}, clock: time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)}
 	g.w = New([]Target{{ID: "r1", Name: "OpenWrt", Router: g.r}}, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	g.w.now = func() time.Time { return g.clock }
+	g.w.started = g.clock
 	g.w.SetNotifier(func(s string) {
 		g.notesM.Lock()
 		g.notes = append(g.notes, s)

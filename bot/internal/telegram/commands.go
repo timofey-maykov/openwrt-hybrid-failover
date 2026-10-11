@@ -531,6 +531,25 @@ func (h CommandHandler) dispatch(ctx context.Context, userID int64, fields []str
 		return "Интервал обновления подписок сохранён (pending)", nil
 	case "/rt":
 		return h.routeByIndex(ctx, rt, fields)
+	case "/version":
+		return h.versionText(ctx, rt)
+	case "/upgrade":
+		// The router id in the argument comes from a release notice; the
+		// command applies to the router it names, else to the selected one.
+		if len(fields) >= 2 {
+			if err := h.mgr.SetSelected(userID, fields[1]); err != nil {
+				return "", err
+			}
+			if rt, err = h.routingFor(userID); err != nil {
+				return "", err
+			}
+		}
+		if err := rt.ApplyUpdate(ctx); err != nil {
+			return "", err
+		}
+		return "Обновление запущено. Когда оно закончится, сервис и бот перезапустятся, и бот напишет об этом.", nil
+	case "/upgrade_status":
+		return h.upgradeStatusText(ctx, rt)
 	case "/config_show":
 		cfg, err := h.store.LoadPending()
 		if err != nil {
@@ -1026,4 +1045,45 @@ func (h CommandHandler) mute(fields []string) (string, error) {
 	}
 	h.wd.Mute(time.Duration(minutes) * time.Minute)
 	return fmt.Sprintf("Уведомления мониторинга выключены на %d мин. Починка продолжает работать.", minutes), nil
+}
+
+func (h CommandHandler) versionText(ctx context.Context, rt routing.Service) (string, error) {
+	res, err := rt.CheckUpdate(ctx)
+	if err != nil {
+		if res.Installed != "" {
+			return "", fmt.Errorf("установлена %s, проверка не удалась: %v", res.Installed, err)
+		}
+		return "", err
+	}
+	if !res.Available {
+		return fmt.Sprintf("Установлена %s, это последняя версия.", res.Installed), nil
+	}
+	out := []string{fmt.Sprintf("Установлена %s, доступна %s.", res.Installed, res.Latest)}
+	if n := strings.TrimSpace(res.Notes); n != "" {
+		out = append(out, "", short(n, 700))
+	}
+	out = append(out, "", "Обновить: /upgrade")
+	return strings.Join(out, "\n"), nil
+}
+
+func (h CommandHandler) upgradeStatusText(ctx context.Context, rt routing.Service) (string, error) {
+	st, err := rt.UpdateStatus(ctx)
+	if err != nil {
+		return "", err
+	}
+	lines := []string{"Установлена " + st.Installed}
+	switch st.State.State {
+	case "running":
+		lines = append(lines, "Обновление идёт: "+st.State.Step)
+	case "done":
+		lines = append(lines, fmt.Sprintf("Последнее обновление: %s → %s, успешно", st.State.From, st.State.To))
+	case "failed":
+		lines = append(lines, fmt.Sprintf("Последнее обновление не удалось: %s", short(st.State.Message, 200)))
+	default:
+		lines = append(lines, "Обновлений не было")
+	}
+	if st.Check != nil && st.Check.Available {
+		lines = append(lines, "Доступна "+st.Check.Latest+": /upgrade")
+	}
+	return strings.Join(lines, "\n"), nil
 }

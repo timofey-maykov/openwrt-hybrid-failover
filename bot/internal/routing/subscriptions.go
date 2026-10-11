@@ -158,3 +158,49 @@ func (s Service) HealthReport(ctx context.Context) (diag.Report, error) {
 	}
 	return r, nil
 }
+
+// SubscriptionSource is one subscription as the last refresh saw it. URL is
+// masked by core.
+type SubscriptionSource struct {
+	URL        string `json:"url"`
+	Title      string `json:"title,omitempty"`
+	SupportURL string `json:"support_url,omitempty"`
+	Expire     int64  `json:"expire,omitempty"`
+	Servers    int    `json:"servers"`
+	Error      string `json:"error,omitempty"`
+}
+
+// SubscriptionStatus is core RPC SubscriptionStatus.
+type SubscriptionStatus struct {
+	Configured int                  `json:"configured"`
+	Interval   string               `json:"interval"`
+	PartnerURL string               `json:"partner_url,omitempty"`
+	Refreshed  bool                 `json:"refreshed"`
+	UpdatedAt  string               `json:"updated_at,omitempty"`
+	Error      string               `json:"error,omitempty"`
+	Sources    []SubscriptionSource `json:"sources"`
+}
+
+func (s Service) SubscriptionStatus(ctx context.Context) (SubscriptionStatus, error) {
+	out, err := s.runner.RunCoreRPC(ctx, "SubscriptionStatus")
+	if err != nil {
+		return SubscriptionStatus{}, err
+	}
+	var st SubscriptionStatus
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		return SubscriptionStatus{}, fmt.Errorf("subscription status: %w", err)
+	}
+	return st, nil
+}
+
+// PartnerURL is where a subscription for the router can be obtained, "" when
+// turned off in settings or unknown (old core).
+func (s Service) PartnerURL(ctx context.Context) string {
+	if st, err := s.SubscriptionStatus(ctx); err == nil {
+		return st.PartnerURL
+	}
+	if rep, err := s.StatusReport(ctx); err == nil {
+		return rep.Meta.PartnerURL
+	}
+	return ""
+}

@@ -126,7 +126,7 @@ func delayText(ms int) string {
 func (h CommandHandler) render(ctx context.Context, userID int64, admin bool, nav string) (screen, bool) {
 	name, arg, _ := strings.Cut(nav, ":")
 	switch name {
-	case "", "main", "service", "failover", "channels", "channels_probe", "subs", "lists", "lst", "settings", "system", "watch", "watch_check":
+	case "", "main", "service", "failover", "channels", "channels_probe", "subs", "lists", "lst", "settings", "system", "watch", "watch_check", "update", "update_check":
 	default:
 		if !isRouterNav(name) {
 			return screen{}, false
@@ -159,6 +159,8 @@ func (h CommandHandler) render(ctx context.Context, userID int64, admin bool, na
 		return h.systemScreen(ctx, rt, admin), true
 	case "watch", "watch_check":
 		return h.watchScreen(ctx, userID, admin, name == "watch_check"), true
+	case "update", "update_check":
+		return h.updateScreen(ctx, rt, admin, name == "update_check"), true
 	default:
 		return h.mainScreen(ctx, userID, rt, admin), true
 	}
@@ -321,15 +323,19 @@ func (h CommandHandler) channelsScreen(ctx context.Context, rt routing.Service, 
 		}
 		switches = append(switches, btn(label, "cmd:/switch "+ch.Name))
 	}
+	var rows []buttonRow
 	if len(rep.Channels) == 0 {
 		lines = append(lines, "Каналы не найдены.")
+		if p := rt.PartnerURL(ctx); p != "" {
+			lines = append(lines, "", "Подписка "+partnerName+" подключается одной ссылкой: экран «Подписки».")
+			rows = append(rows, buttonRow{urlBtn("🛰 Получить подписку "+partnerName, p)})
+		}
 	}
 	if probe {
 		lines = append(lines, "", "Проверено только что.")
 	} else {
 		lines = append(lines, "", "Задержки из последней проверки.")
 	}
-	var rows []buttonRow
 	if admin && len(switches) > 0 {
 		lines = append(lines, "Нажмите на канал, чтобы переключиться на него.")
 		rows = append(rows, pairs(switches)...)
@@ -344,25 +350,50 @@ func (h CommandHandler) subsScreen(ctx context.Context, rt routing.Service, admi
 		return newScreen("📰 Подписки\n\n⚠ "+short(err.Error(), 300), navRow("main"))
 	}
 	n := rt.PendingCount(ctx)
+	st, stErr := rt.SubscriptionStatus(ctx)
 	lines := []string{fmt.Sprintf("📰 Подписки (%d)", len(subs.URLs)), ""}
+	var rows []buttonRow
 	if len(subs.URLs) == 0 {
 		lines = append(lines, "Подписок нет.")
 		if admin {
 			lines = append(lines, "Нажмите «Добавить» и пришлите ссылку.")
 		}
+		if st.PartnerURL != "" {
+			lines = append(lines, "", "Нет своего сервера? "+partnerName+" выдаёт ссылку подписки, которую роутер читает как есть.")
+			rows = append(rows, buttonRow{urlBtn("🛰 Получить подписку "+partnerName, st.PartnerURL)})
+		}
 	}
 	var dels []tgbotapi.InlineKeyboardButton
+	var links []tgbotapi.InlineKeyboardButton
 	for i, u := range subs.URLs {
 		lines = append(lines, fmt.Sprintf("%d. %s", i+1, routing.MaskURL(u)))
+		if stErr == nil && i < len(st.Sources) {
+			lines = append(lines, sourceLines(st.Sources[i])...)
+			if st.Sources[i].SupportURL != "" {
+				links = append(links, urlBtn("💳 "+short(firstNonEmpty(st.Sources[i].Title, "Подписка "+strconv.Itoa(i+1)), 20)+": продлить", st.Sources[i].SupportURL))
+			}
+		}
 		dels = append(dels, btn(fmt.Sprintf("🗑 %d", i+1), fmt.Sprintf("cmd:/sub_del %d", i+1)))
 	}
+	if stErr == nil && len(subs.URLs) > 0 {
+		switch {
+		case st.Error != "":
+			lines = append(lines, "", "⚠ Последнее обновление не удалось: "+short(st.Error, 160))
+		case st.Refreshed:
+			lines = append(lines, "", "Обновлено "+agoRFC(st.UpdatedAt))
+		default:
+			lines = append(lines, "", "Ещё не обновлялись: нажмите «Обновить сейчас».")
+		}
+	}
 	if subs.Interval != "" {
-		lines = append(lines, "", "🔁 Автообновление: каждые "+intervalText(subs.Interval))
+		lines = append(lines, "🔁 Автообновление: каждые "+intervalText(subs.Interval))
 	}
 	lines = append(lines, "Ссылки показаны не полностью: в них секретный токен.")
 	text := strings.Join(lines, "\n") + pendingLine(n)
 
-	var rows []buttonRow
+	for _, l := range links {
+		rows = append(rows, buttonRow{l})
+	}
 	if admin {
 		rows = append(rows, buttonRow{btn("➕ Добавить", "input:sub_add"), btn("🔄 Обновить сейчас", "cmd:/subscription_refresh")})
 		for i := 0; i < len(dels); i += 4 {
@@ -593,6 +624,7 @@ func (h CommandHandler) systemScreen(ctx context.Context, rt routing.Service, ad
 		{btn("📊 Статус", "cmd:/status"), btn("📜 Логи", "cmd:/logs 80")},
 		{btn("🕘 История переключений", "cmd:/history")},
 		{btn("👥 Клиенты", "cmd:/clients"), btn("🛡 Мониторинг", "nav:watch")},
+		{btn("⬆️ Версия и обновление", "nav:update")},
 	}
 	if admin {
 		rows = append(rows,
@@ -646,6 +678,8 @@ func navAfter(cmd string) (string, bool) {
 		return "system", true
 	case "/repair", "/mute", "/unmute":
 		return "watch", true
+	case "/upgrade":
+		return "update", true
 	}
 	return routerNavAfter(f)
 }
@@ -673,6 +707,8 @@ func actionNote(cmd, resp string) string {
 		return ""
 	case "/repair":
 		return "🔧 Сервис перезапущен"
+	case "/upgrade":
+		return "⬆️ Обновление запущено, бот напишет, когда закончит"
 	case "/mute":
 		return "🔕 " + firstLine(resp)
 	case "/unmute":
@@ -829,5 +865,117 @@ func (h CommandHandler) watchScreen(ctx context.Context, userID int64, admin, ch
 		}
 	}
 	rows = append(rows, navRow("main"))
+	return newScreen(strings.Join(lines, "\n"), rows...)
+}
+
+// partnerName is how the subscription provider is called in the screens.
+const partnerName = "PulseVPN"
+
+func urlBtn(label, u string) tgbotapi.InlineKeyboardButton {
+	return tgbotapi.NewInlineKeyboardButtonURL(label, u)
+}
+
+func firstNonEmpty(a, b string) string {
+	if strings.TrimSpace(a) != "" {
+		return a
+	}
+	return b
+}
+
+// sourceLines describes one subscription under its masked URL.
+func sourceLines(src routing.SubscriptionSource) []string {
+	var parts []string
+	if src.Title != "" {
+		parts = append(parts, src.Title)
+	}
+	if src.Servers > 0 {
+		parts = append(parts, fmt.Sprintf("серверов: %d", src.Servers))
+	}
+	if src.Expire > 0 {
+		exp := time.Unix(src.Expire, 0)
+		left := time.Until(exp)
+		switch {
+		case left <= 0:
+			parts = append(parts, "⛔ закончилась "+exp.Local().Format("02.01.2006"))
+		case left < 3*24*time.Hour:
+			parts = append(parts, fmt.Sprintf("⏳ до %s (%d дн.)", exp.Local().Format("02.01.2006"), int(left.Hours()/24)))
+		default:
+			parts = append(parts, fmt.Sprintf("до %s (%d дн.)", exp.Local().Format("02.01.2006"), int(left.Hours()/24)))
+		}
+	}
+	var out []string
+	if len(parts) > 0 {
+		out = append(out, "   "+strings.Join(parts, " · "))
+	}
+	if src.Error != "" {
+		out = append(out, "   ⚠ "+short(src.Error, 120))
+	}
+	return out
+}
+
+func agoRFC(ts string) string {
+	t, err := time.Parse(time.RFC3339, ts)
+	if err != nil {
+		return ts
+	}
+	return ago(t)
+}
+
+func (h CommandHandler) updateScreen(ctx context.Context, rt routing.Service, admin, check bool) screen {
+	lines := []string{"⬆️ Версия и обновление", ""}
+	var rows []buttonRow
+	var chk *routing.UpdateCheck
+	installed := ""
+	if check {
+		res, err := rt.CheckUpdate(ctx)
+		if err != nil {
+			lines = append(lines, "⚠ Проверка не удалась: "+short(err.Error(), 200))
+		}
+		if res.Installed != "" {
+			chk, installed = &res, res.Installed
+		}
+	}
+	st, err := rt.UpdateStatus(ctx)
+	if err == nil {
+		if installed == "" {
+			installed = st.Installed
+		}
+		if chk == nil {
+			chk = st.Check
+		}
+	}
+	if installed != "" {
+		lines = append(lines, "Установлена: "+installed)
+	}
+	switch {
+	case chk == nil:
+		lines = append(lines, "Проверка релизов ещё не выполнялась.")
+	case chk.Error != "":
+		lines = append(lines, "⚠ "+short(chk.Error, 200))
+	case chk.Available:
+		lines = append(lines, "Доступна: "+chk.Latest)
+		if n := strings.TrimSpace(chk.Notes); n != "" {
+			lines = append(lines, "", short(n, 600))
+		}
+		if admin {
+			rows = append(rows, buttonRow{btn("⬆️ Обновить до "+chk.Latest, "cmd:/upgrade")})
+		}
+		if chk.URL != "" {
+			rows = append(rows, buttonRow{urlBtn("📝 Описание релиза", chk.URL)})
+		}
+	default:
+		lines = append(lines, "Это последняя версия.")
+	}
+	if err == nil {
+		switch st.State.State {
+		case "running":
+			lines = append(lines, "", "⏳ Обновление идёт: "+st.State.Step)
+		case "failed":
+			lines = append(lines, "", "⚠ Последнее обновление не удалось: "+short(st.State.Message, 200))
+		case "done":
+			lines = append(lines, "", fmt.Sprintf("Последнее обновление: %s → %s", st.State.From, st.State.To))
+		}
+	}
+	rows = append(rows, buttonRow{btn("🔄 Проверить сейчас", "nav:update_check")}, navRow("system"))
 	return newScreen(strings.Join(lines, "\n"), rows...)
 }

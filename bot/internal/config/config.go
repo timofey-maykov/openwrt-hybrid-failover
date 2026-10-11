@@ -36,6 +36,11 @@ type Config struct {
 	WatchdogEnabled         *bool `json:"watchdog_enabled,omitempty"`
 	WatchdogAutoRepair      *bool `json:"watchdog_auto_repair,omitempty"`
 	WatchdogIntervalSeconds int   `json:"watchdog_interval_seconds,omitempty"`
+
+	// Release checks: the bot asks core for new releases on a timer and
+	// offers to install one. On by default, once a day.
+	UpdateCheckEnabled       *bool `json:"update_check_enabled,omitempty"`
+	UpdateCheckIntervalHours int   `json:"update_check_interval_hours,omitempty"`
 }
 
 func (c Config) WatchdogOn() bool      { return c.WatchdogEnabled == nil || *c.WatchdogEnabled }
@@ -202,4 +207,19 @@ func (r RouterConfig) validate(index int) error {
 		return fmt.Errorf("%s (%s): identity_file is required for remote router", label, r.ID)
 	}
 	return nil
+}
+
+// UpdateCheckOn reports whether the bot looks for new releases on its own.
+func (c Config) UpdateCheckOn() bool { return c.UpdateCheckEnabled == nil || *c.UpdateCheckEnabled }
+
+// UpdateCheckInterval is how often it looks; at least one hour, a day by default.
+func (c Config) UpdateCheckInterval() time.Duration {
+	h := c.UpdateCheckIntervalHours
+	if h <= 0 {
+		h = 24
+	}
+	if h < 1 {
+		h = 1
+	}
+	return time.Duration(h) * time.Hour
 }

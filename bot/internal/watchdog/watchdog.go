@@ -25,6 +25,8 @@ type Router interface {
 	Restart(ctx context.Context) error
 	HardRestart(ctx context.Context) error
 	Logs(ctx context.Context, lines int) (string, error)
+	SubscriptionStatus(ctx context.Context) (routing.SubscriptionStatus, error)
+	CheckUpdate(ctx context.Context) (routing.UpdateCheck, error)
 }
 
 // Target is one router under watch.
@@ -48,6 +50,8 @@ type Config struct {
 	RepairWait time.Duration
 	// Renotify repeats a "still broken" notice this often.
 	Renotify time.Duration
+	// UpdateInterval is how often to look for a new release; 0 turns it off.
+	UpdateInterval time.Duration
 }
 
 func (c Config) withDefaults() Config {
@@ -154,15 +158,19 @@ type target struct {
 	problemTexts []string
 	last         *Incident
 	busy         bool
+	subs         subscriptionState
+	upd          updateState
 }
 
 type Watchdog struct {
-	cfg  Config
-	log  *slog.Logger
-	now  func() time.Time
-	mu   sync.Mutex
-	list []*target
-	send func(string)
+	cfg      Config
+	log      *slog.Logger
+	now      func() time.Time
+	mu       sync.Mutex
+	list     []*target
+	send     func(string)
+	sendRich func(string, [][]Button)
+	started  time.Time
 
 	mutedUntil time.Time
 }
@@ -172,6 +180,7 @@ func New(targets []Target, cfg Config, log *slog.Logger) *Watchdog {
 	if w.log == nil {
 		w.log = slog.Default()
 	}
+	w.started = w.now()
 	for _, t := range targets {
 		w.list = append(w.list, &target{Target: t})
 	}
@@ -242,6 +251,8 @@ func (w *Watchdog) Tick(ctx context.Context) {
 			return
 		}
 		w.check(ctx, t)
+		w.checkSubscriptions(ctx, t)
+		w.checkUpdates(ctx, t)
 	}
 }
 

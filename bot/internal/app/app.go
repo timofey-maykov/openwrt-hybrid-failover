@@ -47,7 +47,11 @@ func Run(ctx context.Context, configPath string) error {
 		for _, inst := range mgr.List() {
 			targets = append(targets, watchdog.Target{ID: inst.ID, Name: inst.Name, Router: inst.Service})
 		}
-		wd = watchdog.New(targets, watchdog.Config{Interval: cfg.WatchdogInterval(), AutoRepair: cfg.WatchdogRepairs()}, logger)
+		wcfg := watchdog.Config{Interval: cfg.WatchdogInterval(), AutoRepair: cfg.WatchdogRepairs()}
+		if cfg.UpdateCheckOn() {
+			wcfg.UpdateInterval = cfg.UpdateCheckInterval()
+		}
+		wd = watchdog.New(targets, wcfg, logger)
 		handler = handler.WithWatchdog(wd)
 	}
 	auth := security.NewAuthorizer(cfg.AdminIDs, cfg.ViewerIDs)
@@ -67,6 +71,7 @@ func Run(ctx context.Context, configPath string) error {
 	bot.SetIdentity(identity, cfg.AdminIDs)
 	if wd != nil {
 		wd.SetNotifier(bot.NotifyAdmins)
+		wd.SetRichNotifier(bot.NotifyAdminsWithButtons)
 		go wd.Run(ctx)
 		logger.Info("watchdog started", "interval", cfg.WatchdogInterval().String(), "auto_repair", cfg.WatchdogRepairs())
 	}
@@ -74,6 +79,7 @@ func Run(ctx context.Context, configPath string) error {
 		logger.Warn("config", "detail", w)
 	}
 	logger.Info("bot started", "routers", len(mgr.List()))
+	go announceFinishedUpdate(ctx, mgr, bot.NotifyAdmins)
 	return bot.Run(ctx)
 }
 
@@ -120,4 +126,29 @@ func Exec(ctx context.Context, configPath string, userID int64, cmd string) (str
 		return fmt.Sprintf("%s %d bytes", name, len(data)), nil
 	}
 	return h.Handle(ctx, userID, cmd)
+}
+
+// announceFinishedUpdate tells the admins when the bot comes up right after
+// an update: the update restarts the bot, so the "done" message has to come
+// from the new one.
+func announceFinishedUpdate(ctx context.Context, mgr *routers.Manager, notify func(string)) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(5 * time.Second):
+	}
+	for _, inst := range mgr.List() {
+		cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		st, err := inst.Service.UpdateStatus(cctx)
+		cancel()
+		if err != nil || st.State.FinishedAt == 0 || time.Since(time.Unix(st.State.FinishedAt, 0)) > 15*time.Minute {
+			continue
+		}
+		switch st.State.State {
+		case "done":
+			notify(fmt.Sprintf("✅ %s: Hybrid Failover обновлён %s → %s.", inst.Name, st.State.From, st.State.To))
+		case "failed":
+			notify(fmt.Sprintf("⚠ %s: обновление не удалось: %s\nСтатус: /upgrade_status", inst.Name, st.State.Message))
+		}
+	}
 }

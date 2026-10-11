@@ -53,7 +53,7 @@ func needsConfirm(fields []string) bool {
 	}
 	switch fields[0] {
 	case "/reboot", "/ifdown", "/wifi_off", "/fw_restart", "/portfwd_add", "/portfwd_del",
-		"/update_apply", "/apk_upgrade", "/backup", "/sh":
+		"/update_apply", "/apk_upgrade", "/backup", "/sh", "/upgrade":
 		return true
 	case "/service":
 		if len(fields) >= 3 {
@@ -73,6 +73,8 @@ func confirmPrompt(text string) string {
 	f := strings.Fields(text)
 	var what string
 	switch f[0] {
+	case "/upgrade":
+		what = "Hybrid Failover обновится до последнего релиза: пакеты поставятся, затем сервис и бот перезапустятся, интернет прервётся на несколько секунд. Бот напишет, когда закончит."
 	case "/reboot":
 		what = "Роутер перезагрузится, сеть пропадёт примерно на минуту."
 	case "/ifdown":
