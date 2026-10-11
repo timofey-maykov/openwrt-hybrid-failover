@@ -225,7 +225,7 @@ This tab configures the bot (package `hybrid-failover-bot`). The page has four p
 | **Проверить pending** (Validate pending) | `-mode validate-config`: validates the pending config |
 | **Применить** (Apply) | `-mode apply-config`: validates pending, copies it over `/etc/hybrid-failover-bot.json` and deletes `.pending` |
 | **Откатить** (Roll back) | `-mode rollback-config`: deletes `.pending` |
-| **Перезапустить бота** (Restart bot) | `service restart hybrid-failover-bot` over ubus |
+| **Перезапустить бота** (Restart bot) | `/etc/init.d/hybrid-failover-bot restart` over ubus `rc init`; brings the bot up also when it was off at boot |
 
 The bot reads its config only at startup, and **Применить** does not restart it. Press **Перезапустить бота** after applying, or the bot keeps running with the old settings.
 

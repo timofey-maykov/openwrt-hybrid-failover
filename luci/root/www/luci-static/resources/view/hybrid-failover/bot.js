@@ -13,11 +13,17 @@ var callServiceList = rpc.declare({
 	params: [ 'name' ]
 });
 
-var callServiceRestart = rpc.declare({
-	object: 'service',
-	method: 'restart',
-	params: [ 'name' ]
+// rc init runs the init script. ubus service restart only restarts running
+// instances, so a bot that was off at boot (no instance) never came up.
+var callRcInit = rpc.declare({
+	object: 'rc',
+	method: 'init',
+	params: [ 'name', 'action' ]
 });
+
+function restartBot() {
+	return callRcInit(BOT_SERVICE, 'restart');
+}
 
 var BOT_SERVICE = 'hybrid-failover-bot';
 
@@ -118,7 +124,7 @@ return view.extend({
 		return chain.then(function() {
 			return self.exec([ '-mode', 'apply-config' ]);
 		}).then(function() {
-			return callServiceRestart(BOT_SERVICE);
+			return restartBot();
 		}).then(function() {
 			document.querySelectorAll('[data-initial]').forEach(function(el) {
 				el.setAttribute('data-initial', el.type === 'checkbox' ? String(el.checked) : el.value);
@@ -186,7 +192,7 @@ return view.extend({
 				E('button', {
 					'class': 'btn cbi-button cbi-button-neutral',
 					'click': ui.createHandlerFn(this, function() {
-						return callServiceRestart(BOT_SERVICE).then(function() {
+						return restartBot().then(function() {
 							self.header.setResult(_('Бот перезапущен.'), true);
 							return self.refreshStatus();
 						});
