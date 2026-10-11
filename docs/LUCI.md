@@ -216,7 +216,7 @@ Validate и apply работают с файлом `/etc/config/hybrid-failover`
 
 **Статус сервиса.** Состояние службы `hybrid-failover-bot` (running с PID или stopped) и кнопка **Обновить**.
 
-**Hybrid Failover Bot: JSON-конфиг.** Форма для `/etc/hybrid-failover-bot.json`: токен, "Имя роутера (в уведомлениях и панели)", ID администраторов, ID только для чтения (`viewer_ids`), политика failover, URL Clash API, скрипт init.d, пути к логам, таймаут проверки, алерты failover (true/false) и их интервал в секундах. Пустое имя роутера означает hostname. URL Clash API нужен только старым установкам на sing-box. Список `routers` для управления несколькими роутерами в форме не редактируется, его правят в JSON вручную.
+**Hybrid Failover Bot: JSON-конфиг.** Форма для `/etc/hybrid-failover-bot.json`: токен, "Имя роутера (в уведомлениях и панели)", ID администраторов, ID только для чтения (`viewer_ids`), политика failover, URL Clash API, скрипт init.d, пути к логам, таймаут проверки, алерты failover (true/false) и их интервал в секундах. Пустое имя роутера означает hostname. URL Clash API нужен только старым установкам на sing-box. Списка `routers`, поля `allow_shell_ids` и ключей `watchdog_*` в форме нет, их правят в JSON вручную.
 
 Кнопка **Сохранить в pending** по одному записывает поля через `hybrid-failover-bot -mode set-pending` в файл `/etc/hybrid-failover-bot.json.pending`. Рабочий конфиг при этом не меняется.
 

@@ -28,6 +28,7 @@
 | `disable_lan_ipv6` | `0` / `1` | `1` | Выключает RA и DHCPv6 на LAN и ставит `filter_aaaa` в dnsmasq. Tproxy работает только с IPv4, без этого Meta и Telegram могут идти мимо прокси по IPv6. `0` возвращает сохранённые настройки LAN |
 | `dont_touch_dhcp` | `0` / `1` | `0` | `1` оставляет dnsmasq как есть, без перенаправления DNS на `127.0.0.42`. Без этого перенаправления FakeIP у клиентов LAN не работает, dnsmasq придётся настроить вручную |
 | `source_network_interfaces` | string | `br-lan` | Входящие интерфейсы для tproxy и перехвата DNS, через пробел. Для моста `br-*` добавляются и его порты. Опции нет в шаблоне и в LuCI |
+| `source_docker` | `0` / `1` | `1` | Трафик Docker-мостов (`docker0` и `br-<hex>`) перехватывается как трафик LAN-клиентов, hotplug добавляет новые мосты сам. `0` выключает. Опции нет в шаблоне и в LuCI |
 | `main_section` | string | `glob` | Основная секция. Её показывают `status` и `health`, в неё пишет `subscription-refresh`, через неё качаются списки, если `download_lists_via_proxy_section` пуст |
 | `update_interval` | `1h` / `3h` / `12h` / `1d` / `3d` | `1d` | Период cron для `hybrid-failover list-update`. Другие значения дают ошибку. Cron ставится, только если хотя бы у одной секции есть списки |
 | `download_lists_via_proxy` | `0` / `1` | `0` | `1` качает community-списки через секцию. Engine поднимает для этого HTTP-прокси на `127.0.0.1:1610`. В шаблоне стоит `1` |

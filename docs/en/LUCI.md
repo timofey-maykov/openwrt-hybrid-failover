@@ -214,7 +214,7 @@ This tab configures the bot (package `hybrid-failover-bot`). The page has four p
 
 **Статус сервиса** (Service status). State of the `hybrid-failover-bot` service (running with PID, or stopped) and an **Обновить** button.
 
-**Hybrid Failover Bot: JSON-конфиг** (JSON config). A form for `/etc/hybrid-failover-bot.json`. It has the token, "Имя роутера (в уведомлениях и панели)" (Router name, in notifications and the panel), admin IDs, read-only IDs (`viewer_ids`), failover policy, Clash API URL, init.d script, log paths, probe timeout, failover alerts (true/false) and their interval in seconds. An empty router name means the hostname. The Clash API URL matters only for old sing-box installs. The `routers` list for managing several routers is not in the form, edit it in the JSON by hand.
+**Hybrid Failover Bot: JSON-конфиг** (JSON config). A form for `/etc/hybrid-failover-bot.json`. It has the token, "Имя роутера (в уведомлениях и панели)" (Router name, in notifications and the panel), admin IDs, read-only IDs (`viewer_ids`), failover policy, Clash API URL, init.d script, log paths, probe timeout, failover alerts (true/false) and their interval in seconds. An empty router name means the hostname. The Clash API URL matters only for old sing-box installs. The `routers` list, `allow_shell_ids` and the `watchdog_*` keys are not in the form, edit them in the JSON by hand.
 
 **Сохранить в pending** (Save to pending) writes the fields one by one with `hybrid-failover-bot -mode set-pending` into `/etc/hybrid-failover-bot.json.pending`. The live config does not change.
 
