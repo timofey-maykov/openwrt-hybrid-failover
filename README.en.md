@@ -2,7 +2,7 @@
 
 English | [Русский](README.md)
 
-Routing for OpenWrt with automatic failover. The primary path runs through a VPN (AmneziaWG). When it goes down, traffic moves to backup proxies and comes back once the VPN recovers. Devices on the network need no configuration.
+Routing for OpenWrt with several ways out: a VPN interface (AmneziaWG) and proxies from `vless://`, `ss://`, `hysteria2://` and other links. Channels are probed all the time. The engine keeps traffic on a live channel by the policy you pick: switch only when the primary is down, return to the primary once it is back, or always use the fastest one. Individual services can be pinned to a channel of their own, sent direct or blocked. Devices on the network need no setup.
 
 Everything runs inside one Go binary on the router. No external sing-box, jq or python is needed. You manage it from LuCI or from Telegram.
 
