@@ -61,6 +61,8 @@ AmneziaWG needs `kmod-amneziawg` and `amneziawg-tools` built for your OpenWrt ve
 
 Links can be added from LuCI or from the Telegram bot. The core validates them on apply.
 
+Panel subscriptions work too: give the router the subscription link once and it fetches the servers, their names and the expiry itself and refreshes the list on a schedule. If you have no server of your own, [PulseVPN](https://t.me/vpnpulsemain_bot?start=router) hands out subscriptions with ready AmneziaWG servers: paste the link from its bot on the Subscriptions tab in LuCI or the Subscriptions screen in the Telegram bot.
+
 ## Telegram bot
 
 The bot runs on the router and controls it through the core. Get a token from [@BotFather](https://t.me/BotFather) and put it into `/etc/hybrid-failover-bot.json` together with `admin_ids`. Then enable the service:

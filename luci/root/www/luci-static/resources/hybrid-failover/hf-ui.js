@@ -804,8 +804,7 @@ function buildChannelsOverview(channels, data, probed, opts) {
 	if (!channels || !channels.length) {
 		return E('div', { 'class': 'hf-ent-card hf-ent-channels' }, [
 			head,
-			E('p', { 'class': 'hf-mon-empty' },
-				_('Каналов нет. Добавьте ссылки на странице «Маршрутизация».'))
+			noChannelsNode(data)
 		]);
 	}
 
@@ -1318,9 +1317,21 @@ function buildFailoverPanels(data, sectionFilter) {
 	]);
 }
 
+// noChannelsNode is the empty state of the channel views: how to add links,
+// and where a subscription can be obtained when core names a place.
+function noChannelsNode(data) {
+	var partner = data && data.meta && data.meta.partner_url;
+	var p = E('p', { 'class': 'hf-mon-empty' }, [ _('Каналов нет. Добавьте ссылки на странице «Маршрутизация».') ]);
+	if (partner)
+		p.appendChild(E('span', {}, [ ' ', _('Нет своего сервера?'), ' ',
+			E('a', { 'href': partner, 'target': '_blank', 'rel': 'noopener' }, _('Подписка PulseVPN')),
+			' ', _('подключается одной ссылкой на вкладке «Подписки».') ]));
+	return p;
+}
+
 function buildChannelsTable(channels, probed, serverDelayData, nativeEngine, data) {
 	if (!channels || !channels.length)
-		return E('p', { 'class': 'hf-mon-empty' }, _('Каналов нет. Добавьте ссылки на странице «Маршрутизация».'));
+		return noChannelsNode(data);
 
 	var ctrl = controllerForSection(data, data && data.failover && data.failover.section);
 	var maxMs = maxChannelDelay(channels);

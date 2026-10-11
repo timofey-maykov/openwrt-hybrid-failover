@@ -45,6 +45,8 @@ The config file is `/etc/hybrid-failover-bot.json`. The package ships a single-r
 | `watchdog_enabled` | `true` | router monitoring, see "Monitoring and self-repair" |
 | `watchdog_auto_repair` | `true` | let the bot restart the service on a failure |
 | `watchdog_interval_seconds` | `30` | how often to check the routers, under 10 becomes 30 |
+| `update_check_enabled` | `true` | ask core about a new release once a day and offer it, see "Updates" |
+| `update_check_interval_hours` | `24` | how often to check for releases, at least 1 |
 
 If `main_section` does not exist in the local router's UCI, the bot falls back to `hybrid-failover.settings.main_section` (default `glob`) and logs a warning.
 
@@ -80,9 +82,15 @@ Only `admin_ids` get these messages. The `/watch` screen (the 🛡 Monitoring bu
 
 If the bot itself or the whole router goes down, nobody is left to write: procd restarts the bot, and only a bot on another device can report a router that is completely off.
 
+The same watchdog keeps an eye on subscriptions: when one ends within three days, has ended or failed to refresh, the admins get a message with a "Renew or ask" button (the subscription's `Support-Url`, else `partner_url`) and a button to refresh the subscriptions. While the situation lasts, the reminder repeats once a day.
+
+### Updates
+
+Once a day (`update_check_interval_hours`) the bot asks core whether a new release is out (`rpc UpdateCheck`). When one is, the admins get a message with the version, the start of the release notes, an "⬆️ Update now" button and a link to the notes. Each version is offered once. The button asks for confirmation, then core installs the packages and restarts the service and the bot; after the restart the new bot reports how it went. The same by hand: `/version` shows the installed and the available version, `/upgrade` updates, `/upgrade_status` shows the progress and the outcome of the last update. The "Version and update" screen is under "System". `update_check_enabled: false` turns the automatic check off, the commands stay.
+
 ### Access
 
-Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, the screens `/menu`, `/subs`, `/lists`, `/settings`, `/system`, `/manage`, `/watch`, the read-only router state commands `/sysinfo`, `/wan`, `/devices`, `/wifi`, `/syslog`, `/dmesg`, `/services`, `/portfwd`, `/slots`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
+Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, `/version`, `/upgrade_status`, the screens `/menu`, `/subs`, `/lists`, `/settings`, `/system`, `/manage`, `/watch`, the read-only router state commands `/sysinfo`, `/wan`, `/devices`, `/wifi`, `/syslog`, `/dmesg`, `/services`, `/portfwd`, `/slots`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
 
 
 ## Several routers
@@ -176,11 +184,19 @@ The `/subs` screen shows the `settings.subscription_urls` list and the `settings
 
 Adding, removing and the interval go to pending and are applied with the "Apply" button or `/param_apply`. The "Refresh now" button runs the refresh right away.
 
+Under every link the screen shows what the panel reported at the last refresh: its title, the number of servers, the expiry with days left, and the reason when it failed (for example that the subscription is not active). When the panel sends a `Support-Url`, a button to renew or ask appears. Servers from a subscription get the names the panel gave them as channel names. With no subscriptions the screen says where a subscription for the router can be obtained (`settings.partner_url` in the core UCI, `off` hides it).
+
 **Monitoring**
 
 - `/watch` opens the monitoring screen, see "Monitoring and self-repair".
 - `/repair` restarts the service on the selected router, with confirmation.
 - `/mute [minutes]` silences monitoring notices for that long (60 minutes by default, 1440 at most), `/unmute` turns them back on.
+
+**Updates**
+
+- `/version` shows the installed version and checks for a new one.
+- `/upgrade [router]` updates Hybrid Failover to the latest release, with confirmation. The router is named when there are several; the button in the notice fills it in.
+- `/upgrade_status` shows the progress and the outcome of the last update.
 
 **Failover**
 
@@ -243,7 +259,7 @@ Router commands that could cut you off, overwrite settings or send secrets out a
 
 The bot token and passwords are cut from the bot log, the audit log and the output of `/syslog`, `/dmesg` and `/sh`, because the Telegram client puts the token into its error text. Subscription and proxy links (`https://`, `vless://`, `ss://` and the rest) are shown in every bot reply without credentials or tail, `/uci_show` included.
 
-UCI changes land in pending first, where `/param_preview` shows them before you apply or roll them back. The `/param_apply`, `/param_rollback`, `/failover_apply`, `/routing_restart`, `/config_apply`, `/config_rollback`, `/repair` buttons and subscription removal (`/sub_del`) ask for confirmation, which stays valid for 30 seconds.
+UCI changes land in pending first, where `/param_preview` shows them before you apply or roll them back. The `/param_apply`, `/param_rollback`, `/failover_apply`, `/routing_restart`, `/config_apply`, `/config_rollback`, `/repair`, `/upgrade` buttons and subscription removal (`/sub_del`) ask for confirmation, which stays valid for 30 seconds.
 
 ## Timeouts and long replies
 

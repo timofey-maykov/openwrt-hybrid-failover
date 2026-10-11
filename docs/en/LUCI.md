@@ -106,7 +106,7 @@ The standard LuCI buttons at the bottom of the page ("Сохранить" and "�
 
 Validate and apply work on the file `/etc/config/hybrid-failover`. When the LuCI form saves, the edits go into LuCI's list of unapplied changes (the counter in the LuCI header). They reach the file when you apply them through that counter, and procd then runs `hybrid-failover reload` by itself.
 
-The same block has **Обновить community lists** (Update community lists), **Обновить подписки** (Refresh subscriptions) and **Дублировать секцию...** (Duplicate section). Duplicate writes the copy into UCI right away (with `uci commit`) and reloads the page.
+On the Subscriptions tab, under the list of links, **Состояние подписок** (Subscription status) shows what the panel reported at the last refresh (title, number of servers, expiry with days left, the reason of a failure) and a link to renew when the panel sent one. With no subscriptions it says where a subscription for the router can be obtained (`settings.partner_url`). Servers from a subscription appear among the channels under their own names. The same block has **Обновить community lists** (Update community lists), **Обновить подписки** (Refresh subscriptions) and **Дублировать секцию...** (Duplicate section). Duplicate writes the copy into UCI right away (with `uci commit`) and reloads the page.
 
 All UCI options are described in [UCI.md](UCI.md).
 
