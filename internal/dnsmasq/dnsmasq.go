@@ -212,18 +212,23 @@ func resolvNeedsFix() bool {
 func lanIPAddress() string {
 	out, err := exec.Command("uci", "-q", "get", "network.lan.ipaddr").CombinedOutput()
 	if err == nil {
-		if ip := strings.TrimSpace(string(out)); ip != "" && ip != "127.0.0.1" {
+		if ip := stripCIDR(string(out)); ip != "" && ip != "127.0.0.1" {
 			return ip
 		}
 	}
 	if pkg, err := uci.Load("/etc/config/network"); err == nil {
 		if sec := pkg.Section("lan"); sec != nil {
-			if ip := strings.TrimSpace(sec.Get("ipaddr", "")); ip != "" && ip != "127.0.0.1" {
+			if ip := stripCIDR(sec.Get("ipaddr", "")); ip != "" && ip != "127.0.0.1" {
 				return ip
 			}
 		}
 	}
 	return ""
+}
+
+// stripCIDR turns "192.168.1.1/24" (the OpenWrt 25.12 default) into "192.168.1.1".
+func stripCIDR(addr string) string {
+	return strings.TrimSpace(strings.Split(strings.TrimSpace(addr), "/")[0])
 }
 
 // RestoreApplyTempPath returns the temp file path used during Restore.

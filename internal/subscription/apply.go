@@ -50,7 +50,7 @@ func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKe
 		finalLinks = mergeLinks(kept, links)
 	}
 
-	if _, err := uci.Exec("delete", uciKey); err != nil && !strings.Contains(err.Error(), "Not found") {
+	if _, err := uci.Exec("delete", uciKey); err != nil && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 		return "", fmt.Errorf("uci delete %s: %w", uciKey, err)
 	}
 	for _, link := range finalLinks {

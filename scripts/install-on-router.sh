@@ -168,7 +168,7 @@ pkg_is_installed() {
 	_pkg="$1"
 	_pm="$(pkg_manager)"
 	case "$_pm" in
-		apk) apk info -e "$_pkg" 2>/dev/null | grep -q "^${_pkg}-" ;;
+		apk) apk info -e "$_pkg" >/dev/null 2>&1 ;;
 		opkg) opkg list-installed 2>/dev/null | grep -q "^${_pkg} " ;;
 		*) return 1 ;;
 	esac
@@ -230,8 +230,18 @@ install_deps() {
 	pkg_update
 	for pkg in curl ca-bundle wget; do
 		pkg_is_installed "$pkg" && continue
+		# On apk systems the wget package is wget-nossl, which breaks https downloads.
+		# uclient-fetch from the base image is enough once curl is there.
+		[ "$pkg" = wget ] && [ "$_pm" = apk ] && continue
 		pkg_install_named "$pkg" || warn "не удалось установить $pkg"
 	done
+	# nft tproxy rules need these kernel modules; stock images do not always ship them.
+	if [ "$_pm" = apk ] || [ "$_pm" = opkg ]; then
+		for pkg in kmod-nft-tproxy kmod-nft-socket; do
+			pkg_is_installed "$pkg" && continue
+			pkg_install_named "$pkg" || warn "не удалось установить $pkg"
+		done
+	fi
 	case "$HF_MODE" in
 		full)
 			;;
