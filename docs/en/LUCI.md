@@ -45,7 +45,7 @@ Next to the title is the overall status. It is one of "В норме" (Healthy),
 
 Below the title is a large status block with the active channel and links to Routing, Diagnostics and Clients. Under it are four inner tabs.
 
-**Обзор** (Overview). Cards for Engine, nft / tproxy, Control, fakeip DNS, Политика (Policy), Активный outbound (Active outbound) and Резервы (Backups, how many backup channels are alive, for example `2/3 живы`). Then the failover channel cards and the Маршрут (Route), Контроллер (Controller) and URLTest panels. They show the selector, mode, primary probe, primary latency, time of the last probe and last switch, fail and recover counters, and urltest parameters. On the right is the **Ручное переключение** (Manual switch) block.
+**Обзор** (Overview). Cards for Движок (Engine), Перехват трафика (Traffic interception), DNS (fake-IP), Сейчас через (Active channel), Каналы на связи (Channels up, for example `2 / 3`) and Режим (Mode) with a hint about the policy. Then the section's channel cards and the Маршрут (Route), Контроллер (Controller) and URLTest panels. They show the selector, mode, primary probe, primary latency, time of the last probe and last switch, fail and recover counters, and urltest parameters. On the right is the **Ручное переключение** (Manual switch) block.
 
 **Каналы** (Channels). A channel table with status, channel, type, latency, trend and role. The trend line is drawn from the latency history the core writes to `/var/run/hybrid-failover/delay-history.json` (RPC `DelayHistory`). Its buffer size is set by "Точек delay-history на канал" (delay-history points per channel) on the Routing tab. When there is no server history, the chart uses the last 40 samples the browser stored locally.
 
@@ -85,11 +85,11 @@ The section name is free-form (`main`, `glob` and so on). Outbound tags are deri
 
 | "Тип подключения" (Connection type, `connection_type`) | Meaning |
 |-------------------|--------|
-| `vpn` | Main path over a VPN interface (`interface`, e.g. `awgch`). With "VPN + резервные proxy" (VPN + backup proxies) on you can add backups in `failover_proxy_links` |
+| `vpn` | Traffic over a VPN interface (`interface`, e.g. `awgch`). With "Резервные каналы, если VPN упал" (Backup channels when the VPN is down) on, proxies from `failover_proxy_links` are added next to it |
 | `proxy` | Proxy only: a single link (`proxy_string`), Outbound JSON, or a URLTest group (`urltest_proxy_links`) |
 | `block` | Reject for this section's domains and subnets |
 
-**VPN with backups.** When the VPN goes down, traffic moves to the backup URIs in "Резервные URI" (Backup URIs). List order is priority, and the **Вверх** (Up) and **Вниз** (Down) buttons reorder it. The policy is set in "Политика failover" (Failover policy): `outage-only`, `prefer-primary` or `fastest`. The **Проверить URI** (Check URI) button shows how the core parsed a link.
+**VPN with backups.** Under the `outage-only` and `prefer-primary` policies traffic goes through the VPN, moves to the proxies in "Резервные каналы" (Backup channels) only while the VPN is down, and returns once it recovers. Under `fastest` there is no primary: the VPN and the proxies compete in urltest on equal terms, and channels are not labelled as backups. List order is priority, and the **Вверх** (Up) and **Вниз** (Down) buttons reorder it. The policy is set in "Политика failover" (Failover policy). The **Проверить URI** (Check URI) button shows how the core parsed a link.
 
 **Lists.** Community lists, your own domains (`user_domains`, `user_domains_text`) and subnets (`user_subnets`, `user_subnets_text`) decide which traffic lands in the section.
 
