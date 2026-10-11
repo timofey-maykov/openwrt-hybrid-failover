@@ -33,7 +33,7 @@ The version comes from the `VERSION` file at the repository root. CI (`.github/w
 | `dist/apk/` | `.apk` (apk-tools 3) | 25.12+ |
 | `dist/binaries/<arch>/` | bare binaries | |
 
-Supported architectures are `aarch64_cortex-a53`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` and `x86_64`.
+Supported architectures are `aarch64_cortex-a53`, `aarch64_cortex-a72`, `aarch64_cortex-a73`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` and `x86_64`.
 
 ### File names
 

@@ -49,6 +49,7 @@ arch_pkg_candidates() {
 	case "$primary" in
 		aarch64_cortex-a53) echo "aarch64_generic" ;;
 		aarch64_generic) echo "aarch64_cortex-a53" ;;
+		aarch64_cortex-a72|aarch64_cortex-a73) echo "aarch64_cortex-a53"; echo "aarch64_generic" ;;
 	esac
 }
 

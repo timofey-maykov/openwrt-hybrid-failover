@@ -55,6 +55,7 @@ detect_arch() {
 	fi
 	case "$_arch" in
 		aarch64_generic) echo "aarch64_generic" ;;
+		aarch64_cortex-a72|aarch64_cortex-a73) echo "$_arch" ;;
 		aarch64*|arm64*) echo "aarch64_cortex-a53" ;;
 		mipsel*|mips64el*) echo "mipsel_24kc" ;;
 		mips_*) echo "mips_24kc" ;;
@@ -73,6 +74,8 @@ arch_candidates() {
 	case "$_primary" in
 		aarch64_cortex-a53) echo "aarch64_generic" ;;
 		aarch64_generic) echo "aarch64_cortex-a53" ;;
+		# opkg installs another aarch64 flavour; apk does not, so these only help on opkg
+		aarch64_cortex-a72|aarch64_cortex-a73) echo "aarch64_cortex-a53"; echo "aarch64_generic" ;;
 	esac
 }
 
