@@ -44,6 +44,9 @@ type fakeRouter struct {
 	staged   int
 	down     bool // the engine is stopped until the service is restarted
 	runs     []string
+	subStat  string // JSON for SubscriptionStatus, "" means the RPC is unknown
+	updCheck string // JSON for UpdateCheck
+	updState string // JSON for UpdateStatus
 	rpc      [][]string
 }
 
@@ -143,6 +146,23 @@ func (f *fakeRouter) RunCoreRPC(ctx context.Context, method string, args ...stri
 		}}}), nil
 	case "PendingApply":
 		f.staged = 0
+	case "SubscriptionStatus":
+		if f.subStat == "" {
+			return "", errors.New(`unknown rpc method "SubscriptionStatus"`)
+		}
+		return f.subStat, nil
+	case "UpdateCheck":
+		if f.updCheck == "" {
+			return "", errors.New("exit status 1")
+		}
+		return f.updCheck, nil
+	case "UpdateStatus":
+		if f.updState == "" {
+			return `{"installed":"1.7.64","state":{"state":"idle"}}`, nil
+		}
+		return f.updState, nil
+	case "UpdateApply":
+		return `{"started":true,"pid":4242}`, nil
 	}
 	return "", nil
 }
@@ -714,4 +734,176 @@ func TestMonitoringOffExplainsItself(t *testing.T) {
 	needs(t, h.tg.last().text(), "Выключен в конфиге")
 	h.press(adminID, "cmd:/mute 5")
 	needs(t, h.tg.last().text(), "мониторинг выключен")
+}
+
+func pulseStatus(expireIn time.Duration, errText string) string {
+	return js(map[string]any{
+		"ok": true, "configured": 1, "interval": "12h", "partner_url": "https://t.me/partner_bot?start=router",
+		"refreshed": true, "updated_at": time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339), "error": errText,
+		"sources": []map[string]any{{"url": "https://sub.example.com/…1234", "title": "PulseVPN 3",
+			"support_url": "https://t.me/partner_bot?start=support", "expire": time.Now().Add(expireIn).Unix(), "servers": 5}},
+	})
+}
+
+func TestSubsScreenShowsWhatThePanelSaidAndWhereToRenew(t *testing.T) {
+	h := newHarness(t)
+	h.router.subs = []string{subURL}
+	h.router.subStat = pulseStatus(364*24*time.Hour, "")
+	h.press(adminID, "nav:subs")
+	c := h.tg.last()
+	needs(t, c.text(), "https://sub.example.com/…1234", "PulseVPN 3 · серверов: 5 · до ", "(363 дн.)", "Обновлено 10 мин назад")
+	if strings.Contains(c.text(), "SECRETTOKEN") {
+		t.Fatal("leak")
+	}
+	var renew bool
+	for _, row := range c.keyboardRows() {
+		for _, b := range row {
+			if b.URL == "https://t.me/partner_bot?start=support" && strings.Contains(b.Text, "продлить") {
+				renew = true
+			}
+		}
+	}
+	if !renew {
+		t.Fatalf("no renew link button: %v", c.form.Get("reply_markup"))
+	}
+}
+
+func TestSubsScreenWithoutSubscriptionsPointsToTheProvider(t *testing.T) {
+	h := newHarness(t)
+	h.router.subStat = js(map[string]any{"ok": true, "configured": 0, "interval": "off", "partner_url": "https://t.me/partner_bot?start=router", "sources": []any{}})
+	h.press(adminID, "nav:subs")
+	c := h.tg.last()
+	needs(t, c.text(), "Подписок нет", "PulseVPN выдаёт ссылку подписки")
+	if !c.hasURL("https://t.me/partner_bot?start=router") {
+		t.Fatalf("no provider button: %v", c.form.Get("reply_markup"))
+	}
+	// Turned off in settings: no mention at all.
+	h.router.subStat = js(map[string]any{"ok": true, "configured": 0, "interval": "off", "sources": []any{}})
+	h.press(adminID, "nav:subs")
+	if strings.Contains(h.tg.last().text(), "PulseVPN") || h.tg.last().hasURL("https://t.me/partner_bot?start=router") {
+		t.Fatal("provider shown although partner_url is off")
+	}
+}
+
+func TestSubsScreenOnOldCoreStillWorks(t *testing.T) {
+	h := newHarness(t)
+	h.router.subs = []string{subURL}
+	h.press(adminID, "nav:subs")
+	needs(t, h.tg.last().text(), "Подписки (1)", "https://sub.example.com/…1234")
+}
+
+func TestUpdateScreenAndUpgradeWithConfirmation(t *testing.T) {
+	h := newHarness(t)
+	h.router.updCheck = `{"installed":"1.7.64","latest":"1.7.65","tag":"v1.7.65","available":true,"notes":"- names from subscriptions","url":"https://github.com/x/y/releases/tag/v1.7.65","checked_at":1}`
+	h.router.updState = `{"installed":"1.7.64","state":{"state":"idle"},"check":{"installed":"1.7.64","latest":"1.7.65","tag":"v1.7.65","available":true,"url":"https://github.com/x/y/releases/tag/v1.7.65"}}`
+	h.press(adminID, "nav:system")
+	if !h.tg.last().hasData("nav:update") {
+		t.Fatalf("system screen has no update button: %v", h.tg.last().buttons())
+	}
+	h.press(adminID, "nav:update_check")
+	c := h.tg.last()
+	needs(t, c.text(), "Установлена: 1.7.64", "Доступна: 1.7.65", "names from subscriptions")
+	if !c.hasData("cmd:/upgrade") || !c.hasURL("https://github.com/x/y/releases/tag/v1.7.65") {
+		t.Fatalf("buttons: %v", c.buttons())
+	}
+
+	h.press(adminID, "cmd:/upgrade")
+	needs(t, h.tg.last().text(), "Hybrid Failover обновится до последнего релиза")
+	for _, r := range h.router.rpc {
+		if r[0] == "UpdateApply" {
+			t.Fatal("applied before confirmation")
+		}
+	}
+	h.press(adminID, "confirm:/upgrade")
+	var applied bool
+	for _, r := range h.router.rpc {
+		if r[0] == "UpdateApply" {
+			applied = true
+		}
+	}
+	if !applied {
+		t.Fatalf("UpdateApply not called: %v", h.router.rpc)
+	}
+	needs(t, h.tg.last().text(), "⬆️ Обновление запущено")
+
+	h.say(adminID, "/version")
+	needs(t, h.tg.last().text(), "Установлена 1.7.64, доступна 1.7.65")
+	h.say(adminID, "/upgrade")
+	needs(t, h.tg.last().text(), "Hybrid Failover обновится до последнего релиза")
+}
+
+func TestUpgradeFromAReleaseNoticeNamesTheRouter(t *testing.T) {
+	h := newHarness(t)
+	h.press(adminID, "cmd:/upgrade local")
+	needs(t, h.tg.last().text(), "/upgrade local", "Hybrid Failover обновится")
+	h.press(adminID, "confirm:/upgrade local")
+	var applied bool
+	for _, r := range h.router.rpc {
+		if r[0] == "UpdateApply" {
+			applied = true
+		}
+	}
+	if !applied {
+		t.Fatalf("UpdateApply not called: %v", h.router.rpc)
+	}
+	h.press(adminID, "cmd:/upgrade nosuch")
+	h.press(adminID, "confirm:/upgrade nosuch")
+	needs(t, h.tg.last().text(), "не найден")
+}
+
+func TestViewerCannotUpgrade(t *testing.T) {
+	h := newHarness(t)
+	h.router.updCheck = `{"installed":"1.7.64","latest":"1.7.64","tag":"v1.7.64","available":false,"checked_at":1}`
+	h.press(viewerID, "cmd:/upgrade")
+	h.say(viewerID, "/upgrade")
+	for _, r := range h.router.rpc {
+		if r[0] == "UpdateApply" {
+			t.Fatal("viewer started an update")
+		}
+	}
+	h.say(viewerID, "/version")
+	needs(t, h.tg.last().text(), "Установлена")
+}
+
+func TestReleaseNoticeReachesAdminsWithButtons(t *testing.T) {
+	h := newHarness(t)
+	h.bot.SetIdentity("OpenWrt", []int64{adminID})
+	h.bot.NotifyAdminsWithButtons("⬆️ вышла 1.7.65", [][]watchdog.Button{
+		{{Text: "⬆️ Обновить сейчас", Data: "cmd:/upgrade local"}},
+		{{Text: "📝 Описание релиза", URL: "https://github.com/x/y/releases/tag/v1.7.65"}},
+	})
+	c := h.tg.last()
+	if c.form.Get("chat_id") != fmt.Sprint(adminID) || !c.hasData("cmd:/upgrade local") || !c.hasURL("https://github.com/x/y/releases/tag/v1.7.65") {
+		t.Fatalf("notice: text=%q buttons=%v", c.text(), c.form.Get("reply_markup"))
+	}
+}
+
+// keyboardRows returns the inline keyboard with both kinds of buttons.
+func (c tgCall) keyboardRows() [][]struct {
+	Text string `json:"text"`
+	Data string `json:"callback_data"`
+	URL  string `json:"url"`
+} {
+	var kb struct {
+		Rows [][]struct {
+			Text string `json:"text"`
+			Data string `json:"callback_data"`
+			URL  string `json:"url"`
+		} `json:"inline_keyboard"`
+	}
+	if raw := c.form.Get("reply_markup"); raw != "" {
+		_ = json.Unmarshal([]byte(raw), &kb)
+	}
+	return kb.Rows
+}
+
+func (c tgCall) hasURL(u string) bool {
+	for _, row := range c.keyboardRows() {
+		for _, b := range row {
+			if b.URL == u {
+				return true
+			}
+		}
+	}
+	return false
 }
