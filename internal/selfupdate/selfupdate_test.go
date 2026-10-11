@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -225,5 +226,47 @@ func TestApplyRefusesOlderUnlessForced(t *testing.T) {
 	}
 	if err := c.Apply(context.Background(), env, ApplyOptions{Installed: "1.8.0", Force: true}); err != nil {
 		t.Fatalf("forced: %v", err)
+	}
+}
+
+func TestApplyRestartsTheBotLastViaProcdAfterRecordingDone(t *testing.T) {
+	files := releaseFiles()
+	files["hybrid-failover-bot-1.8.0-r1_aarch64_cortex-a53.apk"] = []byte("bot-binary")
+	srv := fakeGitHub(t, "v1.8.0", files, "")
+	c := testClient(t, srv)
+	rec := &recorder{have: map[string]bool{"hybrid-failover-core": true, "hybrid-failover-bot": true}}
+	var stateAtRestart State
+	env := &Env{PM: "apk", DistribArch: "aarch64_cortex-a73", Run: func(ctx context.Context, name string, args ...string) (string, error) {
+		if name == "ubus" && len(args) >= 4 && args[2] == "init" {
+			// What the new bot will find when procd brings it up.
+			stateAtRestart = c.ReadState()
+		}
+		return rec.run(ctx, name, args...)
+	}}
+	if err := c.Apply(context.Background(), env, ApplyOptions{Installed: "1.7.45"}); err != nil {
+		t.Fatal(err)
+	}
+	last := rec.calls[len(rec.calls)-1]
+	if !strings.HasPrefix(last, "ubus call rc init") || !strings.Contains(last, `"hybrid-failover-bot"`) || !strings.Contains(last, "restart") {
+		t.Fatalf("the bot restart must be the last step and go through procd, got %q", last)
+	}
+	if stateAtRestart.State != "done" || stateAtRestart.To != "1.8.0" || stateAtRestart.FinishedAt == 0 {
+		t.Fatalf("state must be done before the bot restarts: %+v", stateAtRestart)
+	}
+	for _, call := range rec.calls {
+		if strings.HasPrefix(call, "/etc/init.d/hybrid-failover-bot") {
+			t.Fatalf("init script of the bot called directly: %v", rec.calls)
+		}
+	}
+}
+
+func TestLeaveServiceCgroupWritesOwnPID(t *testing.T) {
+	old := cgroupProcs
+	cgroupProcs = filepath.Join(t.TempDir(), "cgroup.procs")
+	t.Cleanup(func() { cgroupProcs = old })
+	leaveServiceCgroup()
+	b, err := os.ReadFile(cgroupProcs)
+	if err != nil || string(b) != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("got %q, %v", string(b), err)
 	}
 }
