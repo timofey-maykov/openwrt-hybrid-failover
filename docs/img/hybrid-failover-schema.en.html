@@ -90,7 +90,7 @@
   <!-- title -->
   <text x="60" y="66" class="t" font-size="30" font-weight="800" letter-spacing="-0.5">Hybrid Failover</text>
   <text x="298" y="66" class="s" font-size="16" font-weight="500">how it works on OpenWrt</text>
-  <text x="60" y="92" class="s" font-size="13">AmneziaWG VPN as the primary path, backup proxies via urltest, own channels for service lists, fakeip DNS, managed from LuCI and Telegram</text>
+  <text x="60" y="92" class="s" font-size="13">Ways out: AmneziaWG and proxies from links, urltest keeps a live one by policy, own channels for service lists, fakeip DNS, managed from LuCI and Telegram</text>
 
   <!-- ===================== CONTROL PLANE ===================== -->
   <text x="400" y="132" class="lbl">Management</text>
@@ -227,10 +227,10 @@
     <rect x="960" y="330" width="250" height="90" rx="14" class="card" stroke="#34d399" stroke-opacity="0.8"/>
     <rect x="960" y="330" width="3" height="90" rx="1.5" fill="url(#green)"/>
     <text x="980" y="357" class="cardT">AmneziaWG</text>
-    <rect x="1112" y="343" width="78" height="20" rx="10" fill="#34d399" fill-opacity="0.15" stroke="#34d399" stroke-opacity="0.6"/>
-    <text x="1151" y="357" font-size="10.5" font-weight="700" fill="#34d399" text-anchor="middle">PRIMARY</text>
+    <rect x="1124" y="343" width="66" height="20" rx="10" fill="#34d399" fill-opacity="0.15" stroke="#34d399" stroke-opacity="0.6"/>
+    <text x="1157" y="357" font-size="10.5" font-weight="700" fill="#34d399" text-anchor="middle">VPN</text>
     <text x="980" y="380" class="cardS mono" font-size="11">glob-awg-out · direct via awg0</text>
-    <text x="980" y="401" class="cardS">kmod-amneziawg 3.1, handshake</text>
+    <text x="980" y="401" class="cardS">primary of a vpn section, optional</text>
   </g>
   <!-- backups -->
   <g filter="url(#soft)">
@@ -259,7 +259,7 @@
   </g>
   <text x="960" y="756" class="s" font-size="11.5">Links: vless:// ss:// trojan:// hy2:// socks5://</text>
   <text x="960" y="775" class="s" font-size="11.5">Amnezia vpn:// decodes to vless:// or awg2://</text>
-  <text x="960" y="800" class="lbl" font-size="10">Backup</text>
+  <text x="960" y="800" class="lbl" font-size="10">Proxies</text>
   <rect x="1010" y="792" width="200" height="1" fill="#fbbf24" fill-opacity="0.35"/>
 
   <!-- urltest -> outbounds (fan out) -->
@@ -343,18 +343,18 @@
   <g filter="url(#soft)">
     <rect x="1300" y="700" width="250" height="118" rx="16" class="card" stroke="#fbbf24" stroke-opacity="0.5"/>
     <text x="1322" y="728" class="cardT" fill="#fbbf24">Failover</text>
-    <text x="1322" y="751" class="cardS">When the VPN fails its probe,</text>
-    <text x="1322" y="769" class="cardS">urltest moves traffic to a live</text>
-    <text x="1322" y="787" class="cardS">backup and brings it back to</text>
-    <text x="1322" y="805" class="cardS">AmneziaWG once it recovers.</text>
+    <text x="1322" y="751" class="cardS">A channel is down or fails probe:</text>
+    <text x="1322" y="769" class="cardS">urltest moves traffic to a live one.</text>
+    <text x="1322" y="787" class="cardS">The policy says whether to return</text>
+    <text x="1322" y="805" class="cardS">to the primary or keep the fastest.</text>
   </g>
 
   <!-- ===================== LEGEND ===================== -->
   <g font-size="12" fill="#9aa5c2">
     <line x1="80" y1="950" x2="112" y2="950" class="flow data"/><text x="122" y="954">client traffic</text>
     <line x1="260" y1="950" x2="292" y2="950" class="flow dns"/><text x="302" y="954">DNS</text>
-    <line x1="360" y1="950" x2="392" y2="950" class="flow vpn"/><text x="402" y="954">primary path, VPN</text>
-    <line x1="560" y1="950" x2="592" y2="950" class="flow bak dash"/><text x="602" y="954">backup proxies</text>
+    <line x1="360" y1="950" x2="392" y2="950" class="flow vpn"/><text x="402" y="954">VPN interface</text>
+    <line x1="560" y1="950" x2="592" y2="950" class="flow bak dash"/><text x="602" y="954">proxies from links</text>
     <line x1="740" y1="950" x2="772" y2="950" class="flow ctl"/><text x="782" y="954">management and config</text>
     <line x1="950" y1="950" x2="982" y2="950" class="flow bind"/><text x="992" y="954">list bound to a channel</text>
   </g>
