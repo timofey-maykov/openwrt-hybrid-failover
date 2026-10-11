@@ -39,6 +39,56 @@ var callSubscriptionRefresh = rpc.declare({
 	method: 'subscription_refresh'
 });
 
+var callSubscriptionStatus = rpc.declare({
+	object: 'hybrid-failover',
+	method: 'subscription_status'
+});
+
+// subscriptionStatusNode renders what the last refresh learned about each
+// subscription: the panel's title, servers, expiry and errors, plus where to
+// renew. With nothing configured it says where a subscription can be obtained.
+function subscriptionStatusNode(st) {
+	if (!st || typeof st !== 'object')
+		return E('span', { 'class': 'hf-muted' }, _('Статус подписок недоступен: обновите core.'));
+	var box = E('div', { 'class': 'hf-subs' });
+	var sources = Array.isArray(st.sources) ? st.sources : [];
+	if (!st.configured) {
+		box.appendChild(E('div', {}, _('Подписок нет.')));
+		if (st.partner_url)
+			box.appendChild(E('div', { 'style': 'margin-top:6px' }, [
+				_('Нет своего сервера? '),
+				E('a', { 'href': st.partner_url, 'target': '_blank', 'rel': 'noopener' }, _('PulseVPN выдаёт ссылку подписки')),
+				', ', _('роутер читает её как есть.')
+			]));
+		return box;
+	}
+	if (!st.refreshed) {
+		box.appendChild(E('div', {}, _('Ещё не обновлялись: нажмите «Обновить подписки».')));
+		return box;
+	}
+	sources.forEach(function(src, i) {
+		var parts = [];
+		if (src.title) parts.push(src.title);
+		if (src.servers) parts.push(_('серверов: %d').format(src.servers));
+		if (src.expire) {
+			var exp = new Date(src.expire * 1000);
+			var days = Math.floor((exp.getTime() - Date.now()) / 86400000);
+			parts.push(days < 0 ? _('закончилась %s').format(exp.toLocaleDateString()) : _('до %s (%d дн.)').format(exp.toLocaleDateString(), days));
+		}
+		var row = E('div', { 'style': 'margin:4px 0' }, [ E('span', {}, (i + 1) + '. ' + (parts.join(' · ') || src.url)) ]);
+		if (src.support_url)
+			row.appendChild(E('a', { 'href': src.support_url, 'target': '_blank', 'rel': 'noopener', 'style': 'margin-left:8px' }, _('Продлить или спросить')));
+		if (src.error)
+			row.appendChild(E('div', { 'class': 'hf-bad', 'style': 'font-size:12px' }, '⚠ ' + src.error));
+		box.appendChild(row);
+	});
+	if (st.error)
+		box.appendChild(E('div', { 'class': 'hf-bad', 'style': 'margin-top:4px' }, _('Последнее обновление не удалось: %s').format(st.error)));
+	else if (st.updated_at)
+		box.appendChild(E('div', { 'class': 'hf-muted', 'style': 'font-size:12px;margin-top:4px' }, _('Обновлено: %s').format(new Date(st.updated_at).toLocaleString())));
+	return box;
+}
+
 var ROUTING_CSS = [
 	'.hf-chl { width: 100%; }',
 	'.cbi-value:has(.hf-chl) { display: block; }',
@@ -680,7 +730,18 @@ return view.extend({
 
 		o = st.taboption('subs', form.DynamicList, 'subscription_urls', _('Ссылки на подписки'));
 		o.placeholder = 'https://…';
-		o.description = _('Каналы из подписки появляются в списке каналов основной секции.');
+		o.description = _('Каналы из подписки появляются в списке каналов основной секции, с названиями серверов из подписки.');
+
+		o = st.taboption('subs', form.DummyValue, '_sub_status', _('Состояние подписок'));
+		o.renderWidget = function() {
+			var node = E('div', {}, _('Загрузка…'));
+			L.resolveDefault(callSubscriptionStatus(), null).then(function(res) {
+				// rpcd parses core's JSON into data; an old core answers with an error.
+				var st = res && res.ok && res.data && typeof res.data === 'object' ? res.data : null;
+				dom.content(node, subscriptionStatusNode(st));
+			});
+			return node;
+		};
 
 		o = st.taboption('subs', form.ListValue, 'subscription_update_interval', _('Обновлять подписки'));
 		o.value('off', _('вручную'));

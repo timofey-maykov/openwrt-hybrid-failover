@@ -1847,9 +1847,6 @@ msgstr "DNS answer TTL, s"
 msgid "Ссылки на подписки"
 msgstr "Subscription links"
 
-msgid "Каналы из подписки появляются в списке каналов основной секции."
-msgstr "Channels from the subscription appear in the channel list of the main section."
-
 msgid "Обновлять подписки"
 msgstr "Update subscriptions"
 
@@ -2752,3 +2749,57 @@ msgstr "Share by channels"
 
 msgid "Привяжите списки сервисов к своим каналам, чтобы тяжелый трафик не шел через один туннель. Список без привязки идет через пул секции, как раньше: самый быстрый живой канал. «Делить по каналам» закрепляет каждый сайт за одним из живых каналов: быстрые получают больше сайтов, а канал намного медленнее лучшего новых сайтов не получает. Видео YouTube, Instagram и Telegram делится по серверам, один ролик целиком идет через один канал. Если выбранный канал упал, список временно уходит туда, что указано в колонке «Если канал упал»."
 msgstr "Bind service lists to your channels so heavy traffic does not all go through one tunnel. A list without a binding goes through the section pool as before: the fastest live channel. “Share by channels” pins each site to one of the live channels: faster channels get more sites, and a channel much slower than the best one gets no new sites. YouTube, Instagram and Telegram video is split by server, one video goes through one channel. If the chosen channel is down, the list temporarily goes where the “If the channel is down” column says."
+
+msgid "Статус подписок недоступен: обновите core."
+msgstr "Subscription status is unavailable: update the core."
+
+msgid "Подписок нет."
+msgstr "No subscriptions."
+
+msgid "Нет своего сервера? "
+msgstr "No server of your own? "
+
+msgid "PulseVPN выдаёт ссылку подписки"
+msgstr "PulseVPN hands out a subscription link"
+
+msgid "роутер читает её как есть."
+msgstr "the router reads it as it is."
+
+msgid "Ещё не обновлялись: нажмите «Обновить подписки»."
+msgstr "Not refreshed yet: press \"Refresh subscriptions\"."
+
+msgid "серверов: %d"
+msgstr "servers: %d"
+
+msgid "закончилась %s"
+msgstr "ended on %s"
+
+msgid "до %s (%d дн.)"
+msgstr "until %s (%d days)"
+
+msgid "Продлить или спросить"
+msgstr "Renew or ask"
+
+msgid "Последнее обновление не удалось: %s"
+msgstr "The last refresh failed: %s"
+
+msgid "Обновлено: %s"
+msgstr "Refreshed: %s"
+
+msgid "Каналы из подписки появляются в списке каналов основной секции, с названиями серверов из подписки."
+msgstr "Channels from the subscription appear in the main section's channel list, named after the subscription's servers."
+
+msgid "Состояние подписок"
+msgstr "Subscription status"
+
+msgid "Загрузка…"
+msgstr "Loading…"
+
+msgid "Нет своего сервера?"
+msgstr "No server of your own?"
+
+msgid "Подписка PulseVPN"
+msgstr "A PulseVPN subscription"
+
+msgid "подключается одной ссылкой на вкладке «Подписки»."
+msgstr "connects with one link on the Subscriptions tab."
