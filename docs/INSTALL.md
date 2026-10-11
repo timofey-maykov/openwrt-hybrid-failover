@@ -42,7 +42,7 @@ HF_MODE=core ash /tmp/install.sh
 
 ```sh
 HF_REPO=timofey-maykov/openwrt-hybrid-failover   # репозиторий GitHub
-HF_VERSION=latest            # или конкретный тег, например v1.7.48
+HF_VERSION=latest            # или конкретный тег, например v1.7.64
 HF_BRANCH=main               # ветка, из которой читается VERSION, если API GitHub недоступен
 HF_TOKEN=123456789:ABC...    # токен бота, сразу записывается в /etc/hybrid-failover-bot.json
 HF_ADMIN_IDS=123456789       # только подсказка в логе, admin_ids в JSON не записываются
@@ -88,10 +88,10 @@ HF_DIST_DIR=/tmp/hf-dist     # каталог с локальными пакет
 ### OpenWrt 24.x (opkg, `.ipk`)
 
 ```sh
-opkg install /tmp/hybrid-failover-core_1.7.48-1_aarch64_cortex-a53.ipk
-opkg install /tmp/hybrid-failover-bot_1.7.48-1_aarch64_cortex-a53.ipk
-opkg install /tmp/luci-i18n-hybrid-failover_1.7.48-1_all.ipk
-opkg install /tmp/luci-app-hybrid-failover_1.7.48-1_all.ipk
+opkg install /tmp/hybrid-failover-core_1.7.64-1_aarch64_cortex-a53.ipk
+opkg install /tmp/hybrid-failover-bot_1.7.64-1_aarch64_cortex-a53.ipk
+opkg install /tmp/luci-i18n-hybrid-failover_1.7.64-1_all.ipk
+opkg install /tmp/luci-app-hybrid-failover_1.7.64-1_all.ipk
 ```
 
 ### OpenWrt 25.12+ (apk, `.apk`)
@@ -99,10 +99,10 @@ opkg install /tmp/luci-app-hybrid-failover_1.7.48-1_all.ipk
 С 25.12 вместо opkg используется apk (Alpine Package Keeper). Имена файлов строятся как `пакет-версия-rN_arch.apk`, у пакетов без архитектуры суффикса нет.
 
 ```sh
-apk add --allow-untrusted /tmp/hybrid-failover-core-1.7.48-r1_aarch64_cortex-a53.apk
-apk add --allow-untrusted /tmp/hybrid-failover-bot-1.7.48-r1_aarch64_cortex-a53.apk
-apk add --allow-untrusted /tmp/luci-i18n-hybrid-failover-1.7.48-r1.apk
-apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.7.48-r1.apk
+apk add --allow-untrusted /tmp/hybrid-failover-core-1.7.64-r1_aarch64_cortex-a53.apk
+apk add --allow-untrusted /tmp/hybrid-failover-bot-1.7.64-r1_aarch64_cortex-a53.apk
+apk add --allow-untrusted /tmp/luci-i18n-hybrid-failover-1.7.64-r1.apk
+apk add --allow-untrusted /tmp/luci-app-hybrid-failover-1.7.64-r1.apk
 ```
 
 Пакеты не подписаны ключом OpenWrt, поэтому нужен `--allow-untrusted`.
@@ -165,7 +165,7 @@ hybrid-failover update apply     # поставить последний рел�
 hybrid-failover update status    # ход и журнал последнего обновления
 ```
 
-`apply` скачивает `hybrid-failover-core`, `luci-i18n-hybrid-failover` и `luci-app-hybrid-failover`, а также `hybrid-failover-bot`, `curfew` и `luci-app-curfew`, если они уже стоят. Каждый файл сверяется с `manifest.json`. После установки выполняются `migrate` и перезапуск `rpcd`, `hybrid-failover` и бота. Журнал пишется в `/tmp/hybrid-failover/update/update.log`. `--foreground` запускает обновление в текущей консоли, `--tag v1.7.48` ставит конкретный релиз, `--force` разрешает ту же или более старую версию. Переменная `HF_REPO` меняет репозиторий.
+`apply` скачивает `hybrid-failover-core`, `luci-i18n-hybrid-failover` и `luci-app-hybrid-failover`, а также `hybrid-failover-bot`, `curfew` и `luci-app-curfew`, если они уже стоят. Каждый файл сверяется с `manifest.json`. После установки выполняются `migrate` и перезапуск `rpcd`, `hybrid-failover` и бота. Журнал пишется в `/tmp/hybrid-failover/update/update.log`. `--foreground` запускает обновление в текущей консоли, `--tag v1.7.64` ставит конкретный релиз, `--force` разрешает ту же или более старую версию. Переменная `HF_REPO` меняет репозиторий.
 
 В LuCI то же самое на вкладке **Обновление**, см. [LUCI.md](LUCI.md#обновление).
 

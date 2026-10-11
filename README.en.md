@@ -17,7 +17,7 @@ Everything runs inside one Go binary on the router. No external sing-box, jq or 
 - Per-device rules by IP. A console can always go through the VPN while a TV bypasses it.
 - Service lists can be spread over separate tunnels so YouTube does not share a channel with everything else. Each list gets a channel and a fallback for when that channel is down, with automatic spread and balancing. Your own lists of domains and subnets are bound the same way.
 - Live per-tunnel charts in LuCI: traffic, connections, latency and traffic share, from 5 minutes up to a day.
-- A Telegram bot shows status and channels, switches them, edits the config and sends failover alerts.
+- A Telegram bot with a button menu: status and channels, subscriptions, binding lists to channels, failover settings, control of the router itself (Wi-Fi, services, port forwards), failover alerts. It also watches the router: on a failure it restarts the service and tells you if that did not help.
 
 ![Services and channels in LuCI](docs/img/luci-services.png)
 
@@ -70,7 +70,7 @@ uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot
 /etc/init.d/hybrid-failover-bot restart
 ```
 
-Open `/panel` in Telegram. With several routers, either give each router its own bot or connect them to one bot over SSH. Both setups are described in [bot/README.en.md](bot/README.en.md).
+Open `/menu` in Telegram. With several routers, either give each router its own bot or connect them to one bot over SSH. Both setups are described in [bot/README.en.md](bot/README.en.md).
 
 ## Documentation
 

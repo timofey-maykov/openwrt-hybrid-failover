@@ -2,7 +2,7 @@
 
 # Hybrid Failover Bot
 
-A Telegram bot for managing Hybrid Failover and the OpenWrt router itself (state, network, Wi-Fi, services, port forwards, updates). It shows status and channels, edits the `hybrid-failover` UCI config through pending changes, applies them and sends notifications when a channel switches. Status, channel checks, history and apply all go through core RPC (`hybrid-failover rpc`), so the bot behaves the same on the local router and on a remote one over SSH.
+A Telegram bot for managing Hybrid Failover and the OpenWrt router itself (state, network, Wi-Fi, services, port forwards, updates). It shows status and channels, edits the `hybrid-failover` UCI config through pending changes, applies them, sends notifications when a channel switches, and keeps an eye on the router: when something breaks it restarts the service and tells you if that did not help. Status, channel checks, history and apply all go through core RPC (`hybrid-failover rpc`), so the bot behaves the same on the local router and on a remote one over SSH.
 
 Every installation gets its own bot, with a token from [@BotFather](https://t.me/BotFather). In LuCI the settings live under **Services → Hybrid Failover → Telegram**. Installation is covered in [docs/en/INSTALL.md](../docs/en/INSTALL.md), and the packages are in [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
 
@@ -32,7 +32,7 @@ The config file is `/etc/hybrid-failover-bot.json`. The package ships a single-r
 | `viewer_ids` | `[]` | read-only users, see below |
 | `allow_shell_ids` | `[]` | who may run `/sh`, empty means off, see "Router management" |
 | `notify_failover_enabled` | `false` | send new failover events to admins |
-| `notify_failover_interval_seconds` | `30` | how often to check the history, at least 10 |
+| `notify_failover_interval_seconds` | `30` | how often to check the history. `/config_set` and LuCI refuse values under 10, in the JSON itself zero becomes 30 |
 | `log_path` | `/var/log/hybrid-failover-bot.log` | bot log |
 | `audit_path` | `/var/log/hybrid-failover-bot.audit.log` | command log with user ID and result |
 | `routing_init_script` | `/etc/init.d/hybrid-failover` | what `/routing_restart` calls |
@@ -42,6 +42,9 @@ The config file is `/etc/hybrid-failover-bot.json`. The package ships a single-r
 | `clash_api` | `http://127.0.0.1:9090` | fallback for old installs with an external sing-box. The native engine has no Clash API, and the bot reads channels from core RPC |
 | `policy` | `outage-only` | validated and shown by `/config_show`, has no effect on routing. The failover policy is set with `/set_policy` |
 | `routers` | none | router list for the one-bot-many-routers setup |
+| `watchdog_enabled` | `true` | router monitoring, see "Monitoring and self-repair" |
+| `watchdog_auto_repair` | `true` | let the bot restart the service on a failure |
+| `watchdog_interval_seconds` | `30` | how often to check the routers, under 10 becomes 30 |
 
 If `main_section` does not exist in the local router's UCI, the bot falls back to `hybrid-failover.settings.main_section` (default `glob`) and logs a warning.
 
@@ -51,7 +54,7 @@ If `main_section` does not exist in the local router's UCI, the bot falls back t
 /etc/init.d/hybrid-failover-bot restart
 ```
 
-`routers`, `uci_package` and `main_section` can only be changed in the JSON file itself.
+`routers`, `uci_package`, `main_section`, `allow_shell_ids` and the `watchdog_*` keys can only be changed in the JSON file itself.
 
 The UCI section `hybrid-failover-bot.main` holds `enabled` (`0` after installation), `binary`, `config_path` and `log_path`.
 
@@ -61,9 +64,25 @@ The core can send failover alerts without the bot, through the UCI option `hybri
 
 With `notify_failover_enabled: true` the bot reads `/var/log/hybrid-failover/history.jsonl` and sends new events to every `admin_ids` user. Users in `viewer_ids` do not get them. The message header carries the router name. The bot remembers the time of the last event it sent, so when the core rotates the file, events are neither skipped nor resent in bulk.
 
+### Monitoring and self-repair
+
+Every `watchdog_interval_seconds` (30 s by default) the bot asks each configured router for core RPC `Status` and looks at four things: is the engine running, are the nft rules in place, does FakeIP DNS answer, and is at least one channel alive. This is an outer layer on top of the core's own watchdog. The core repairs what it can see from inside, but it cannot message you and does not notice when it is stuck itself.
+
+What the bot does:
+
+1. One failed check means nothing. A reload after "Apply" takes a few seconds and is not an incident. The bot acts after three failures in a row, about a minute and a half.
+2. If `watchdog_auto_repair` is on and the problem is one a restart can fix (engine, nft, FakeIP, a silent core), the bot tells the admins "trying to repair" and restarts `/etc/init.d/hybrid-failover`. If that has not helped a minute later, it stops the service and starts it again. It never makes more than two attempts per incident.
+3. When the attempts are used up, or repair is off, a 🚨 message arrives with the problem, what the bot did, and the last log lines with secrets removed. While the incident lasts, the reminder repeats every 30 minutes.
+4. If every channel is down, a restart will not help. The bot says so right away and touches nothing.
+5. When everything is back, a ✅ message tells how long the incident lasted and what fixed it.
+
+Only `admin_ids` get these messages. The `/watch` screen (the 🛡 Monitoring button) shows the state of every router, the open incident and the last closed one. Its buttons are "Check now", "Repair now" (a restart with confirmation, same as `/repair`), "Mute for 1 h" and "Unmute". `/mute <minutes>` silences the notices for 1 to 1440 minutes while repairs keep running, `/unmute` turns them back on.
+
+If the bot itself or the whole router goes down, nobody is left to write: procd restarts the bot, and only a bot on another device can report a router that is completely off.
+
 ### Access
 
-Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, the read-only router state commands `/sysinfo`, `/wan`, `/devices`, `/wifi`, `/syslog`, `/dmesg`, `/services`, `/portfwd`, `/slots`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
+Admins in `admin_ids` can do everything. Users in `viewer_ids` can only run `/start`, `/help`, `/panel`, `/quick`, `/wizard`, `/status`, `/health`, `/channels`, `/routes`, `/history`, `/failover_history`, `/failover_list`, `/uci_show`, `/uci_sections`, `/params`, `/param_list`, `/logs`, `/check_channels`, `/clients`, the screens `/menu`, `/subs`, `/lists`, `/settings`, `/system`, `/manage`, `/watch`, the read-only router state commands `/sysinfo`, `/wan`, `/devices`, `/wifi`, `/syslog`, `/dmesg`, `/services`, `/portfwd`, `/slots`, and the router selection commands `/routers`, `/use` and `/router`. The selection only affects what that user sees. In the panel they can move between sections and press the buttons for those same commands. Buttons that ask for a value or a confirmation are closed to them. Anyone else gets a refusal. Every command goes to the audit log.
 
 
 ## Several routers
@@ -115,8 +134,10 @@ Install the bot on one host that can reach the other routers. On the others the 
 
 **General**
 
-- `/start`, `/help` print the command list.
-- `/panel` opens the button panel.
+- `/menu` (also `/start` and `/panel`) opens the main menu: a summary of the engine, the active channel, how many channels are alive, monitoring and unapplied changes, with the section buttons below.
+- The sections open as commands too: `/channels` channels, `/subs` subscriptions, `/lists` service lists and their channels, `/settings` failover settings, `/system` status, logs and maintenance, `/manage` the router, `/watch` monitoring. The same commands are registered in Telegram's "/" menu.
+- Every screen is built from live router data. After an action the bot redraws the same screen with the result as a line on top. UCI changes pile up in pending, and the screens show their count with "Apply" and "Roll back" buttons.
+- `/help` prints the full command list.
 - `/quick` (or `/wizard`) shows common recipes.
 - `/param_menu` shows parameter hints with quick setting buttons, `/uci_menu` shows hints for the UCI commands.
 - `/cancel` drops a pending value prompt.
@@ -132,7 +153,7 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/status` shows the service state and active channels.
 - `/health` (or `/check_channels`) probes the channels again through RPC Health.
 - `/channels` (or `/failover_list`) shows the channels and whether they are up.
-- `/routes` shows the section channels with numbers and where each service list goes.
+- `/routes` shows the section channels with numbers and where each service list goes. The `/lists` screen does the same with buttons: tapping a list opens the channel choice (pool, balance, direct, block or a specific channel).
 - `/route <list> <channel> [pool|direct|block]` binds a list to a channel. The channel is a number from `/routes`, an id, the start of its name, or one of `pool`, `balance`, `direct`, `block`. The last argument says where to go when the channel is down. Example: `/route youtube 2`. The change goes to pending and is applied with `/param_apply`.
 - `/history` (or `/failover_history`) prints the last 20 failover events.
 - `/clients` shows the client rules.
@@ -145,6 +166,22 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/list_update` refreshes the domain lists.
 - `/subscription_refresh` refreshes subscriptions.
 
+**Subscriptions**
+
+The `/subs` screen shows the `settings.subscription_urls` list and the `settings.subscription_update_interval` interval. Links are shown without their tail, because the tail is a secret token.
+
+- The "Add" button waits for a link in one message, `/sub_add <https://…>` does the same. Only `http` and `https` without spaces or quotes are accepted, and a duplicate is not added.
+- `/sub_del <number>` removes a subscription by its number in the list, with confirmation.
+- `/sub_interval <1h|6h|12h|24h>` sets the refresh interval, values like `30m`, `6h`, `1d` are accepted.
+
+Adding, removing and the interval go to pending and are applied with the "Apply" button or `/param_apply`. The "Refresh now" button runs the refresh right away.
+
+**Monitoring**
+
+- `/watch` opens the monitoring screen, see "Monitoring and self-repair".
+- `/repair` restarts the service on the selected router, with confirmation.
+- `/mute [minutes]` silences monitoring notices for that long (60 minutes by default, 1440 at most), `/unmute` turns them back on.
+
 **Failover**
 
 - `/failover_params` shows the policy and URLTest settings of the main section.
@@ -153,7 +190,7 @@ Install the bot on one host that can reach the other routers. On the others the 
 - `/failover_apply` applies the changes.
 - `/set_policy outage-only|prefer-primary|fastest` sets `failover_policy`.
 - `/set_urltest_interval <sec>`, `/set_urltest_tolerance <ms>`, `/set_urltest_idle_timeout <sec>` and `/set_interrupt_existing on|off` set the URLTest options.
-- `/set_quic on|off` sets `settings.disable_quic`.
+- `/set_quic on|off` turns QUIC on and off. `off` writes `settings.disable_quic=1`, `on` writes `0`.
 
 **UCI parameters**
 
@@ -204,9 +241,9 @@ Beam WRT only. On other routers these commands answer that the tools are missing
 
 Router commands that could cut you off, overwrite settings or send secrets out ask for confirmation both as a button and when typed. They are `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/backup`, `/sh`, `/mode5g` with a mode, and `/service` with `stop`, `restart` or `disable`. The confirmation lasts 30 seconds, belongs to you and to the router that was selected, works once, and says what will happen. If you switched routers with `/use` in the meantime, it is cancelled.
 
-The bot token and passwords are cut from the bot log, the audit log and the output of `/syslog`, `/dmesg` and `/sh`, because the Telegram client puts the token into its error text.
+The bot token and passwords are cut from the bot log, the audit log and the output of `/syslog`, `/dmesg` and `/sh`, because the Telegram client puts the token into its error text. Subscription and proxy links (`https://`, `vless://`, `ss://` and the rest) are shown in every bot reply without credentials or tail, `/uci_show` included.
 
-UCI changes land in pending first, where `/param_preview` shows them before you apply or roll them back. In the panel the `/param_apply`, `/param_rollback`, `/failover_apply`, `/routing_restart`, `/config_apply` and `/config_rollback` buttons ask for confirmation, which stays valid for 30 seconds.
+UCI changes land in pending first, where `/param_preview` shows them before you apply or roll them back. The `/param_apply`, `/param_rollback`, `/failover_apply`, `/routing_restart`, `/config_apply`, `/config_rollback`, `/repair` buttons and subscription removal (`/sub_del`) ask for confirmation, which stays valid for 30 seconds.
 
 ## Timeouts and long replies
 
@@ -214,7 +251,7 @@ A command on the router gets 30 seconds by default. Slow operations get more tim
 
 ## LuCI
 
-The **Services → Hybrid Failover → Telegram** page is at `/cgi-bin/luci/admin/services/hybrid-failover/bot`. It has fields for the same bot config keys as `/config_set`. Saving writes them to the pending file, and separate buttons validate, apply and roll back the pending file and restart the bot. Below that are the UCI settings of `hybrid-failover-bot`, that is, whether the service is enabled and the paths to the binary, config and log.
+The **Services → Hybrid Failover → Telegram** page is at `/cgi-bin/luci/admin/services/hybrid-failover/bot`. It has fields for the same bot config keys as `/config_set`. Saving writes them to the pending file, and separate buttons validate, apply and roll back the pending file and restart the bot. Below that are the UCI settings of `hybrid-failover-bot`, that is, whether the service is enabled and the paths to the binary, config and log. `allow_shell_ids`, `watchdog_*`, `routers`, `uci_package` and `main_section` are not in the form, edit them in the JSON.
 
 ## Installing
 
