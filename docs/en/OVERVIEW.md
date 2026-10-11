@@ -51,13 +51,13 @@ flowchart TB
   Client[LAN traffic] --> SEL
 ```
 
-A section such as `glob` gets the following outbounds. The name is arbitrary and becomes the tag prefix.
+A vpn section such as `glob` gets the following outbounds. The name is arbitrary and becomes the tag prefix. A proxy section with `urltest_proxy_links` gets the same set without `{section}-awg-out`: the `{section}-1-out`, `{section}-2-out` and further channels come from `urltest_proxy_links`.
 
 | Outbound | Purpose |
 |----------|---------|
-| `{section}-awg-out` | Primary path, **direct** through the VPN interface (`option interface`, e.g. `awg0`) |
-| `{section}-1-out`, `{section}-2-out`, ... | Backups from `failover_proxy_links`, one per URI |
-| `{section}-urltest-out` | **urltest** over AWG and all backups |
+| `{section}-awg-out` | The section's VPN interface, **direct** through `option interface` (e.g. `awg0`). With `outage-only` and `prefer-primary` it is the primary channel |
+| `{section}-1-out`, `{section}-2-out`, ... | Proxies from `failover_proxy_links`, one per URI |
+| `{section}-urltest-out` | **urltest** over all channels of the section |
 | `{section}-out` | **selector**, points at urltest by default |
 
 The order of URIs in the list sets candidate priority after the primary VPN. Within urltest the live and fastest one wins.
@@ -127,7 +127,7 @@ The same steps are exposed as the RPC methods `CapturePending`, `PendingValidate
 | `failover_proxy_links` | list of URIs (see the table below) |
 | `interface` | VPN interface, e.g. `awg0` |
 
-Section traffic goes through the VPN interface first. When it fails, urltest moves to the backup proxies from the list.
+With `failover_policy` `outage-only` and `prefer-primary` traffic goes through the VPN interface, the proxies from the list are used only while it is down, and traffic returns to the VPN once it recovers. With `fastest` there is no primary: urltest keeps the fastest live channel, and the VPN interface competes with the proxies on equal terms.
 
 ### 2. Proxy with URLTest
 

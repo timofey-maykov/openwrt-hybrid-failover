@@ -51,13 +51,13 @@ flowchart TB
   Client[LAN traffic] --> SEL
 ```
 
-Для секции `glob` (имя произвольное, теги получают этот префикс) создаются такие outbounds.
+Для vpn-секции `glob` (имя произвольное, теги получают этот префикс) создаются такие outbounds. У proxy-секции с `urltest_proxy_links` набор тот же, но без `{section}-awg-out`: каналы `{section}-1-out`, `{section}-2-out` и дальше берутся из `urltest_proxy_links`.
 
 | Outbound | Назначение |
 |----------|------------|
-| `{section}-awg-out` | Основной путь, **direct** через VPN-интерфейс (`option interface`, напр. `awg0`) |
-| `{section}-1-out`, `{section}-2-out`, ... | Резервы из `failover_proxy_links`, по одному на URI |
-| `{section}-urltest-out` | **urltest** по AWG и всем резервам |
+| `{section}-awg-out` | VPN-интерфейс секции, **direct** через `option interface` (напр. `awg0`). При `outage-only` и `prefer-primary` это основной канал |
+| `{section}-1-out`, `{section}-2-out`, ... | Прокси из `failover_proxy_links`, по одному на URI |
+| `{section}-urltest-out` | **urltest** по всем каналам секции |
 | `{section}-out` | **selector**, по умолчанию указывает на urltest |
 
 Порядок URI в списке задаёт приоритет кандидатов после основного VPN. Внутри urltest выбирается живой и быстрый.
@@ -127,7 +127,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 | `failover_proxy_links` | список URI (см. таблицу ниже) |
 | `interface` | VPN-интерфейс, напр. `awg0` |
 
-Трафик секции сначала идёт через VPN-интерфейс. Если он недоступен, urltest переключается на резервные proxy из списка.
+При `failover_policy` `outage-only` и `prefer-primary` трафик идёт через VPN-интерфейс, прокси из списка берутся, только когда он падает, а после восстановления трафик возвращается на VPN. При `fastest` основного канала нет: urltest держит самый быстрый живой, и VPN-интерфейс участвует наравне с прокси.
 
 ### 2. Proxy и URLTest
 
