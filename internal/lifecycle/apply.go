@@ -3,12 +3,15 @@ package lifecycle
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/lists"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/perclient"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/subscription"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
@@ -81,6 +84,12 @@ func ApplyAndReloadIfChanged(opts Options) (Result, error) {
 	if err != nil {
 		return res, err
 	}
+	// The cron jobs follow the settings, not the plan: a new subscription URL
+	// or interval leaves the plan hash alone, so sync them on every apply,
+	// not only at start.
+	if !opts.DryRun {
+		syncCron(opts.UCIPath)
+	}
 	if !res.Changed {
 		return res, nil
 	}
@@ -102,3 +111,12 @@ func RefreshPerClient(uciPath string) error {
 	return perclient.RefreshFromUCI(pkg)
 }
 
+func syncCron(uciPath string) {
+	if uciPath == "" {
+		uciPath = paths.UCIConfig
+	}
+	_ = lists.InstallCron(uciPath)
+	if err := subscription.InstallCron(uciPath); err != nil {
+		log.Printf("hybrid-failover apply: subscription cron: %v", err)
+	}
+}
