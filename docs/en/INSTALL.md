@@ -83,7 +83,7 @@ To see the router architecture:
 . /etc/openwrt_release && echo "$DISTRIB_ARCH"
 ```
 
-Releases are built for `aarch64_cortex-a53`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` and `x86_64`. The LuCI packages are architecture independent.
+Releases are built for `aarch64_cortex-a53`, `aarch64_cortex-a72`, `aarch64_cortex-a73`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` and `x86_64`. The LuCI packages are architecture independent.
 
 ### OpenWrt 24.x (opkg, `.ipk`)
 

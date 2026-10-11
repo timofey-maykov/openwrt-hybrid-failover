@@ -33,7 +33,7 @@ chmod +x scripts/build-packages.sh scripts/lib/*.sh
 | `dist/apk/` | `.apk` (apk-tools 3) | 25.12+ |
 | `dist/binaries/<arch>/` | голые бинарники | |
 
-Поддерживаются архитектуры `aarch64_cortex-a53`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` и `x86_64`.
+Поддерживаются архитектуры `aarch64_cortex-a53`, `aarch64_cortex-a72`, `aarch64_cortex-a73`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` и `x86_64`.
 
 ### Имена файлов
 

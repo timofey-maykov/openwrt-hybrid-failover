@@ -83,7 +83,7 @@ HF_DIST_DIR=/tmp/hf-dist     # каталог с локальными пакет
 . /etc/openwrt_release && echo "$DISTRIB_ARCH"
 ```
 
-Релизы собираются для `aarch64_cortex-a53`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` и `x86_64`. LuCI-пакеты общие для всех архитектур.
+Релизы собираются для `aarch64_cortex-a53`, `aarch64_cortex-a72`, `aarch64_cortex-a73`, `aarch64_generic`, `arm_cortex-a7`, `mipsel_24kc`, `mips_24kc` и `x86_64`. LuCI-пакеты общие для всех архитектур.
 
 ### OpenWrt 24.x (opkg, `.ipk`)
 

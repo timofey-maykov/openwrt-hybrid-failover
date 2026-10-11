@@ -5,6 +5,8 @@
 # Architectures we build release packages for (override: HF_BUILD_ARCHS="x86_64")
 HF_BUILD_ARCHS=(
 	aarch64_cortex-a53
+	aarch64_cortex-a72
+	aarch64_cortex-a73
 	aarch64_generic
 	arm_cortex-a7
 	mipsel_24kc
@@ -52,6 +54,9 @@ normalize_openwrt_arch() {
 	local raw="${1:-}"
 	case "$raw" in
 		aarch64_generic) echo "aarch64_generic" ;;
+		# apk refuses a package built for another aarch64 flavour, so the
+		# flavours we ship are kept as they are; the rest fall back to a53.
+		aarch64_cortex-a72|aarch64_cortex-a73) echo "$raw" ;;
 		aarch64*|arm64*) echo "aarch64_cortex-a53" ;;
 		mipsel*|mips64el*) echo "mipsel_24kc" ;;
 		mips_*) echo "mips_24kc" ;;
