@@ -21,6 +21,7 @@
 | `engine_mode` | `native` | `native` | Любое другое значение `apply` отклоняет с просьбой запустить `migrate`. Migrate заменяет `singbox` на `native` |
 | `config_schema_version` | int | `0` | Версия схемы UCI. Текущая `migrate` поднимает до `5`. В шаблоне стоит `4`, первый `migrate` после установки доводит до `5` |
 | `bootstrap_dns_server` | IP | `77.88.8.8` | Upstream для DNS на `127.0.0.42`. Все A-запросы, которые не получают FakeIP, уходят сюда обычным UDP на порт 53. Этот же сервер используется при прямой загрузке community-списков |
+| `dns_upstream_via` | `auto` / `wan` / `tunnel` | `auto` | Как запросы мимо fakeip доходят до `bootstrap_dns_server`. `wan`: обычный UDP с WAN. `tunnel`: по TCP через активный канал основной секции. `auto`: оба сразу, берётся первый ответ, так что провайдер, который временами режет UDP/53, не оставляет сайты вне списков без DNS |
 | `dns_rewrite_ttl` | int, секунды | `60` | TTL в ответах с FakeIP. Ответы от upstream всегда идут с TTL 60 |
 | `dns_type` | `doh` / `dot` / `udp` | `doh` | Попадает в план engine, но DNS-сервер native engine его сейчас не использует |
 | `dns_server` | string | `1.1.1.1` | То же, что `dns_type`. В native engine сейчас не используется |

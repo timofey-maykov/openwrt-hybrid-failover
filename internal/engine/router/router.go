@@ -178,6 +178,24 @@ func (r *Router) resolveOutbound(section, fallback string) (string, error) {
 	return fallback, nil
 }
 
+// DialUpstream connects to the DNS upstream through the active channel of
+// the first vpn or proxy section, the one Route falls back to. The DNS
+// server races it against plain UDP from the WAN, so a provider that drops
+// UDP/53 does not take every unlisted site down with it.
+func (r *Router) DialUpstream(ctx context.Context, addr string) (net.Conn, error) {
+	for _, sec := range r.plan.Sections {
+		if sec.ConnectionType != "vpn" && sec.ConnectionType != "proxy" {
+			continue
+		}
+		tag, err := r.resolveOutbound(sec.Name, plan.OutboundTag(sec.Name))
+		if err != nil {
+			return nil, err
+		}
+		return r.registry.DialTCP(ctx, tag, "tcp", addr)
+	}
+	return nil, fmt.Errorf("no vpn or proxy section to carry the dns upstream")
+}
+
 func (r *Router) Dial(meta plan.ConnMeta) (net.Conn, error) {
 	tag, err := r.Route(meta)
 	if err != nil {

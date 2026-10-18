@@ -44,14 +44,14 @@ const (
 )
 
 var (
-	CompilePlan  = plan.CompilePlan
-	ValidatePlan = plan.ValidatePlan
-	EngineMode   = plan.EngineMode
-	NativeEnabled = plan.NativeEnabled
+	CompilePlan    = plan.CompilePlan
+	ValidatePlan   = plan.ValidatePlan
+	EngineMode     = plan.EngineMode
+	NativeEnabled  = plan.NativeEnabled
 	LoadEngineMode = plan.LoadEngineMode
-	OutboundTag  = plan.OutboundTag
-	URLTestTag   = plan.URLTestTag
-	AWGTag       = plan.AWGTag
-	PeerTag      = plan.PeerTag
-	RulesetTag   = plan.RulesetTag
+	OutboundTag    = plan.OutboundTag
+	URLTestTag     = plan.URLTestTag
+	AWGTag         = plan.AWGTag
+	PeerTag        = plan.PeerTag
+	RulesetTag     = plan.RulesetTag
 )

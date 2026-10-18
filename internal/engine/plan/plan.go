@@ -76,9 +76,11 @@ type BindingPlan struct {
 }
 
 type DNSPlan struct {
-	Type          string
-	Server        string
-	Bootstrap     string
+	Type      string
+	Server    string
+	Bootstrap string
+	// UpstreamVia: auto (WAN and tunnel at once), wan, tunnel.
+	UpstreamVia   string
 	RewriteTTL    int
 	FakeIPRange   string
 	FakeIPDomains []string

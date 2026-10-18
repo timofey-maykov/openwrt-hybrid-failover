@@ -17,8 +17,10 @@ const defaultListenAddr = "127.0.0.42"
 const defaultListenPort = 53
 
 type Plan struct {
-	RewriteTTL    int
-	Bootstrap     string
+	RewriteTTL int
+	Bootstrap  string
+	// UpstreamVia is how upstream queries travel: auto, wan or tunnel.
+	UpstreamVia   string
 	RejectHTTPS   bool
 	FakeIPDomains []string
 	ListenAddr    string
@@ -33,6 +35,7 @@ type Server struct {
 	mu       sync.Mutex
 	plan     Plan
 	resolver Resolver
+	upstream UpstreamDialer
 	udp      *mdns.Server
 	tcp      *mdns.Server
 	cancel   context.CancelFunc
@@ -241,20 +244,6 @@ func (s *Server) resolve(name string) (string, bool) {
 		return "", false
 	}
 	return s.resolver.ResolveFakeIP(name)
-}
-
-func (s *Server) upstreamLookup(name string) (net.IP, error) {
-	c := mdns.Client{Timeout: 4 * time.Second}
-	resp, _, err := c.Exchange(mdnsMsg(name), net.JoinHostPort(s.plan.Bootstrap, "53"))
-	if err != nil {
-		return nil, err
-	}
-	for _, ans := range resp.Answer {
-		if a, ok := ans.(*mdns.A); ok {
-			return a.A, nil
-		}
-	}
-	return nil, fmt.Errorf("no A record")
 }
 
 func mdnsMsg(name string) *mdns.Msg {

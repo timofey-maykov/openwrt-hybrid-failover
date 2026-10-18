@@ -15,14 +15,14 @@ import (
 )
 
 type Runtime struct {
-	mu            sync.Mutex
-	plan          *plan.Plan
-	control       *control.Control
-	registry      *outbound.Registry
-	router        *router.Router
-	tproxy        *tproxy.Server
-	dnsServer     *dns.Server
-	listDownload  *listdownload.Server
+	mu           sync.Mutex
+	plan         *plan.Plan
+	control      *control.Control
+	registry     *outbound.Registry
+	router       *router.Router
+	tproxy       *tproxy.Server
+	dnsServer    *dns.Server
+	listDownload *listdownload.Server
 }
 
 func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, error) {
@@ -37,6 +37,7 @@ func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, er
 	dnsPlan := dns.Plan{
 		RewriteTTL:    p.DNS.RewriteTTL,
 		Bootstrap:     p.DNS.Bootstrap,
+		UpstreamVia:   p.DNS.UpstreamVia,
 		RejectHTTPS:   p.DNS.RejectHTTPS,
 		FakeIPDomains: p.DNS.FakeIPDomains,
 		ListenAddr:    plan.DNSListenAddr,
@@ -51,6 +52,7 @@ func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, er
 		dnsServer: dns.NewServer(dnsPlan, rtr),
 	}
 	rt.tproxy.DisableQUIC = p.DisableQUIC
+	rt.dnsServer.SetUpstreamDialer(rtr)
 	if p.ListDownload.Enabled && p.ListDownload.Section != "" {
 		rt.listDownload = listdownload.New(p.ListDownload.Section, p.ListDownload.Port, reg, ctrl)
 	}

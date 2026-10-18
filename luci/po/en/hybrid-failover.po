@@ -1838,9 +1838,6 @@ msgstr "DNS over TLS (DoT)"
 msgid "Обычный DNS (UDP)"
 msgstr "Plain DNS (UDP)"
 
-msgid "Нужен, чтобы найти сам DNS-сервер, если он задан именем."
-msgstr "Used to resolve the DNS server itself when it is given by name."
-
 msgid "Время жизни DNS-ответов, сек"
 msgstr "DNS answer TTL, s"
 
@@ -2803,3 +2800,21 @@ msgstr "A PulseVPN subscription"
 
 msgid "подключается одной ссылкой на вкладке «Подписки»."
 msgstr "connects with one link on the Subscriptions tab."
+
+msgid "Сюда уходят все запросы, которые не попали в списки и не получили fakeip-адрес."
+msgstr "Every query that matched no list and got no fakeip address goes here."
+
+msgid "Как спрашивать upstream"
+msgstr "How to reach the upstream"
+
+msgid "через WAN и через активный канал сразу, берётся первый ответ"
+msgstr "over the WAN and through the active channel at once, first answer wins"
+
+msgid "только напрямую через WAN"
+msgstr "over the WAN only"
+
+msgid "только через активный канал"
+msgstr "through the active channel only"
+
+msgid "Если провайдер временами режет UDP/53, сайты вне списков перестают открываться. Запрос через канал идёт по TCP и этого не боится."
+msgstr "When the provider drops UDP/53 now and then, sites outside the lists stop opening. The query through the channel travels over TCP and is not affected."
