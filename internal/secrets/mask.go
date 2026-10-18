@@ -33,6 +33,9 @@ func MaskURL(u string) string {
 		authority = "•••@" + authority[at+1:]
 	}
 	tail = strings.TrimLeft(tail, "/?#")
+	if strings.Contains(tail, "…") {
+		return u // already masked: text that passes here twice must not shrink further
+	}
 	switch {
 	case tail == "":
 		return scheme + authority

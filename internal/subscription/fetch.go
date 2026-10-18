@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -146,12 +147,13 @@ func (f *Fetcher) fetchOne(subURL string) (Source, []string, error) {
 	src := Source{URL: secrets.MaskURL(subURL)}
 	resp, err := f.HTTP.Get(strings.TrimSpace(subURL))
 	if err != nil {
-		return src, nil, err
+		// net/http puts the whole URL, token included, into its errors.
+		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return src, nil, err
+		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
 	}
 	if resp.StatusCode/100 != 2 {
 		return src, nil, fmt.Errorf("%s: %s", src.URL, httpStatusText(resp.StatusCode, body))
