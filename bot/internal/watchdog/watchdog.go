@@ -227,7 +227,7 @@ func (w *Watchdog) notify(text string) {
 		w.log.Info("watchdog notice withheld", "muted", muted, "text", oneLine(text, 120))
 		return
 	}
-	send(text)
+	send(routing.MaskSecrets(text))
 }
 
 // Run checks every router each interval until ctx ends.

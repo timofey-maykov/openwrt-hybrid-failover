@@ -171,3 +171,14 @@ func TestOwnedStateKeepsNamesAcrossLinkSaves(t *testing.T) {
 		t.Fatalf("state = %+v", st)
 	}
 }
+
+func TestFetchErrorsNeverCarryTheToken(t *testing.T) {
+	// A closed port: the dial error from net/http quotes the full URL.
+	_, err := NewFetcher().Fetch([]string{"http://127.0.0.1:9/sub/SECRETTOKEN1234.mac"})
+	if err == nil {
+		t.Fatal("expected a dial error")
+	}
+	if strings.Contains(err.Error(), "SECRETTOKEN") {
+		t.Fatalf("token in error: %v", err)
+	}
+}

@@ -23,6 +23,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/pending"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subscription"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
@@ -528,7 +529,7 @@ func runSubscriptionRefresh(args []string) int {
 	res, err := f.Fetch(urls)
 	if err != nil {
 		if !*dryRun {
-			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err.Error(), Sources: res.Sources})
+			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error()), Sources: res.Sources})
 		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -541,7 +542,7 @@ func runSubscriptionRefresh(args []string) int {
 	}
 	listKey, err := subscription.ApplyLinks(*uciPath, mainSection, links, *merge)
 	if err != nil {
-		_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err.Error(), Sources: res.Sources})
+		_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error()), Sources: res.Sources})
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

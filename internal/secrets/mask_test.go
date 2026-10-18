@@ -12,6 +12,9 @@ func TestMaskURL(t *testing.T) {
 		"vless://11111111-2222@host.net:443?type=ws&sni=a#name":  "vless://•••@host.net:443/…name",
 		"awg2://1.2.3.4:41490?private_key=SECRET&public_key=PUB": "awg2://1.2.3.4:41490/…=PUB",
 		"not a link": "not a link",
+		// Already masked text goes through status files and notices twice.
+		"https://sub.example.com/…1234:": "https://sub.example.com/…1234:",
+		"vless://•••@host.net:443/…name": "vless://•••@host.net:443/…name",
 	}
 	for in, want := range cases {
 		if got := MaskURL(in); got != want {

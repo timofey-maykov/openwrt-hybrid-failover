@@ -1,5 +1,7 @@
 package watchdog
 
+import "github.com/tmaykov/openwrt-hybrid-failover/bot/internal/routing"
+
 // Button is a key under a notice: a bot command (Data, as callback data) or a
 // link (URL). Exactly one of the two is set.
 type Button struct {
@@ -25,6 +27,7 @@ func (w *Watchdog) notifyRich(text string, rows [][]Button) {
 		w.log.Info("watchdog notice withheld", "muted", true, "text", oneLine(text, 120))
 		return
 	}
+	text = routing.MaskSecrets(text)
 	switch {
 	case rich != nil:
 		rich(text, rows)
