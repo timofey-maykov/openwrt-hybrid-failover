@@ -722,7 +722,14 @@ return view.extend({
 
 		o = st.taboption('dns', form.Value, 'bootstrap_dns_server', _('Bootstrap DNS'));
 		o.placeholder = '77.88.8.8';
-		o.description = _('Нужен, чтобы найти сам DNS-сервер, если он задан именем.');
+		o.description = _('Сюда уходят все запросы, которые не попали в списки и не получили fakeip-адрес.');
+
+		o = st.taboption('dns', form.ListValue, 'dns_upstream_via', _('Как спрашивать upstream'));
+		o.value('auto', _('через WAN и через активный канал сразу, берётся первый ответ'));
+		o.value('wan', _('только напрямую через WAN'));
+		o.value('tunnel', _('только через активный канал'));
+		o.default = 'auto';
+		o.description = _('Если провайдер временами режет UDP/53, сайты вне списков перестают открываться. Запрос через канал идёт по TCP и этого не боится.');
 
 		o = st.taboption('dns', form.Value, 'dns_rewrite_ttl', _('Время жизни DNS-ответов, сек'));
 		o.placeholder = '60';

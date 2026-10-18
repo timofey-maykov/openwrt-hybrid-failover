@@ -59,8 +59,12 @@ func (c *compiler) compileSettings() error {
 	dnsType := singbox.DefaultDNSType
 	dnsServer := singbox.DefaultDNSServer
 	bootstrap := singbox.DefaultBootstrapDNS
+	upstreamVia := "auto"
 	rewriteTTL := 60
 	if settings != nil {
+		if v := settings.Get("dns_upstream_via", ""); v != "" {
+			upstreamVia = v
+		}
 		if v := settings.Get("dns_type", ""); v != "" {
 			dnsType = v
 		}
@@ -92,6 +96,7 @@ func (c *compiler) compileSettings() error {
 		Type:          dnsType,
 		Server:        dnsServer,
 		Bootstrap:     bootstrap,
+		UpstreamVia:   upstreamVia,
 		RewriteTTL:    rewriteTTL,
 		FakeIPRange:   FakeIPRange,
 		FakeIPDomains: []string{FakeIPTestDomain, CheckProxyIPDomain},

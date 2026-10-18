@@ -21,6 +21,7 @@ The "Default" column shows what the code uses when the option is absent. If the 
 | `engine_mode` | `native` | `native` | `apply` rejects any other value and asks you to run `migrate`. Migrate replaces `singbox` with `native` |
 | `config_schema_version` | int | `0` | UCI schema version. The current `migrate` raises it to `5`. The template ships `4`, and the first `migrate` after install brings it to `5` |
 | `bootstrap_dns_server` | IP | `77.88.8.8` | Upstream for the DNS server on `127.0.0.42`. Every A query that does not get a FakeIP goes here over plain UDP port 53. The same server is used when community lists are downloaded directly |
+| `dns_upstream_via` | `auto` / `wan` / `tunnel` | `auto` | How queries outside fakeip reach `bootstrap_dns_server`. `wan`: plain UDP from the WAN. `tunnel`: over TCP through the main section's active channel. `auto`: both at once, first answer wins, so a provider that drops UDP/53 now and then does not leave the unlisted sites without DNS |
 | `dns_rewrite_ttl` | int, seconds | `60` | TTL in FakeIP answers. Answers from the upstream always carry TTL 60 |
 | `dns_type` | `doh` / `dot` / `udp` | `doh` | Goes into the engine plan, but the native engine DNS server does not use it at the moment |
 | `dns_server` | string | `1.1.1.1` | Same as `dns_type`. Not used by the native engine at the moment |

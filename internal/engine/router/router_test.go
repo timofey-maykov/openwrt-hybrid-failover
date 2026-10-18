@@ -92,9 +92,9 @@ func TestRouteFullRouteSourceOverridesDirect(t *testing.T) {
 		t.Fatal(err)
 	}
 	tag, err := r.Route(plan.ConnMeta{
-		SrcIP:  "192.168.11.50",
-		DstIP:  "213.180.204.186",
-		Domain: "music.yandex.ru",
+		SrcIP:   "192.168.11.50",
+		DstIP:   "213.180.204.186",
+		Domain:  "music.yandex.ru",
 		DstPort: 443,
 	})
 	if err != nil {
