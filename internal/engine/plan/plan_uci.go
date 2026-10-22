@@ -3,6 +3,7 @@ package plan
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -115,26 +116,30 @@ func (c *compiler) compileSection(section string, sec *uci.Section) error {
 	}
 	conn := sec.Get("connection_type", "")
 	sp := SectionPlan{Name: section, ConnectionType: conn, Enabled: true}
-	switch conn {
-	case "vpn":
+	sp.DirectWhenDown = (conn == "vpn" || conn == "proxy") && sec.GetBool("direct_when_down", true)
+	switch {
+	case conn == "proxy" && sp.DirectWhenDown && proxySectionEmpty(sec):
+		// No channel at all (the list was emptied, a subscription vanished):
+		// keep the clients online, the section goes direct until links return.
+		log.Printf("hybrid-failover plan: section %q has no channels, its traffic goes direct", section)
+		c.plan.Outbounds = append(c.plan.Outbounds, OutboundPlan{Tag: OutboundTag(section), Kind: OutboundDirect})
+		sp.SelectorTag = OutboundTag(section)
+	case conn == "vpn":
 		if err := c.compileVPN(section, sec); err != nil {
 			return err
 		}
 		sp.SelectorTag = OutboundTag(section)
-	case "proxy":
+		c.recordChannels(section, sec)
+	case conn == "proxy":
 		if err := c.compileProxy(section, sec); err != nil {
 			return err
 		}
 		sp.SelectorTag = OutboundTag(section)
-	case "block":
+		c.recordChannels(section, sec)
+	case conn == "block", conn == "":
 		// lists handled in compileRoutes
 	default:
-		if conn != "" {
-			return fmt.Errorf("unknown connection_type %q", conn)
-		}
-	}
-	if conn == "vpn" || conn == "proxy" {
-		c.recordChannels(section, sec)
+		return fmt.Errorf("unknown connection_type %q", conn)
 	}
 	if sectionRoutesByLists(c.pkg, section, sec) {
 		sp.ListBased = true
@@ -144,6 +149,14 @@ func (c *compiler) compileSection(section string, sec *uci.Section) error {
 	}
 	c.plan.Sections = append(c.plan.Sections, sp)
 	return nil
+}
+
+// proxySectionEmpty: a proxy section with no link to build a channel from.
+func proxySectionEmpty(sec *uci.Section) bool {
+	if sec.Get("proxy_config_type", "url") == "outbound" {
+		return strings.TrimSpace(sec.Get("outbound_json", "")) == ""
+	}
+	return len(channels.Links(sec)) == 0
 }
 
 // sectionRoutesByLists: the section only takes matching traffic (its own lists
