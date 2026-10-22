@@ -82,7 +82,7 @@ Only `admin_ids` get these messages. The `/watch` screen (the 🛡 Monitoring bu
 
 If the bot itself or the whole router goes down, nobody is left to write: procd restarts the bot, and only a bot on another device can report a router that is completely off.
 
-The same watchdog keeps an eye on subscriptions: when one ends within three days, has ended or failed to refresh, the admins get a message with a "Renew or ask" button (the subscription's `Support-Url`, else `partner_url`) and a button to refresh the subscriptions. While the situation lasts, the reminder repeats once a day.
+The same watchdog keeps an eye on subscriptions: when one ends within three days, has ended or failed to refresh, the admins get a message with a button to refresh the subscriptions. The "Renew or ask" button (the subscription's `Support-Url`, else `partner_url`) appears only when the subscription itself is the problem: it is ending, has ended or the panel refused it. When a refresh failed on the network and the subscription is active, the message says the servers from the last refresh keep working. While the situation lasts, the reminder repeats once a day.
 
 ### Updates
 
