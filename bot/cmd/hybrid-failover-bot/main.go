@@ -10,6 +10,7 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/app"
 	"github.com/tmaykov/openwrt-hybrid-failover/bot/internal/botconfig"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 )
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		if err := app.Run(ctx, *configPath); err != nil && err != context.Canceled {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, secrets.MaskBotToken(err.Error()))
 			os.Exit(1)
 		}
 	case "exec":
@@ -58,7 +59,7 @@ func main() {
 
 func exitIfErr(err error) {
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, secrets.MaskBotToken(err.Error()))
 		os.Exit(1)
 	}
 }

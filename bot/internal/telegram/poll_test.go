@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -71,7 +72,7 @@ func TestHTTPClientDropsADeadConnection(t *testing.T) {
 	defer srv.Close()
 	defer close(hang)
 
-	c := NewHTTPClient(150 * time.Millisecond)
+	c := NewHTTPClient(150 * time.Millisecond).(tokenSafeClient)
 	start := time.Now()
 	resp, err := c.Get(srv.URL)
 	if err == nil {
@@ -90,5 +91,32 @@ func TestHTTPClientDropsADeadConnection(t *testing.T) {
 	}
 	if !tr.DisableKeepAlives {
 		t.Fatal("a connection that died during a router reload must never be reused")
+	}
+}
+
+// The Bot API carries the token in the request path; a failed request must
+// not hand it on to the log, and timeouts must still read as timeouts.
+func TestHTTPClientHidesTheBotToken(t *testing.T) {
+	hang := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { <-hang }))
+	defer srv.Close()
+	defer close(hang)
+
+	// Built at run time so the source holds nothing that looks like a token.
+	token := "1234567890" + ":" + strings.Repeat("x", 35)
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/bot"+token+"/getMe", nil)
+	_, err := NewHTTPClient(100 * time.Millisecond).Do(req)
+	if err == nil {
+		t.Fatal("expected a timeout")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("token in error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "/bot<token>/getMe") {
+		t.Fatalf("error lost the method: %v", err)
+	}
+	var ue *url.Error
+	if !errors.As(err, &ue) || !ue.Timeout() {
+		t.Fatalf("must stay a timeout *url.Error: %#v", err)
 	}
 }
