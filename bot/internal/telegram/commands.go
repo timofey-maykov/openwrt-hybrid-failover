@@ -616,6 +616,7 @@ func (h CommandHandler) helpText(userID int64) string {
 	if h.mgr.Multi() {
 		lines = append(lines, "/routers — список роутеров", "/use <id> — выбрать роутер", "/router — текущий роутер", "")
 	}
+	lines = append(lines, featureHelpLines()...)
 	lines = append(lines,
 		"Быстрый старт:",
 		"/quick",
@@ -674,11 +675,37 @@ func (h CommandHandler) helpText(userID int64) string {
 	return strings.Join(lines, "\n")
 }
 
+// featureHelpLines lists the commands that have their own screens or
+// confirmations and were missing from /help: updates, subscriptions,
+// monitoring and the panel sections.
+func featureHelpLines() []string {
+	return []string{
+		"Обновление сервиса:",
+		"/version — установленная и доступная версии",
+		"/upgrade — обновить hybrid-failover и бота (с подтверждением)",
+		"/upgrade_status — ход и итог последнего обновления",
+		"",
+		"Подписки:",
+		"/subs — список подписок и интервал",
+		"/sub_add <ссылка>",
+		"/sub_del <номер>",
+		"/sub_interval <1h|6h|12h|24h>",
+		"/subscription_refresh — обновить сейчас",
+		"",
+		"Мониторинг:",
+		"/watch — состояние и сбои",
+		"/repair — перезапустить сервис (с подтверждением)",
+		"/mute [минуты], /unmute — уведомления мониторинга",
+		"",
+		"Разделы панели: /menu /channels /lists /settings /system /manage",
+		"",
+	}
+}
+
 func helpText() string {
 	sec := paths.DefaultMainSection
 	sectionKey := paths.UCIPackage + "." + sec
-	return strings.Join([]string{
-		"Команды:",
+	return strings.Join(append(append([]string{"Команды:"}, featureHelpLines()...),
 		"Быстрый старт:",
 		"/quick",
 		"/panel",
@@ -730,8 +757,8 @@ func helpText() string {
 		"/config_apply",
 		"/config_rollback",
 		"",
-		"Основная секция UCI: " + sectionKey,
-	}, "\n") + "\n\n" + strings.Join(routerHelpLines(), "\n")
+		"Основная секция UCI: "+sectionKey,
+	), "\n") + "\n\n" + strings.Join(routerHelpLines(), "\n")
 }
 
 func mainPanelText(mgr *routers.Manager) string {
