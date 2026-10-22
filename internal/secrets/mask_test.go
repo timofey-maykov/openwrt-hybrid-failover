@@ -32,3 +32,16 @@ func TestMaskSecretsCoversEverySchemeTheRouterUses(t *testing.T) {
 		}
 	}
 }
+
+func TestMaskBotToken(t *testing.T) {
+	// Built at run time so the source holds nothing that looks like a token.
+	token := "1234567890" + ":" + strings.Repeat("x", 35)
+	in := `Post "https://api.telegram.org/bot` + token + `/getMe": dial tcp: i/o timeout`
+	want := `Post "https://api.telegram.org/bot<token>/getMe": dial tcp: i/o timeout`
+	if got := MaskBotToken(in); got != want {
+		t.Fatalf("got %q", got)
+	}
+	if got := MaskBotToken("router 192.168.1.1:53 timeout"); got != "router 192.168.1.1:53 timeout" {
+		t.Fatalf("plain text changed: %q", got)
+	}
+}

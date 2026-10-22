@@ -50,3 +50,13 @@ func MaskURL(u string) string {
 func MaskSecrets(text string) string {
 	return secretURLRe.ReplaceAllStringFunc(text, MaskURL)
 }
+
+// botTokenRe matches a Telegram bot token: the numeric bot id, a colon and
+// the secret. The Bot API puts it into every request path (/bot<token>/...),
+// so net/http quotes it in each error about a failed request.
+var botTokenRe = regexp.MustCompile(`\d{5,}:[A-Za-z0-9_-]{30,}`)
+
+// MaskBotToken replaces Telegram bot tokens in text with <token>.
+func MaskBotToken(text string) string {
+	return botTokenRe.ReplaceAllString(text, "<token>")
+}

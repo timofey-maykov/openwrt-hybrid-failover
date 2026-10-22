@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 )
 
 // Telegram rejects messages over 4096 UTF-16 units; stay below it with room
@@ -32,7 +35,54 @@ const (
 // long poll would wait on it forever and no button would ever answer again.
 // HTTP/1.1 without keep-alive is used on purpose: nothing stale is ever reused,
 // and a timed-out request closes its own connection.
-func NewHTTPClient(timeout time.Duration) *http.Client {
+//
+// Errors come back with the bot token cut out: the Bot API carries it in the
+// request path, and net/http quotes the whole URL in every failed request, so
+// a DNS hiccup at boot would put the token into the router's syslog.
+func NewHTTPClient(timeout time.Duration) tgbotapi.HTTPClient {
+	return tokenSafeClient{newHTTPClient(timeout)}
+}
+
+type tokenSafeClient struct{ *http.Client }
+
+func (c tokenSafeClient) Do(req *http.Request) (*http.Response, error) {
+	resp, err := c.Client.Do(req)
+	if err != nil {
+		return resp, hideBotToken(err)
+	}
+	return resp, nil
+}
+
+// hideBotToken masks the token in err and keeps what callers test for: a
+// *url.Error stays one (Timeout and Temporary still answer), anything else
+// still unwraps to the original error.
+func hideBotToken(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		inner := ue.Err
+		if inner != nil && secrets.MaskBotToken(inner.Error()) != inner.Error() {
+			inner = maskedError{inner}
+		}
+		return &url.Error{Op: ue.Op, URL: secrets.MaskBotToken(ue.URL), Err: inner}
+	}
+	if masked := secrets.MaskBotToken(err.Error()); masked != err.Error() {
+		return maskedError{err}
+	}
+	return err
+}
+
+type maskedError struct{ err error }
+
+func (e maskedError) Error() string { return secrets.MaskBotToken(e.err.Error()) }
+func (e maskedError) Unwrap() error { return e.err }
+
+// Timeout keeps a masked network error recognisable as a timeout.
+func (e maskedError) Timeout() bool {
+	var t interface{ Timeout() bool }
+	return errors.As(e.err, &t) && t.Timeout()
+}
+
+func newHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
