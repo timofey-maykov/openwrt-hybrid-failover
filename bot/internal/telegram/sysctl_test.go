@@ -142,3 +142,14 @@ func TestConfirmIsBoundToTheRouterItWasAskedFor(t *testing.T) {
 		t.Fatalf("prefix %q", got)
 	}
 }
+
+// Commands with their own screens used to be missing from /help, so a user
+// could not find how to update the service from the bot.
+func TestHelpListsUpdateSubscriptionAndMonitoringCommands(t *testing.T) {
+	help := helpText()
+	for _, c := range []string{"/version", "/upgrade", "/upgrade_status", "/subs", "/sub_add", "/sub_del", "/sub_interval", "/watch", "/repair", "/mute", "/unmute", "/routes"} {
+		if !strings.Contains(help, c) {
+			t.Errorf("/help does not mention %s", c)
+		}
+	}
+}
