@@ -185,3 +185,36 @@ func TestTrimNotes(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestNetworkFailureOnAnActiveSubscriptionHasNoRenewButton(t *testing.T) {
+	g := newRichRig(t, cfg())
+	g.r.sub = subStatus(300*24*time.Hour, g.clock, `Get "https://p/…abcd": dial tcp: lookup p on 192.168.11.1:53: i/o timeout`)
+	g.tick()
+	g.said("⚠ Подписки не обновились", "Подписка активна до", "серверы из прошлого обновления продолжают работать")
+	for _, b := range g.lastButtons() {
+		if b.URL != "" {
+			t.Fatalf("renew button on a network failure: %+v", g.lastButtons())
+		}
+	}
+	// Another network failure with different wording is the same situation.
+	n := g.count()
+	g.r.sub = subStatus(300*24*time.Hour, g.clock, `Get "https://p/…abcd": read: connection reset by peer`)
+	g.tick()
+	if g.count() != n {
+		t.Fatalf("repeated for a reworded network error: %v", g.notes)
+	}
+}
+
+func TestPanelRefusalKeepsTheRenewButton(t *testing.T) {
+	g := newRichRig(t, cfg())
+	g.r.sub = subStatus(300*24*time.Hour, g.clock, "https://p/…abcd: HTTP 403: Подписка не активна")
+	g.tick()
+	bs := g.lastButtons()
+	if len(bs) == 0 || bs[0].URL == "" {
+		t.Fatalf("panel refusal must offer renewing: %+v", bs)
+	}
+	all := g.said("HTTP 403")
+	if strings.Contains(all, "продолжают работать") {
+		t.Fatal("must not reassure when the panel refused the subscription")
+	}
+}

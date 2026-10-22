@@ -29,6 +29,10 @@ type subscriptionReport struct {
 	key  string
 	text string
 	link string // where to renew or ask for help
+	// renew is true when the subscription itself needs attention (ended,
+	// ending, or the panel refused it), false for a refresh that failed on
+	// the way: a renew button would only confuse then.
+	renew bool
 }
 
 // evaluateSubscriptions turns the status into a report, nil when fine.
@@ -37,6 +41,8 @@ func evaluateSubscriptions(st routing.SubscriptionStatus, now time.Time) *subscr
 		return nil
 	}
 	var parts, keys []string
+	renew := false
+	activeUntil := int64(0)
 	link := st.PartnerURL
 	for i, src := range st.Sources {
 		name := src.Title
@@ -50,11 +56,16 @@ func evaluateSubscriptions(st routing.SubscriptionStatus, now time.Time) *subscr
 			continue
 		}
 		left := time.Unix(src.Expire, 0).Sub(now)
+		if left > 0 && (activeUntil == 0 || src.Expire < activeUntil) {
+			activeUntil = src.Expire
+		}
 		switch {
 		case left <= 0:
+			renew = true
 			parts = append(parts, fmt.Sprintf("⛔ %s закончилась %s", name, time.Unix(src.Expire, 0).Local().Format("02.01.2006")))
 			keys = append(keys, fmt.Sprintf("expired:%d:%d", i, src.Expire))
 		case left <= subscriptionSoonDays*24*time.Hour:
+			renew = true
 			days := int(left.Hours() / 24)
 			parts = append(parts, fmt.Sprintf("⏳ %s заканчивается %s", name, inDays(days)))
 			keys = append(keys, fmt.Sprintf("soon:%d:%d:%d", i, src.Expire, days))
@@ -62,12 +73,40 @@ func evaluateSubscriptions(st routing.SubscriptionStatus, now time.Time) *subscr
 	}
 	if st.Error != "" {
 		parts = append(parts, "⚠ Подписки не обновились: "+oneLine(st.Error, 160))
-		keys = append(keys, "error:"+oneLine(st.Error, 80))
+		keys = append(keys, "error:"+errorKind(st.Error))
+		if refusedByPanel(st.Error) {
+			renew = true
+		} else if !renew && activeUntil > 0 {
+			parts = append(parts, "Подписка активна до "+time.Unix(activeUntil, 0).Local().Format("02.01.2006")+
+				", серверы из прошлого обновления продолжают работать. Обновление повторится по расписанию.")
+		}
 	}
 	if len(parts) == 0 {
 		return nil
 	}
-	return &subscriptionReport{key: strings.Join(keys, "|"), text: strings.Join(parts, "\n"), link: link}
+	return &subscriptionReport{key: strings.Join(keys, "|"), text: strings.Join(parts, "\n"), link: link, renew: renew}
+}
+
+// refusedByPanel tells an answer from the panel that the subscription is not
+// valid (it says so with 401, 402, 403, 404 or 410) from a failure on the way
+// there, which renewing would not fix.
+func refusedByPanel(err string) bool {
+	for _, code := range []string{"HTTP 401", "HTTP 402", "HTTP 403", "HTTP 404", "HTTP 410"} {
+		if strings.Contains(err, code) {
+			return true
+		}
+	}
+	return false
+}
+
+// errorKind keys a failure by what went wrong, not by its exact text: a
+// lookup timeout and a reset are the same "network" situation, so the
+// notice is not repeated every time the wording changes.
+func errorKind(err string) string {
+	if refusedByPanel(err) {
+		return "refused"
+	}
+	return "network"
 }
 
 func inDays(d int) string {
@@ -108,7 +147,7 @@ func (w *Watchdog) checkSubscriptions(ctx context.Context, t *target) {
 
 	text := "📰 " + name + "\n" + rep.text
 	var rows [][]Button
-	if rep.link != "" {
+	if rep.link != "" && rep.renew {
 		rows = append(rows, []Button{{Text: "💳 Продлить или спросить", URL: rep.link}})
 	}
 	rows = append(rows, []Button{{Text: "🔄 Обновить подписки", Data: "cmd:/subscription_refresh"}, {Text: "📰 Подписки", Data: "nav:subs"}})
