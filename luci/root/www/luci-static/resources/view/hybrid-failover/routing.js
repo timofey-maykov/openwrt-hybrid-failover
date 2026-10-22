@@ -890,6 +890,12 @@ return view.extend({
 		o.monospace = true;
 		o.depends({ connection_type: 'proxy', proxy_config_type: 'outbound' });
 
+		o = s.taboption('conn', form.Flag, 'direct_when_down', _('Если все каналы недоступны, пускать напрямую'));
+		o.default = '1';
+		o.description = _('Пока ни один канал не проходит проверку, трафик из списков этой секции идёт через провайдера, а не обрывается. Как только канал оживает, трафик возвращается в туннель. Списки с привязкой «Не пускать» остаются заблокированными.');
+		o.depends('connection_type', 'proxy');
+		o.depends('connection_type', 'vpn');
+
 		o = s.taboption('conn', form.Value, 'interface', _('VPN-интерфейс'));
 		o.placeholder = 'awg0';
 		o.depends('connection_type', 'vpn');

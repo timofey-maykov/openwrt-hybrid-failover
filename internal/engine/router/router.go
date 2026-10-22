@@ -21,6 +21,18 @@ type Router struct {
 	fakeIP        *fakeIPStore
 	domainSetsMap map[string][]string
 	subnetSets    map[string][]*net.IPNet
+	// downDirect: sections whose traffic may go direct when their channels
+	// fail (direct_when_down), with the channel tags to watch.
+	downDirect map[string][]string
+	// bindingSection maps a list_route to its section and on_down.
+	bindingSection map[string]plan.BindingPlan
+}
+
+// route is where a connection goes, and the section whose direct_when_down
+// may take over when that fails.
+type route struct {
+	tag     string
+	section string
 }
 
 type compiledRule struct {
@@ -37,6 +49,21 @@ func New(p *plan.Plan, reg *outbound.Registry, ctrl *control.Control) (*Router, 
 		registry: reg,
 		control:  ctrl,
 		fakeIP:   newFakeIPStore(p.DNS.FakeIPRange),
+	}
+	r.downDirect = make(map[string][]string)
+	for _, sec := range p.Sections {
+		if sec.DirectWhenDown {
+			r.downDirect[sec.Name] = []string{}
+		}
+	}
+	for _, ch := range p.Channels {
+		if tags, ok := r.downDirect[ch.Section]; ok {
+			r.downDirect[ch.Section] = append(tags, ch.Tag)
+		}
+	}
+	r.bindingSection = make(map[string]plan.BindingPlan, len(p.Bindings))
+	for _, b := range p.Bindings {
+		r.bindingSection[b.Name] = b
 	}
 	for _, rs := range p.RuleSets {
 		if err := r.loadRuleSet(rs); err != nil {
@@ -76,6 +103,25 @@ func New(p *plan.Plan, reg *outbound.Registry, ctrl *control.Control) (*Router, 
 }
 
 func (r *Router) Route(meta plan.ConnMeta) (string, error) {
+	rt, err := r.route(meta)
+	return rt.tag, err
+}
+
+// route picks the outbound for a connection. While every channel of the
+// section is down, a section with direct_when_down goes direct right away
+// instead of failing each connection on a dead tunnel.
+func (r *Router) route(meta plan.ConnMeta) (route, error) {
+	rt, err := r.match(meta)
+	if err != nil || rt.section == "" || rt.tag == plan.DirectTag {
+		return rt, err
+	}
+	if r.sectionDown(rt.section) {
+		return route{tag: plan.DirectTag}, nil
+	}
+	return rt, nil
+}
+
+func (r *Router) match(meta plan.ConnMeta) (route, error) {
 	domain := meta.Domain
 	if domain == "" && meta.DstIP != "" {
 		if d, ok := r.fakeIP.LookupDomain(meta.DstIP); ok {
@@ -90,14 +136,15 @@ func (r *Router) Route(meta plan.ConnMeta) (string, error) {
 		}
 		if cr.rule.Reject {
 			if ruleMatches(cr, domain, dstIP, srcIP) {
-				return "", fmt.Errorf("rejected")
+				return route{}, fmt.Errorf("rejected")
 			}
 			continue
 		}
 		if !ruleMatches(cr, domain, dstIP, srcIP) {
 			continue
 		}
-		return r.resolveOutbound(cr.rule.Section, cr.rule.OutboundTag)
+		tag, err := r.resolveOutbound(cr.rule.Section, cr.rule.OutboundTag)
+		return route{tag: tag, section: r.directSection(cr.rule)}, err
 	}
 	// List-based sections: sing-box final=direct. Do not catch-all to VPN/proxy
 	// or Russian sites (Yandex Music, etc.) leak into the tunnel via tproxy.
@@ -108,9 +155,49 @@ func (r *Router) Route(meta plan.ConnMeta) (string, error) {
 		if sec.ListBased {
 			continue
 		}
-		return r.resolveOutbound(sec.Name, plan.OutboundTag(sec.Name))
+		tag, err := r.resolveOutbound(sec.Name, plan.OutboundTag(sec.Name))
+		section := ""
+		if _, ok := r.downDirect[sec.Name]; ok {
+			section = sec.Name
+		}
+		return route{tag: tag, section: section}, err
 	}
-	return plan.DirectTag, nil
+	return route{tag: plan.DirectTag}, nil
+}
+
+// directSection returns the section whose direct_when_down covers rule, or
+// "" when the rule must not go direct: a section without the option, or a
+// list bound with on_down block (the user chose blocked over direct).
+func (r *Router) directSection(rule plan.RouteRule) string {
+	section := rule.Section
+	if rule.Binding != "" {
+		b, ok := r.bindingSection[rule.Binding]
+		if !ok || b.OnDown == "block" {
+			return ""
+		}
+		section = b.Section
+	}
+	if _, ok := r.downDirect[section]; !ok {
+		return ""
+	}
+	return section
+}
+
+// sectionDown reports whether no channel of section works: each one failed
+// its last probe. A channel never probed yet counts as alive. A section with
+// no channels (compiled direct) is handled by its own direct outbound.
+func (r *Router) sectionDown(section string) bool {
+	tags := r.downDirect[section]
+	if r.control == nil || len(tags) == 0 {
+		return false
+	}
+	for _, tag := range tags {
+		d := r.control.Delay(tag)
+		if d.OK || d.Error == "" {
+			return false
+		}
+	}
+	return true
 }
 
 func ruleMatches(cr compiledRule, domain string, dstIP, srcIP net.IP) bool {
@@ -196,20 +283,37 @@ func (r *Router) DialUpstream(ctx context.Context, addr string) (net.Conn, error
 	return nil, fmt.Errorf("no vpn or proxy section to carry the dns upstream")
 }
 
+// Dial connects through the routed outbound. When that fails and the section
+// has direct_when_down, it tries direct: a tunnel can die between two probes,
+// and the client should not wait for the next round to get online.
 func (r *Router) Dial(meta plan.ConnMeta) (net.Conn, error) {
-	tag, err := r.Route(meta)
+	rt, err := r.route(meta)
 	if err != nil {
 		return nil, err
 	}
-	return r.registry.DialTCP(context.Background(), tag, "tcp", r.dialTarget(meta))
+	target := r.dialTarget(meta)
+	c, err := r.registry.DialTCP(context.Background(), rt.tag, "tcp", target)
+	if err != nil && rt.section != "" {
+		if dc, derr := r.registry.DialTCP(context.Background(), plan.DirectTag, "tcp", target); derr == nil {
+			return dc, nil
+		}
+	}
+	return c, err
 }
 
 func (r *Router) DialUDP(ctx context.Context, meta plan.ConnMeta) (net.PacketConn, error) {
-	tag, err := r.Route(meta)
+	rt, err := r.route(meta)
 	if err != nil {
 		return nil, err
 	}
-	return r.registry.DialUDP(ctx, tag, "udp", r.dialTarget(meta))
+	target := r.dialTarget(meta)
+	c, err := r.registry.DialUDP(ctx, rt.tag, "udp", target)
+	if err != nil && rt.section != "" && ctx.Err() == nil {
+		if dc, derr := r.registry.DialUDP(ctx, plan.DirectTag, "udp", target); derr == nil {
+			return dc, nil
+		}
+	}
+	return c, err
 }
 
 // dialTarget returns the hostname proxy outbounds should connect to.

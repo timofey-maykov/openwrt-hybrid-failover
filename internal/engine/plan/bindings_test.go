@@ -116,3 +116,40 @@ func TestCompileListBindingMissingChannel(t *testing.T) {
 }
 
 func sprintf(format string, a ...any) string { return fmt.Sprintf(format, a...) }
+
+// A proxy section left with no links (subscription gone, list emptied) must
+// not break the whole plan: it compiles to a direct outbound.
+func TestCompileProxyWithoutChannelsGoesDirect(t *testing.T) {
+	conf := `
+config settings 'settings'
+	option enabled '1'
+
+config section 'main'
+	option connection_type 'proxy'
+	option proxy_config_type 'urltest'
+	option user_subnet_list_type 'text'
+	option user_subnets_text '10.20.0.0/16'
+`
+	pkg, err := uci.Parse(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := plan.CompilePlan(pkg)
+	if err != nil {
+		t.Fatalf("empty proxy section must compile: %v", err)
+	}
+	found := false
+	for _, ob := range p.Outbounds {
+		if ob.Tag == plan.OutboundTag("main") && ob.Kind == plan.OutboundDirect {
+			found = true
+		}
+	}
+	if !found || !p.Sections[0].DirectWhenDown {
+		t.Fatalf("want main-out direct, got %+v", p.Outbounds)
+	}
+
+	pkg, _ = uci.Parse(conf + "\toption direct_when_down '0'\n")
+	if _, err := plan.CompilePlan(pkg); err == nil {
+		t.Fatal("with direct_when_down off an empty section is still an error")
+	}
+}

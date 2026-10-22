@@ -94,6 +94,9 @@ type SectionPlan struct {
 	Enabled        bool
 	// ListBased means unmatched traffic must stay direct (sing-box final), not catch-all to VPN/proxy.
 	ListBased bool
+	// DirectWhenDown sends the section's traffic direct while none of its
+	// channels works (or it has none), instead of failing every connection.
+	DirectWhenDown bool `json:",omitempty"`
 }
 
 type OutboundPlan struct {

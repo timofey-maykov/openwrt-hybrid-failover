@@ -173,6 +173,12 @@ Custom subnets (`user_subnets`, `user_subnets_text`, `local_subnet_lists`, `remo
 |--------|------|-------------|
 | `list channel_names` | list | Your own channel names as `id=Name`. The channel ids are shown on the "Сервисы и каналы" (Services and channels) tab, by `/routes` in the bot and by `hybrid-failover rpc ListRoutes` |
 
+### When every channel is down
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `direct_when_down` | `1` | For `vpn` and `proxy` sections. While none of the section's channels passes its urltest probe, the traffic of its lists goes direct through the ISP instead of failing. As soon as a channel passes a probe, the traffic returns to the tunnel. When a channel counted as alive but a connection through it could not be opened, the engine tries direct right away. A `proxy` section with no link at all does not break the config with this option on, it goes direct as a whole. Lists bound with `on_down 'block'` are never sent direct. `0` restores the old behaviour: with dead channels, connections to listed sites are not established |
+
 ### Section channels
 
 Every link in `urltest_proxy_links` (or in `failover_proxy_links` of a VPN with backups) becomes a channel. A VPN section has the interface itself as its first channel, with the id `vpn`. The id of any other channel is the first 8 characters of a sha256 over the link's server and credentials: the peer public key for `awg2://`, the scheme, user, host and port for the rest. Obfuscation parameters and the order of the links do not change the id, so bindings survive editing and reordering links. Two `awg2://` links to the same peer with different addresses make one channel.
