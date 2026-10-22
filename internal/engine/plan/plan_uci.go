@@ -298,9 +298,9 @@ func (c *compiler) compileProxy(section string, sec *uci.Section) error {
 		_, err := c.addProxyLink(section, link, udpOverTCP)
 		return err
 	case "urltest":
-		links := sec.GetList("urltest_proxy_links")
+		links := channels.Links(sec)
 		if len(links) == 0 {
-			return fmt.Errorf("urltest_proxy_links is not set")
+			return fmt.Errorf("no channels: urltest_proxy_links is empty, add links or refresh the subscription")
 		}
 		var candidates []string
 		for i, link := range links {

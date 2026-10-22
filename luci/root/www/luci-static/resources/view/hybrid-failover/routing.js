@@ -508,6 +508,35 @@ var CBIChips = form.MultiValue.extend({
 	}
 });
 
+// The proxy mode keeps its channels in urltest_proxy_links and the VPN mode
+// in failover_proxy_links. LuCI deletes the list of the mode that is no longer
+// shown when the section is saved, so switching the mode would lose every
+// channel (a subscription wrote them into one list only). Move them over to
+// the list of the new mode instead, and turn on what that list needs.
+function carryChannels(section, section_id, type) {
+	var from = type === 'proxy' ? 'failover_proxy_links' : 'urltest_proxy_links';
+	var to = type === 'proxy' ? 'urltest_proxy_links' : 'failover_proxy_links';
+	if (type !== 'proxy' && type !== 'vpn')
+		return;
+	var src = section.getUIElement(section_id, from);
+	var dst = section.getUIElement(section_id, to);
+	if (!src || !dst)
+		return;
+	var links = L.toArray(src.getValue()).filter(function(v) { return String(v).trim() !== ''; });
+	if (!links.length || L.toArray(dst.getValue()).length)
+		return;
+	dst.setValue(links);
+	var flag = type === 'proxy'
+		? section.getUIElement(section_id, 'proxy_config_type')
+		: section.getUIElement(section_id, 'failover_vpn_enabled');
+	if (flag)
+		flag.setValue(type === 'proxy' ? 'urltest' : '1');
+	section.map.checkDepends();
+	ui.addNotification(null, E('p', {},
+		_('Каналы (%d) перенесены в режим «%s».').format(links.length,
+			type === 'proxy' ? _('Через прокси-каналы') : _('Через VPN-интерфейс'))), 'info');
+}
+
 var CBIChannelList = form.DynamicList.extend({
 	__name__: 'CBI.HFChannelList',
 
@@ -840,6 +869,9 @@ return view.extend({
 		o.value('proxy', _('Через прокси-каналы'));
 		o.value('vpn', _('Через VPN-интерфейс'));
 		o.value('block', _('Блокировать'));
+		o.onchange = function(ev, section_id, value) {
+			carryChannels(this.section, section_id, value);
+		};
 
 		o = s.taboption('conn', form.ListValue, 'proxy_config_type', _('Как заданы каналы'));
 		o.value('urltest', _('Несколько ссылок, работает самая быстрая'));
@@ -889,7 +921,6 @@ return view.extend({
 		o.description = _('Каждая ссылка (vless, hysteria2, awg2, trojan, ss, socks) становится отдельным каналом. Движок их проверяет, ведёт трафик через самый быстрый, а при отказе переключается на следующий.');
 		o.emptyText = _('Каналов пока нет. Вставьте ссылку ниже или добавьте подписку в общих настройках.');
 		o.depends({ connection_type: 'proxy', proxy_config_type: 'urltest' });
-		o.depends({ connection_type: 'vpn', failover_vpn_enabled: '1' });
 
 		o = s.taboption('channels', CBIChannelList, 'failover_proxy_links', _('Резервные каналы'));
 		o.live = live;

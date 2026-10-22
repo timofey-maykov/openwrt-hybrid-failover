@@ -118,7 +118,13 @@ func Links(sec *uci.Section) []string {
 	case "proxy":
 		switch sec.Get("proxy_config_type", "url") {
 		case "urltest":
-			return sec.GetList("urltest_proxy_links")
+			if links := sec.GetList("urltest_proxy_links"); len(links) > 0 {
+				return links
+			}
+			// Left over from the VPN mode when the section was switched to
+			// proxy outside LuCI (uci set): use those channels rather than
+			// leaving the section with none.
+			return sec.GetList("failover_proxy_links")
 		case "url":
 			if s := strings.TrimSpace(sec.Get("proxy_string", "")); s != "" {
 				return []string{s}
