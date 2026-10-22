@@ -55,6 +55,23 @@ _write_apk_post_install() {
 		echo '[ -s "${IPKG_INSTROOT}/lib/functions.sh" ] && . "${IPKG_INSTROOT}/lib/functions.sh"'
 		echo "export root=\"\${IPKG_INSTROOT}\""
 		echo "export pkgname=\"${pkg_name}\""
+		# Packages up to 1.7.72 were built with the files owned by the CI user,
+		# which the router shows as nobody: rpcd then refused to restart our
+		# services (rc init wants a root-owned init script) and anything running
+		# as nobody could rewrite binaries that run as root. A kept conffile
+		# (the bot token) is not replaced by an upgrade, so fix ownership here.
+		cat <<'FIXOWN'
+if [ -z "${IPKG_INSTROOT}" ]; then
+	for l in "/lib/apk/packages/${pkgname}.list" "/lib/apk/packages/${pkgname}.conffiles"; do
+		[ -f "$l" ] || continue
+		while IFS= read -r f; do
+			[ -e "$f" ] && chown -h root:root "$f" 2>/dev/null
+			d="${f%/*}"
+			case "$d" in */hybrid-failover|*/hybrid-failover/*) chown root:root "$d" 2>/dev/null ;; esac
+		done <"$l"
+	done
+fi
+FIXOWN
 		if [[ -f "$postinst" ]]; then
 			sed '/^#!/d' "$postinst"
 		fi
@@ -113,7 +130,7 @@ _run_apk_mkpkg_docker() {
 
 	docker "${docker_args[@]}" \
 		"${APK_DOCKER_IMAGE}" \
-		sh -c "apk add -q apk-tools 2>/dev/null || true; apk mkpkg${sign_arg}${args_quoted} --script post-install:/scripts/post-install --script post-upgrade:/scripts/post-upgrade --files /pkg --output /out/${out_name}"
+		sh -c "apk add -q apk-tools 2>/dev/null || true; cp -a /pkg /tmp/pkg && chown -R 0:0 /tmp/pkg && apk mkpkg${sign_arg}${args_quoted} --script post-install:/scripts/post-install --script post-upgrade:/scripts/post-upgrade --files /tmp/pkg --output /out/${out_name}"
 }
 
 apk_build() {
@@ -192,6 +209,12 @@ apk_build() {
 	if _apk_bin >/dev/null 2>&1; then
 		local apk_bin
 		apk_bin="$(_apk_bin)"
+		# apk stores the owner the files have here; on the router it must be root.
+		if [[ "$(id -u)" == 0 ]]; then
+			chown -R 0:0 "$idir"
+		else
+			echo "warning: building ${pkg_name}.apk as $(id -un): file owners are not root, build in docker or as root" >&2
+		fi
 		_run_apk_mkpkg_native "$apk_bin" "${mkpkg_args[@]}" \
 			--script "post-install:${scripts_dir}/post-install" \
 			--script "post-upgrade:${scripts_dir}/post-upgrade" \
