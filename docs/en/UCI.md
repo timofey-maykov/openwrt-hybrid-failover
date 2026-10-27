@@ -8,7 +8,7 @@ Routing is described by `config section '<name>'` sections. The name is free-for
 
 Only the native engine exists. The mode with an external sing-box was removed, and `hybrid-failover migrate` switches old installs to native. Options that only sing-box used to read are still in the template and in LuCI, but they have no effect. They are marked below.
 
-The general description is in [OVERVIEW.md](OVERVIEW.md). Initial setup is done with `hybrid-failover migrate`.
+The general description is in [OVERVIEW.md](OVERVIEW.md), the commands in [CLI.md](CLI.md).
 
 ---
 
@@ -37,7 +37,7 @@ The "Default" column shows what the code uses when the option is absent. If the 
 | `webhook_url` | URL | empty | HTTP webhook for failover events. The old name `failover_webhook_url` is read when `webhook_url` is empty |
 | `failover_probe_interval` | duration | `30s` | Interval of the background failover controller (not the urltest interval). Values below `15s` are replaced with `30s`, values above `5m` are capped at `5m` |
 | `history_max_lines` | int | `500` | How many lines to keep in `/var/log/hybrid-failover/history.jsonl`. Allowed range is 50 to 10000, anything below 50 means 500 |
-| `delay_history_points` | int | `50` | Delay points per channel in `/var/run/hybrid-failover/delay-history.json`, from 10 to 200 |
+| `delay_history_points` | int | `50` | Delay points per channel in `/var/run/hybrid-failover/delay-history.json`, from 10 to 200. A non-numeric value gives 10 |
 | `output_network_interface` | string | empty | Read into the engine plan, but the native engine does not apply it |
 | `list subscription_urls` | list | - | Subscription URLs. `hybrid-failover subscription-refresh` or LuCI write the links into `main_section` |
 | `subscription_update_interval` | `off` / `1h` / `3h` / `6h` / `12h` / `1d` | `off` | Cron period for `hybrid-failover subscription-refresh`. The job exists only when `subscription_urls` is set. A refresh replaces the links the previous refresh wrote (remembered in `/etc/hybrid-failover/subscription-links.json`) and keeps the links added by hand. A subscription with no supported links changes nothing. Server names from the subscription go into the section's `channel_names`; names set by hand stay |
@@ -53,7 +53,7 @@ These options are in the template and in LuCI, but the native engine does not us
 | Option | Template | What it used to do |
 |--------|----------|--------------------|
 | `enabled` | `1` | A flag in LuCI. The code does not read it, the service is enabled with `/etc/init.d/hybrid-failover enable` |
-| `cache_path` | `/etc/sing-box/cache.db` | sing-box cache file. `migrate` still sets it when the option is missing |
+| `cache_path` | `/etc/sing-box/cache.db` | sing-box cache file. Schema migration v1 sets it when the option is missing |
 | `clash_api_listen` | `127.0.0.1:9090` | sing-box Clash API address |
 | `service_listen_address` | empty | Fallback Clash API address when `clash_api_listen` is empty |
 | `enable_yacd` | `0` | Yacd web UI in sing-box |
@@ -83,7 +83,7 @@ Rules for individual LAN clients. A rule sets the client IP and how its traffic 
 
 After changing rules LuCI reloads on its own. From the console run `hybrid-failover reload`.
 
-Check the result with `hybrid-failover rpc ListClients` or the **Refresh** button on the **Clients** tab (the Effective rules table).
+Check the result with `hybrid-failover rpc ListClients` or the effective rules block on the **Clients** tab.
 
 ### Legacy lists
 
@@ -269,23 +269,13 @@ Section `config bot 'main'`. The init script `/etc/init.d/hybrid-failover-bot` r
 | `enabled` | `0` | `1` starts the bot |
 | `binary` | `/usr/bin/hybrid-failover-bot` | Path to the binary |
 | `config_path` | `/etc/hybrid-failover-bot.json` | Path to the bot JSON config |
-| `log_path` | `/var/log/hybrid-failover-bot.log` | Log file, passed to the bot through `HF_BOT_LOG_PATH` |
+| `log_path` | `/var/log/hybrid-failover-bot.log` | Passed to the bot in `HF_BOT_LOG_PATH`, but the bot does not read that variable. The bot log is set by `log_path` in the JSON config |
 
 ---
 
-## CLI and validation
+## Validation
 
-```sh
-hybrid-failover migrate [--dry-run]    # import old UCI and migrate the schema to v5
-hybrid-failover validate [--dry-run]   # check UCI and build the engine plan
-hybrid-failover apply [--dry-run]      # apply the engine plan and nft, reload on changes
-hybrid-failover reload                 # re-read UCI
-hybrid-failover check-fakeip           # DNS through 127.0.0.42 without bind-dig
-hybrid-failover list-update            # update community lists
-hybrid-failover subscription-refresh   # write subscription links into main_section
-```
-
-`validate` and `apply` check the URIs in `failover_proxy_links` and `urltest_proxy_links` and the `urltest_check_interval` / `urltest_idle_timeout` pair.
+`hybrid-failover validate` checks the URIs in `failover_proxy_links` and `urltest_proxy_links`, the `urltest_check_interval` / `urltest_idle_timeout` pair and the `list_route` bindings. `apply` runs the same checks before applying. The other commands are in [CLI.md](CLI.md).
 
 ---
 

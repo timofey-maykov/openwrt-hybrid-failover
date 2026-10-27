@@ -58,9 +58,9 @@ If `main_section` does not exist in the local router's UCI, the bot falls back t
 
 `routers`, `uci_package`, `main_section`, `allow_shell_ids` and the `watchdog_*` keys can only be changed in the JSON file itself.
 
-The UCI section `hybrid-failover-bot.main` holds `enabled` (`0` after installation), `binary`, `config_path` and `log_path`.
+The UCI section `hybrid-failover-bot.main` holds `enabled` (`0` after installation), `binary`, `config_path` and `log_path`. The init script passes the last one in `HF_BOT_LOG_PATH`, but the bot does not read that variable; the log is set by `log_path` in the JSON.
 
-The core can send failover alerts without the bot, through the UCI option `hybrid-failover.settings.webhook_url`. See [docs/en/OVERVIEW.md](../docs/en/OVERVIEW.md).
+The core can send failover alerts without the bot, through the UCI option `hybrid-failover.settings.webhook_url`. See [docs/en/OVERVIEW.md](../docs/en/OVERVIEW.md#switch-notifications).
 
 ### Failover notifications
 
@@ -255,7 +255,7 @@ Beam WRT only. On other routers these commands answer that the tools are missing
 - `/config_apply` writes the pending file over the main one. Restart the bot afterwards.
 - `/config_rollback` deletes the pending file.
 
-Router commands that could cut you off, overwrite settings or send secrets out ask for confirmation both as a button and when typed. They are `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/backup`, `/sh`, `/mode5g` with a mode, and `/service` with `stop`, `restart` or `disable`. The confirmation lasts 30 seconds, belongs to you and to the router that was selected, works once, and says what will happen. If you switched routers with `/use` in the meantime, it is cancelled.
+Router commands that could cut you off, overwrite settings or send secrets out ask for confirmation both as a button and when typed. They are `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/upgrade`, `/backup`, `/sh`, `/mode5g` with a mode, and `/service` with `stop`, `restart` or `disable`. The confirmation lasts 30 seconds, belongs to you and to the router that was selected, works once, and says what will happen. If you switched routers with `/use` in the meantime, it is cancelled.
 
 The bot token and passwords are cut from the bot log, the audit log and the output of `/syslog`, `/dmesg` and `/sh`, because the Telegram client puts the token into its error text. Subscription and proxy links (`https://`, `vless://`, `ss://` and the rest) are shown in every bot reply without credentials or tail, `/uci_show` included.
 

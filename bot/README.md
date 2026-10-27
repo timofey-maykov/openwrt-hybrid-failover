@@ -58,9 +58,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat \
 
 `routers`, `uci_package`, `main_section`, `allow_shell_ids` и ключи `watchdog_*` правятся только в самом JSON.
 
-UCI `hybrid-failover-bot.main` содержит `enabled` (после установки `0`), `binary`, `config_path` и `log_path`.
+UCI `hybrid-failover-bot.main` содержит `enabled` (после установки `0`), `binary`, `config_path` и `log_path`. Последний init-скрипт передаёт в `HF_BOT_LOG_PATH`, но бот эту переменную не читает, журнал задаёт `log_path` в JSON.
 
-Уведомления о failover без бота умеет присылать сам core через UCI `hybrid-failover.settings.webhook_url`, см. [docs/OVERVIEW.md](../docs/OVERVIEW.md#алерты-при-failover).
+Уведомления о failover без бота умеет присылать сам core через UCI `hybrid-failover.settings.webhook_url`, см. [docs/OVERVIEW.md](../docs/OVERVIEW.md#уведомления-о-переключениях).
 
 ### Уведомления о failover
 
@@ -254,7 +254,7 @@ Telegram отдаёт обновления одного токена тольк�
 - `/config_apply` записывает pending в основной файл, после чего бот нужно перезапустить.
 - `/config_rollback` удаляет pending.
 
-Команды управления роутером, которые могут отрезать вас от него, перезаписать настройки или отправить наружу секреты, просят подтверждения и в виде кнопки, и когда набраны вручную. Это `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/backup`, `/sh`, `/mode5g` с режимом и `/service` с `stop`, `restart` или `disable`. Подтверждение действует 30 секунд, привязано к вам и к выбранному роутеру, срабатывает один раз, и в нём написано, что именно произойдёт. Если вы за это время переключили роутер командой `/use`, подтверждение отменяется.
+Команды управления роутером, которые могут отрезать вас от него, перезаписать настройки или отправить наружу секреты, просят подтверждения и в виде кнопки, и когда набраны вручную. Это `/reboot`, `/ifdown`, `/wifi_off`, `/fw_restart`, `/portfwd_add`, `/portfwd_del`, `/update_apply`, `/apk_upgrade`, `/upgrade`, `/backup`, `/sh`, `/mode5g` с режимом и `/service` с `stop`, `restart` или `disable`. Подтверждение действует 30 секунд, привязано к вам и к выбранному роутеру, срабатывает один раз, и в нём написано, что именно произойдёт. Если вы за это время переключили роутер командой `/use`, подтверждение отменяется.
 
 Токен бота и пароли вырезаются из лога бота, из audit-лога и из вывода `/syslog`, `/dmesg` и `/sh`, потому что клиент Telegram кладёт токен в текст ошибок. Ссылки подписок и прокси (`https://`, `vless://`, `ss://` и остальные) во всех ответах бота показываются без учётных данных и хвоста, в том числе в `/uci_show`.
 

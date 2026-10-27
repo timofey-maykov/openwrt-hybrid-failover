@@ -8,7 +8,7 @@
 
 Работает только native engine. Режим с внешним sing-box удалён, `hybrid-failover migrate` переводит старые установки на native. Опции, которые читал только sing-box, остались в шаблоне и в LuCI, но ни на что не влияют. Они отмечены ниже.
 
-Общее описание в [OVERVIEW.md](OVERVIEW.md), первичная настройка через `hybrid-failover migrate`.
+Общее описание в [OVERVIEW.md](OVERVIEW.md), команды в [CLI.md](CLI.md).
 
 ---
 
@@ -37,7 +37,7 @@
 | `webhook_url` | URL | пусто | HTTP webhook на события failover. Старое имя `failover_webhook_url` читается, если `webhook_url` пуст |
 | `failover_probe_interval` | duration | `30s` | Интервал фонового контроллера failover (не интервал urltest). Значения меньше `15s` заменяются на `30s`, больше `5m` обрезаются до `5m` |
 | `history_max_lines` | int | `500` | Сколько строк держать в `/var/log/hybrid-failover/history.jsonl`. Допустимо от 50 до 10000, меньше 50 значит 500 |
-| `delay_history_points` | int | `50` | Точек задержки на канал в `/var/run/hybrid-failover/delay-history.json`, от 10 до 200 |
+| `delay_history_points` | int | `50` | Точек задержки на канал в `/var/run/hybrid-failover/delay-history.json`, от 10 до 200. Нечисловое значение даёт 10 |
 | `output_network_interface` | string | пусто | Читается в план engine, но native engine его не применяет |
 | `list subscription_urls` | list | - | URL подписок. `hybrid-failover subscription-refresh` или LuCI записывают ссылки в `main_section` |
 | `subscription_update_interval` | `off` / `1h` / `3h` / `6h` / `12h` / `1d` | `off` | Период cron для `hybrid-failover subscription-refresh`. Задача есть только при заданном `subscription_urls`. Обновление заменяет ссылки, записанные прошлым обновлением (список в `/etc/hybrid-failover/subscription-links.json`), и не трогает ссылки, добавленные вручную. Подписка без поддерживаемых ссылок ничего не меняет. Названия серверов из подписки попадают в `channel_names` секции, названия, заданные вручную, остаются |
@@ -53,7 +53,7 @@
 | Опция | Шаблон | Что делала раньше |
 |--------|--------|-------------------|
 | `enabled` | `1` | Флаг в LuCI. Код его не читает, службу включают через `/etc/init.d/hybrid-failover enable` |
-| `cache_path` | `/etc/sing-box/cache.db` | Файл cache sing-box. `migrate` по-прежнему прописывает его, если опции нет |
+| `cache_path` | `/etc/sing-box/cache.db` | Файл cache sing-box. Миграция схемы v1 прописывает его, если опции нет |
 | `clash_api_listen` | `127.0.0.1:9090` | Адрес Clash API sing-box |
 | `service_listen_address` | пусто | Запасной адрес Clash API, если `clash_api_listen` пуст |
 | `enable_yacd` | `0` | Веб-интерфейс Yacd в sing-box |
@@ -83,7 +83,7 @@
 
 После изменения правил LuCI сам делает reload, из консоли нужен `hybrid-failover reload`.
 
-Проверка через `hybrid-failover rpc ListClients` или кнопку **Обновить** на вкладке **Клиенты** (таблица Effective rules).
+Проверка через `hybrid-failover rpc ListClients` или блок «Что действует сейчас» на вкладке **Клиенты**.
 
 ### Устаревшие списки
 
@@ -269,23 +269,13 @@ config list_route 'lr_main_user_ul_work'
 | `enabled` | `0` | `1` запускает бота |
 | `binary` | `/usr/bin/hybrid-failover-bot` | Путь к бинарнику |
 | `config_path` | `/etc/hybrid-failover-bot.json` | Путь к JSON-конфигу бота |
-| `log_path` | `/var/log/hybrid-failover-bot.log` | Файл журнала, передаётся боту через `HF_BOT_LOG_PATH` |
+| `log_path` | `/var/log/hybrid-failover-bot.log` | Передаётся боту в `HF_BOT_LOG_PATH`, но бот эту переменную не читает. Журнал бота задаёт `log_path` в JSON-конфиге |
 
 ---
 
-## CLI и проверка
+## Проверка
 
-```sh
-hybrid-failover migrate [--dry-run]    # импорт старого UCI и миграция схемы до v5
-hybrid-failover validate [--dry-run]   # проверка UCI и сборка плана engine
-hybrid-failover apply [--dry-run]      # применить план engine и nft, reload при изменениях
-hybrid-failover reload                 # перечитать UCI
-hybrid-failover check-fakeip           # DNS через 127.0.0.42 без bind-dig
-hybrid-failover list-update            # обновить community-списки
-hybrid-failover subscription-refresh   # записать ссылки из подписок в main_section
-```
-
-`validate` и `apply` проверяют URI в `failover_proxy_links` и `urltest_proxy_links` и пару `urltest_check_interval` / `urltest_idle_timeout`.
+`hybrid-failover validate` проверяет URI в `failover_proxy_links` и `urltest_proxy_links`, пару `urltest_check_interval` / `urltest_idle_timeout` и привязки `list_route`. `apply` делает те же проверки перед применением. Остальные команды в [CLI.md](CLI.md).
 
 ---
 

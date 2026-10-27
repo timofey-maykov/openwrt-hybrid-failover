@@ -4,22 +4,26 @@
 
 Веб-интерфейс Hybrid Failover для OpenWrt.
 
-**Руководство пользователя (что нажимать и зачем):** [docs/LUCI.md](../docs/LUCI.md)
+**Руководство пользователя (вкладки, кнопки, когда изменения вступают в силу):** [docs/LUCI.md](../docs/LUCI.md)
 
 ---
 
 ## Меню и пути
 
-**Сервисы → Hybrid Failover**, базовый URL `/cgi-bin/luci/admin/services/hybrid-failover`. Корень меню ведёт на Обзор.
+**Сервисы → Hybrid Failover**, базовый URL `/cgi-bin/luci/admin/services/hybrid-failover`. Корень меню ведёт на `/dashboard`.
 
-| Вкладка | Путь | View | Назначение |
-|---------|------|------|------------|
-| Обзор | `/dashboard` | `dashboard.js` | Статус, каналы, контроллер failover, delay history, ручное переключение |
-| Маршрутизация | `/routing` | `routing.js` | Глобальные настройки, секции, URI, проверка и применение |
-| Диагностика | `/diagnostics` | `diagnostics.js` | Validate, check-nft, check-fakeip, global-check, бэкап UCI |
-| Клиенты | `/clients` | `clients.js` | `client_rule`, выбор из DHCP, effective rules |
-| Telegram | `/bot` | `bot.js` | Служба бота, JSON-конфиг через pending |
-| Обновление | `/update` | `update.js` | Проверка релизов на GitHub и установка |
+| Путь | View |
+|------|------|
+| `/dashboard` | `dashboard.js` |
+| `/routing` | `routing.js` |
+| `/services` | `services.js` |
+| `/tunnels` | `tunnels.js` |
+| `/diagnostics` | `diagnostics.js` |
+| `/clients` | `clients.js` |
+| `/bot` | `bot.js` |
+| `/update` | `update.js` |
+
+Что на каждой вкладке, описано в [docs/LUCI.md](../docs/LUCI.md#вкладки). Названия пунктов меню заданы в `menu.d` на русском и переводятся каталогом, как остальные строки. Все пункты требуют ACL `luci-app-hybrid-failover`. Пункт `/bot` виден, только если есть исполняемый `/usr/bin/hybrid-failover-bot`.
 
 ---
 
@@ -27,8 +31,9 @@
 
 | Путь | Содержимое |
 |------|------------|
-| `luci/root/www/luci-static/resources/view/hybrid-failover/` | Страницы LuCI (JS) |
-| `luci/root/www/luci-static/resources/hybrid-failover/hf-ui.js` | Общий UI: карточки, таблицы, модалки, RPC-обёртки |
+| `luci/root/www/luci-static/resources/view/hybrid-failover/` | Страницы LuCI (JS), по одной на вкладку |
+| `luci/root/www/luci-static/resources/hybrid-failover/hf-ui.js` | Общий UI: шапка страницы, карточки, таблицы, модалки, общий статус, RPC-обёртки |
+| `luci/root/www/luci-static/resources/hybrid-failover/hf-charts.js` | Графики для `tunnels.js`: canvas, легенда, общий курсор, зум. Без внешних библиотек |
 | `luci/root/usr/share/luci/menu.d/luci-app-hybrid-failover.json` | Меню |
 | `luci/root/usr/share/rpcd/ucode/hybrid-failover` | Backend для rpcd (ucode) |
 | `luci/root/usr/share/rpcd/acl.d/luci-app-hybrid-failover.json` | ACL |
@@ -38,7 +43,7 @@
 
 ### Переводы
 
-Исходные строки в JS написаны на русском, поэтому русский интерфейс работает без каталога. `po/ru` почти пустой и нужен только для инструментов. Английский и упрощённый китайский каталоги покрывают все строки интерфейса.
+Исходные строки в JS написаны на русском, поэтому русский интерфейс работает без каталога. `po/ru` почти пустой и нужен только для инструментов. Английский и упрощённый китайский каталоги покрывают почти все строки интерфейса. Строка без перевода показывается на русском. Новые строки `_('…')` добавляйте в оба каталога.
 
 После правки `.po` пересоберите каталоги вручную:
 
@@ -58,27 +63,52 @@
 LuCI (браузер) → ubus hybrid-failover.<method> → rpcd ucode → hybrid-failover rpc <Method>
 ```
 
-Ответ приходит в виде `{ ok, data }`, если core вернул JSON, иначе `{ ok, code, output }`.
+Ответ приходит в виде `{ ok, data }`, если core вернул JSON, иначе `{ ok, output }` или `{ ok, code, output }`. `ok` повторяет код выхода core, поэтому неудачная проверка возвращает и `ok: false`, и разобранный JSON.
 
-| ubus | Команда core |
-|------|--------------|
-| `status`, `health`, `history`, `export_history`, `delay_history`, `metrics` | `rpc Status`, `Health`, `History`, `ExportHistory`, `DelayHistory`, `Metrics` |
-| `validate`, `check_nft`, `check_fakeip`, `global_check` | `rpc Validate`, `CheckNft`, `CheckFakeip`, `GlobalCheck` |
-| `switch_proxy` (`section`, `outbound`) | `rpc SwitchProxy <section> <outbound>` |
-| `decode_uri` (`uri`) | `rpc DecodeURI <uri>` |
-| `apply`, `reload` | `hybrid-failover apply`, `hybrid-failover reload` |
-| `list_update`, `subscription_refresh`, `duplicate_section` | `rpc ListUpdate`, `SubscriptionRefresh`, `DuplicateSection` |
-| `list_clients` | `rpc ListClients` |
-| `backup_uci`, `backup_download`, `restore_uci` (`path`) | `rpc BackupUCI`, `BackupDownload`, `RestoreUCI` |
-| `pending_capture`, `pending_validate`, `pending_apply`, `pending_rollback` | `rpc CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback` |
-| `update_check`, `update_status`, `update_apply` | `rpc UpdateCheck`, `UpdateStatus`, `UpdateApply` |
-| `dhcp_leases` | Без core, см. ниже |
+### Методы ubus
 
-У native engine нет HTTP API в духе Clash. Статус, каналы и история задержек приходят только через эти RPC. История задержек лежит в `/var/run/hybrid-failover/delay-history.json`, журнал переключений в `/var/log/hybrid-failover/history.jsonl`.
+| ubus | Аргументы | Команда core | Кто вызывает |
+|------|-----------|--------------|--------------|
+| `status` | | `rpc Status` | Обзор, Маршрутизация, Клиенты |
+| `health` | | `rpc Health` | Обзор ("Проверить каналы сейчас"), таймаут 60 с |
+| `history` | | `rpc History` | Обзор |
+| `export_history` | | `rpc ExportHistory` | Обзор ("Экспорт журнала") |
+| `delay_history` | | `rpc DelayHistory` | Обзор |
+| `metrics` | | `rpc Metrics` | Объявлен в `hf-ui.js`, страницы не вызывают |
+| `list_routes` | | `rpc ListRoutes` | Обзор, Маршрутизация, Сервисы и каналы |
+| `validate` | | `rpc Validate` | Маршрутизация, Диагностика |
+| `check_nft` | | `rpc CheckNft` | Диагностика |
+| `check_fakeip` | | `rpc CheckFakeip` | Обзор, Диагностика |
+| `global_check` | | `rpc GlobalCheck` | Обзор, Диагностика, таймаут 60 с |
+| `switch_proxy` | `section`, `outbound` | `rpc SwitchProxy <section> <outbound>` | Обзор |
+| `decode_uri` | `uri` | `rpc DecodeURI <uri>` | Маршрутизация ("Разобрать") |
+| `apply` | | `hybrid-failover apply` | Маршрутизация (без изменений в форме) |
+| `reload` | | `hybrid-failover reload` | Страницы не вызывают |
+| `list_update` | | `rpc ListUpdate` | Маршрутизация |
+| `subscription_refresh` | | `rpc SubscriptionRefresh` | Маршрутизация |
+| `subscription_status` | | `rpc SubscriptionStatus` | Маршрутизация (вкладка Подписки) |
+| `duplicate_section` | `from`, `to` | `rpc DuplicateSection <from> <to>` | Маршрутизация ("Копировать секцию…") |
+| `list_clients` | | `rpc ListClients` | Клиенты |
+| `dhcp_leases` | | Без core, см. ниже | Клиенты |
+| `backup_uci` | | `rpc BackupUCI` | Диагностика |
+| `backup_download` | | `rpc BackupDownload` | Диагностика |
+| `restore_uci` | `path` | `rpc RestoreUCI <path>` | Диагностика |
+| `pending_capture`, `pending_validate`, `pending_apply`, `pending_rollback` | | `rpc CapturePending`, `PendingValidate`, `PendingApply`, `PendingRollback` | Страницы не вызывают |
+| `update_check` | | `rpc UpdateCheck` | Обновление, таймаут 100 с |
+| `update_status` | | `rpc UpdateStatus` | Обновление |
+| `update_apply` | | `rpc UpdateApply` | Обновление |
+
+У `restore_uci` и `duplicate_section` пустые аргументы не передаются в core. ACL разрешает все эти методы. В `write` лежат `apply`, `reload`, `pending_capture`, `pending_apply`, `pending_rollback`, `switch_proxy`, `restore_uci`, `list_update`, `subscription_refresh`, `update_check`, `update_apply`, остальные в `read`. `duplicate_section` тоже в `read`, хотя он пишет UCI.
 
 `dhcp_leases` читает файлы аренд dnsmasq сам (пути из `leasefile` в UCI `dhcp`, иначе `/tmp/dhcp.leases`), а если они пусты, вызывает `ubus call dhcp ipv4leases`. Вызов `luci-rpc` из rpcd приводил к deadlock, поэтому его здесь нет.
 
-Вкладка Telegram идёт мимо этого объекта. Она вызывает `/usr/bin/hybrid-failover-bot -mode set-pending|validate-config|apply-config|rollback-config` через `fs.exec`, читает `/etc/hybrid-failover-bot.json` через `fs.read` и перезапускает бота через `service restart`. Всё это разрешено в общем ACL.
+### Что идёт мимо ubus-объекта
+
+- **Сохранение форм.** Маршрутизация, Сервисы и каналы и Клиенты пишут UCI через стандартный `uci` LuCI и применяют через `ui.changes.apply(true)`, то есть с откатом при потере связи. После commit procd запускает `hybrid-failover reload` по `procd_add_reload_trigger`. Кнопка "Сохранить и применить" на Маршрутизации без изменений в форме вызывает `validate`, затем `apply`.
+- **Графики.** `tunnels.js` читает `/var/run/hybrid-failover/channel-metrics.json` и `channel-metrics-24h.json` через `fs.read_direct`.
+- **Telegram.** `bot.js` читает `/etc/hybrid-failover-bot.json` через `fs.read` и вызывает `/usr/bin/hybrid-failover-bot -mode set-pending`, затем `-mode apply-config` через `fs.exec`. При ошибке вызывает `-mode rollback-config`. Бот перезапускается через ubus `rc init` (`restart`), состояние читается из `service list`. `rc init` нужен потому, что `service restart` не поднимает бота, который был выключен при загрузке.
+
+Всё это разрешено в общем ACL. История задержек лежит в `/var/run/hybrid-failover/delay-history.json`, журнал переключений в `/var/log/hybrid-failover/history.jsonl`. У native engine нет HTTP API в духе Clash, статус и каналы приходят только через RPC.
 
 Конфиги UCI лежат в `/etc/config/hybrid-failover` и `/etc/config/hybrid-failover-bot`.
 
@@ -98,7 +128,7 @@ rpcd читает `/usr/share/rpcd/ucode/*` только при старте. П
 
 `luci-app-hybrid-failover` зависит от `luci-base`, `luci-compat`, `luci-i18n-hybrid-failover` и `hybrid-failover-core`.
 
-Postinst пакета ставит `luci.main.rpctimeout` в 60 секунд, если значение не задано или лежит между 10 и 59 (Live probe и global-check бывают дольше стандартных 20 секунд), перезапускает rpcd и uhttpd и чистит кэш LuCI.
+Postinst пакета ставит `luci.main.rpctimeout` в 60 секунд, если значение не задано или лежит между 10 и 59 (проверка каналов и полная проверка бывают дольше стандартных 20 секунд), перезапускает rpcd и uhttpd и чистит кэш LuCI.
 
 ---
 
@@ -109,4 +139,4 @@ ubus call hybrid-failover status '{}'
 hybrid-failover rpc Status
 ```
 
-`scripts/luci-ubus-smoke.sh` проходит по основным ubus-методам и проверяет, что каждый отвечает.
+`scripts/luci-ubus-smoke.sh` вызывает `status`, `health`, `history`, `check_nft`, `global_check`, `export_history`, `delay_history`, `list_clients`, `dhcp_leases` и проверяет, что каждый отвечает. Потом он вызывает `switch_proxy` для секции `glob` (кроме политики `fastest`), то есть действительно переключает канал. Запускайте его на тестовом роутере.

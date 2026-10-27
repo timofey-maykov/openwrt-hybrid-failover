@@ -14,14 +14,12 @@
 2. [Режимы маршрутизации](#режимы-маршрутизации)
 3. [Поддерживаемые форматы ссылок (URI)](#поддерживаемые-форматы-ссылок-uri)
 4. [Опции UCI](#опции-uci)
-5. [Пакеты OpenWrt](#пакеты-openwrt)
-6. [Установка](#установка)
-7. [LuCI](#luci)
-8. [Per-client правила](#per-client-правила)
-9. [Telegram-бот](#telegram-бот)
-10. [Диагностика](#диагностика)
-11. [Типичные проблемы](#типичные-проблемы)
-12. [Содержимое репозитория](#содержимое-репозитория)
+5. [Правила для устройств](#правила-для-устройств)
+6. [Уведомления о переключениях](#уведомления-о-переключениях)
+7. [Диагностика](#диагностика)
+8. [Типичные проблемы](#типичные-проблемы)
+
+Установка описана в [INSTALL.md](INSTALL.md), веб-интерфейс в [LUCI.md](LUCI.md), все опции в [UCI.md](UCI.md), команды в [CLI.md](CLI.md), бот в [bot/README.md](../bot/README.md).
 
 ---
 
@@ -31,7 +29,7 @@
 
 Go core `hybrid-failover` читает UCI и компилирует из него план для встроенного engine. Затем он настраивает nft tproxy (таблица `inet hybrid_failover`, mark `0x105`, порт 1602) и запускает engine внутри своего процесса. Под procd работает `hybrid-failover monitor`. В этом процессе живут engine, контроллер политики failover и watchdog.
 
-Внешнего sing-box больше нет. Единственный режим `settings.engine_mode=native`. Старый `engine_mode=singbox` удалён, и `hybrid-failover migrate` переводит такие конфиги на native. Пакет `internal/singbox` остался в коде ради имён тегов и миграции, трафик через него не идёт.
+Внешнего sing-box больше нет. Единственный режим `settings.engine_mode=native`. Старый `engine_mode=singbox` удалён, и `hybrid-failover migrate` переводит такие конфиги на native. Пакет `internal/singbox` остался в коде как набор общих констант, имён тегов и разбора списков, а также ради миграции. Трафик через него не идёт.
 
 LuCI и бот общаются с core через `hybrid-failover rpc <Method>`. Для LuCI вызов идёт через rpcd (ucode-скрипт `/usr/share/rpcd/ucode/hybrid-failover`). Ручное переключение канала передаётся работающему engine через IPC-файлы в `/var/run/hybrid-failover`. HTTP-сервера Clash API у native engine нет, порт 9090 не открывается.
 
@@ -62,17 +60,7 @@ flowchart TB
 
 Порядок URI в списке задаёт приоритет кандидатов после основного VPN. Внутри urltest выбирается живой и быстрый.
 
-```text
-hybrid-failover migrate [--dry-run]
-hybrid-failover validate [--dry-run]
-hybrid-failover apply [--dry-run]
-hybrid-failover start|stop|reload|restart|status|health|monitor
-hybrid-failover rpc <method> [json args]
-hybrid-failover pending capture|validate|apply|rollback
-hybrid-failover check-nft|check-proxy|check-fakeip|global-check
-hybrid-failover list-update|subscription-refresh
-hybrid-failover update check|apply|status [--tag vX.Y.Z] [--force]
-```
+Все команды core перечислены в [CLI.md](CLI.md).
 
 ### DNS через 127.0.0.42
 
@@ -143,16 +131,9 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 
 Когда в секции несколько каналов, списки сервисов можно развести по разным туннелям, чтобы YouTube не делил канал со всем остальным. Привязки задаются на вкладке «Сервисы и каналы» или командой `/route` в боте и хранятся в `config list_route`. Список без привязки идет через пул секции, как в режимах выше. Для каждой привязки выбирается, что делать, если канал упал: уйти в пул, пойти напрямую или не пускать. Вариант `balance` раскладывает соединения списка по всем живым каналам, сайт при этом держится одного канала. Свои списки доменов и подсетей с названием (`config user_list`) привязываются так же, как готовые. Подробности в [UCI.md](UCI.md#config-list_route-name).
 
-### Общие параметры URLTest
+### Параметры URLTest
 
-| Опция UCI | По умолчанию | Описание |
-|-----------|--------------|----------|
-| `urltest_check_interval` | `3m` | Интервал проверки |
-| `urltest_tolerance` | `50` | Допуск по задержке (ms) |
-| `urltest_testing_url` | `https://www.gstatic.com/generate_204` | URL для probe |
-| `urltest_idle_timeout` | пусто | Таймаут простоя urltest (напр. `5m`) |
-| `urltest_interrupt_exist_connections` | `0` | `1` рвёт существующие сессии при смене узла |
-| `enable_udp_over_tcp` | `0` | Для SS и SOCKS в списках ссылок |
+Интервал проверки, допуск по задержке и URL проверки задаются опциями `urltest_*` секции, см. [UCI.md](UCI.md#параметры-urltest). Там же отмечено, какие из них native engine пока не использует.
 
 ---
 
@@ -167,18 +148,18 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 | `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws и grpc, остальные (httpupgrade, xhttp, h2) ссылка принимает, но канал помечается ошибкой «transport is not supported». Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws и grpc |
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
-| `socks4://`, `socks4a://`, `socks5://` | да | `enable_udp_over_tcp` при необходимости |
+| `socks4://`, `socks4a://`, `socks5://` | да | |
 | `hysteria2://`, `hy2://` | да | TLS (`sni`, `insecure`), obfs, `up`/`down` в mbps |
 | `vpn://` | да | Экспорт **Amnezia**, превращается в `vless://` (xray) или `awg2://` (awg, awg2) |
 | `awg2://` | да (служебный URI) | Не протокол, см. [ниже](#amnezia-awg2-awg2) |
 | `amneziawg://` | только в подписках | Целиком клиентский конфиг AmneziaWG в base64, так его отдают панели подписок. При загрузке подписки превращается в `awg2://`, берётся первый peer |
-| `http://`, `https://` | нет | Ошибка `unsupported scheme` |
+| `http://`, `https://` | нет | Ошибка `unsupported uri scheme` |
 
 ### Amnezia `vpn://`
 
 Декодер встроен в core (`internal/amnezia`). Поддерживается типичный экспорт **amnezia-xray** с VLESS в `last_config`. В LuCI строку `vpn://...` можно вставлять как есть.
 
-### Amnezia AWG2 (`awg2://`) {#amnezia-awg2-awg2}
+### Amnezia AWG2 (`awg2://`)
 
 `awg2://` не отдельный сетевой протокол. Это служебный формат core для настройки **AmneziaWG**, включая 3.1. Core делает три вещи.
 
@@ -229,7 +210,7 @@ awg show               # latest handshake, transfer
 
 Подробная таблица лежит в [`docs/UCI.md`](UCI.md), пример команд в [`examples/glob-uci-commands.txt`](../examples/glob-uci-commands.txt).
 
-Конфиг хранится в `/etc/config/hybrid-failover`. После установки или обновления запустите `hybrid-failover migrate`.
+Конфиг хранится в `/etc/config/hybrid-failover`. `hybrid-failover migrate` запускают установщик, postinst пакета core и `hybrid-failover update apply`, вручную его запускать не нужно.
 
 ### Миграция схемы
 
@@ -246,87 +227,22 @@ awg show               # latest handshake, transfer
 
 ---
 
-## Пакеты OpenWrt
-
-Пакеты собирает `./scripts/build-packages.sh`, готовые лежат в [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
-
-Бинарники сжимаются **UPX**, если `upx` есть на машине сборки. На `aarch64` это примерно 6 МБ до сжатия и 1,8 МБ после. Отключить можно через `HF_UPX=0 ./scripts/build-packages.sh`. Сам upx ставится через `brew install upx` или `apt install upx-ucl`.
-
-| Пакет | Architecture | Содержимое |
-|-------|----------------|------------|
-| `hybrid-failover-core` | per-target | `/usr/sbin/hybrid-failover`, init.d, шаблон UCI |
-| `hybrid-failover-bot` | per-target | Go-бинарник бота, init.d, JSON и UCI-шаблон |
-| `luci-app-hybrid-failover` | all | Маршрутизация, дашборд, клиенты, бот, обновление |
-| `luci-i18n-hybrid-failover` | all | Переводы LuCI |
-
-Пакет core зависит от `ca-bundle`, `uci` и `procd`. Установщик дополнительно ставит `curl` и `wget`. Для `check-fakeip` не нужен `bind-dig`. Не нужны `jq`, `python3-light` и внешний sing-box. Пакеты `kmod-amneziawg` и `amneziawg-tools` в релиз HF не входят. Для `vpn://` с AWG 3.1 их ставит пользователь, см. [INSTALL.md](INSTALL.md#amneziawg-31).
-
----
-
-## Установка
-
-Полная инструкция в [`docs/INSTALL.md`](INSTALL.md).
-
-```sh
-wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
-ash /tmp/install.sh
-hybrid-failover migrate
-/etc/init.d/hybrid-failover enable && /etc/init.d/hybrid-failover start
-```
-
-| Режим (`HF_MODE`) | Устанавливает |
-|-------|----------------|
-| `full` (по умолчанию) | core, бот, luci-app-hybrid-failover |
-| `core` | core и LuCI, без бота |
-| `bot` | только бот |
-
-### После установки бота
-
-1. Получите токен у [@BotFather](https://t.me/BotFather) и впишите его в `/etc/hybrid-failover-bot.json`.
-2. `uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot`
-3. `/etc/init.d/hybrid-failover-bot restart`
-4. В Telegram отправьте `/panel`.
-
----
-
-## LuCI
-
-Раздел **Сервисы -> Hybrid Failover**, адрес `/cgi-bin/luci/admin/services/hybrid-failover`.
-
-Подробное руководство по вкладкам, клиентам, выбору из DHCP и pending лежит в [docs/LUCI.md](LUCI.md).
-
-| Подраздел | Назначение |
-|-----------|------------|
-| Обзор | Дашборд: engine, nft, каналы и задержки, контроллер политики, журнал переключений, ручное переключение |
-| Маршрутизация | VPN + failover, URLTest, подписки, community-списки (через pending) |
-| Сервисы и каналы | Каналы секций с нагрузкой, привязка списков к каналам, свои списки, автораспределение |
-| Графики | Живые графики по каналам: трафик, соединения, задержка, доля трафика, за 5 минут или до суток |
-| Диагностика | validate, global-check, backup UCI |
-| Клиенты | `client_rule` по IP, effective rules, выбор IP из DHCP |
-| Telegram | JSON бота, pending validate, apply и rollback |
-| Обновление | Проверка и установка новых релизов (`hybrid-failover update`) |
-
-Все действия идут через rpcd в `hybrid-failover rpc`.
-
----
-
-## Per-client правила
+## Правила для устройств
 
 Глобальная маршрутизация (секции, списки доменов) определяет, какой трафик попадает в engine. Правила клиентов определяют, какие устройства LAN в этом участвуют и в каком режиме.
 
-В UCI это секции `config client_rule`, в LuCI вкладка **Клиенты -> Правила клиентов**.
+В UCI это секции `config client_rule`, в LuCI вкладка **Клиенты**.
 
 | `mode` | Поведение |
 |--------|-----------|
-| `include` | Клиент получает nft mark и идёт через tproxy в engine |
-| `exclude` | Клиент идёт мимо Hybrid Failover (direct) |
+| `include` | Трафик клиента идёт в engine, дальше его разбирают правила секций |
+| `exclude` | DNS клиента не перехватывается, трафик по подсетям идёт мимо. FakeIP-домены всё равно идут через прокси, если клиент спрашивает DNS у роутера |
 | `full_route` | Весь трафик клиента через указанную секцию (`option section`) |
-| `global_exclude` | Клиент исключён из tproxy глобально |
+| `global_exclude` | Работал только в sing-box. Native engine этот режим не обрабатывает |
 
-Итоговые правила на странице **Клиенты** берутся из `hybrid-failover rpc ListClients` (только чтение). Пустой список при работающем core значит, что правил нет. Это не ошибка.
+Синонимы и подробности в [UCI.md](UCI.md#config-client_rule-name). Действующие правила показывает `hybrid-failover rpc ListClients`. Пустой список при работающем core значит, что правил нет. Это не ошибка.
 
-Legacy-списки (`settings.include_source_ips`, `exclude_source_ips`, `fully_routed_ips` в секциях) `migrate` переносит в `client_rule`. Пока есть хотя бы один `client_rule`, legacy-списки не используются.
+Старые списки (`settings.include_source_ips`, `exclude_source_ips`, `routing_excluded_ips`, `fully_routed_ips` в секциях) `migrate` переносит в `client_rule`. Пока есть хотя бы один `client_rule`, старые списки не используются.
 
 ```sh
 # Пример: консоль 192.168.1.50 через HF
@@ -337,41 +253,15 @@ uci commit hybrid-failover
 hybrid-failover reload
 ```
 
-Подробнее в [UCI.md](UCI.md#config-client_rule-name) и [LUCI.md](LUCI.md#клиенты).
+Как добавить правило в веб-интерфейсе, описано в [LUCI.md](LUCI.md#клиенты).
 
 ---
 
-## Telegram-бот
+## Уведомления о переключениях
 
-Полный список команд и настроек в [`bot/README.md`](../bot/README.md).
+Каждое переключение core пишет в `/var/log/hybrid-failover/history.jsonl` (размер задаёт `settings.history_max_lines`).
 
-- Бот редактирует UCI `hybrid-failover` через pending-конфиг (validate, apply, rollback).
-- Статус, проверка каналов (`/health`, `/channels`) и история (`/history`) берутся из core RPC (`Status`, `Health`, `History`). Clash API для этого не нужен.
-- `admin_ids` дают полный доступ. `viewer_ids` дают только чтение (`/status`, `/health`, `/channels`, `/history` и навигация по панели).
-- Ссылки для failover принимаются тех же схем, что и в core.
-
-Конфиг `/etc/hybrid-failover-bot.json`.
-
-| Ключ | Назначение |
-|------|------------|
-| `token` | Токен бота от @BotFather |
-| `router_name` | Имя роутера в панели, статусе и уведомлениях (по умолчанию hostname) |
-| `admin_ids`, `viewer_ids` | Telegram ID администраторов и наблюдателей |
-| `log_path`, `audit_path` | Лог бота и журнал действий |
-| `routing_init_script` | По умолчанию `/etc/init.d/hybrid-failover` |
-| `uci_package`, `main_section` | Пакет UCI и основная секция (обычно `glob`) |
-| `policy`, `probe_timeout_seconds` | Политика и таймаут проверок |
-| `notify_failover_enabled`, `notify_failover_interval_seconds` | Уведомления о переключениях и интервал опроса |
-| `routers` | Управление несколькими роутерами по SSH |
-| `clash_api` | Нужен только старым установкам на sing-box |
-
-### Несколько роутеров
-
-Telegram отдаёт обновления одного токена только одному получателю. Поэтому на каждом роутере лучше держать своего бота со своим токеном и задать ему `router_name`. Второй вариант подходит, если нужен один чат на все роутеры. Тогда один бот управляет остальными по SSH через список `routers`, а на остальных роутерах бот выключен. Детали и пример конфига в [`bot/README.md`](../bot/README.md#несколько-роутеров).
-
-### Алерты при failover
-
-**Через бота.** Включите `notify_failover_enabled: true` в `hybrid-failover-bot.json`. Бот читает `/var/log/hybrid-failover/history.jsonl` с интервалом `notify_failover_interval_seconds` (по умолчанию 30 с) и шлёт новые события всем `admin_ids`. Время последнего доставленного события бот запоминает в `/var/run/hybrid-failover-bot/history.state`, поэтому ротация журнала не вызывает повторов. В схеме с SSH уведомления приходят только с роутера, где запущен бот.
+**Через бота.** Включите `notify_failover_enabled: true` в `/etc/hybrid-failover-bot.json`, бот будет присылать новые события администраторам. Подробности в [bot/README.md](../bot/README.md#уведомления-о-failover).
 
 **Через webhook core.** Укажите HTTP endpoint в `hybrid-failover.settings.webhook_url`. При каждом автоматическом переключении core шлёт на него `POST` с JSON-телом события.
 
@@ -390,14 +280,12 @@ Telegram отдаёт обновления одного токена тольк�
 ```sh
 hybrid-failover status          # JSON: engine, nft, fakeip, активный outbound, контроллер
 hybrid-failover health          # то же плюс живая проверка каналов
-hybrid-failover global-check    # то же, что status
 hybrid-failover check-fakeip    # DNS-запрос к 127.0.0.42, без dig
 hybrid-failover check-nft       # таблица inet hybrid_failover на месте
-hybrid-failover rpc Health      # то, что видят LuCI и бот
 logread -e hybrid-failover
 ```
 
-Поле `clash_ok` в отчёте осталось для совместимости. В native оно просто повторяет `engine_running`. Опция `settings.clash_api_listen` на native engine не влияет.
+Остальные команды в [CLI.md](CLI.md).
 
 В боте то же самое показывают `/status`, `/health` и `/channels`.
 
@@ -405,7 +293,7 @@ logread -e hybrid-failover
 
 ## Типичные проблемы
 
-### Нет effective rules, пустая таблица на вкладке Клиенты
+### Пустая таблица действующих правил на вкладке Клиенты
 
 Core при этом может работать нормально (`engine_running: true` в статусе). Сообщение значит, что секций `client_rule` нет. Добавьте правило на вкладке **Клиенты** или через UCI, см. [LUCI.md](LUCI.md#клиенты).
 
@@ -439,19 +327,4 @@ logread -e hybrid-failover | tail -50
 
 ---
 
-## Содержимое репозитория
-
-| Путь | Назначение |
-|------|------------|
-| `core/`, `internal/` | Go core и встроенный engine |
-| `packages/`, `packaging/` | Сборка `.ipk` и `.apk`, релизный workflow |
-| `luci/` | luci-app-hybrid-failover |
-| `bot/` | Telegram-бот |
-| `openwrt/` | init.d, UCI-шаблон |
-| `curfew/`, `luci-curfew/` | Отдельный пакет curfew (ограничение скорости устройств LAN) и его LuCI |
-| `examples/` | Примеры UCI-команд и конфига бота для нескольких роутеров |
-| `scripts/` | install-on-router.sh, build-packages.sh, QEMU lab |
-| `docs/` | Документация |
-| `legacy/` | Архивные заметки по миграции |
-
-Общий README проекта лежит в [README.md](../README.md). Размер пакетов и место на overlay разобраны в [SING-BOX-SIZE.md](SING-BOX-SIZE.md).
+Устройство репозитория описано в [README.md](../README.md#структура-репозитория).

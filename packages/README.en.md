@@ -17,7 +17,7 @@ The script cross-compiles `hybrid-failover` (core) and `hybrid-failover-bot` for
 |----------|---------|--------|
 | `HF_PKG_FORMAT` | `both` | `ipk`, `apk` or `both` |
 | `HF_UPX` | `auto` | `auto` compresses binaries with UPX when `upx` is in PATH. `1` requires UPX, `0` turns it off |
-| `HF_BUILD_SET` | `full` | `full` builds everything, `core` builds only the core and the bot, without LuCI |
+| `HF_BUILD_SET` | `full` | `full` builds everything, `core` builds the core and the bot without the Hybrid Failover LuCI. `curfew` and `luci-app-curfew` are built in both modes |
 | `HF_BUILD_ARCHS_OVERRIDE` | | space separated architectures, for example `"x86_64"` |
 | `PKG_RELEASE` | `1` | package revision (`-1` in ipk, `-r1` in apk) |
 | `DIST_DIR` | `dist` | output directory |
@@ -29,7 +29,7 @@ The version comes from the `VERSION` file at the repository root. CI (`.github/w
 
 | Directory | Format | OpenWrt |
 |-----------|--------|---------|
-| `dist/ipk/` | `.ipk` (opkg) | 24.10 and older |
+| `dist/ipk/` | `.ipk` (opkg) | 24.x |
 | `dist/apk/` | `.apk` (apk-tools 3) | 25.12+ |
 | `dist/binaries/<arch>/` | bare binaries | |
 
@@ -39,8 +39,8 @@ Supported architectures are `aarch64_cortex-a53`, `aarch64_cortex-a72`, `aarch64
 
 | opkg (24.x) | apk (25.12+) |
 |-------------|--------------|
-| `hybrid-failover-core_1.7.48-1_aarch64_cortex-a53.ipk` | `hybrid-failover-core-1.7.48-r1_aarch64_cortex-a53.apk` |
-| `luci-app-hybrid-failover_1.7.48-1_all.ipk` | `luci-app-hybrid-failover-1.7.48-r1.apk` |
+| `hybrid-failover-core_1.7.74-1_aarch64_cortex-a53.ipk` | `hybrid-failover-core-1.7.74-r1_aarch64_cortex-a53.apk` |
+| `luci-app-hybrid-failover_1.7.74-1_all.ipk` | `luci-app-hybrid-failover-1.7.74-r1.apk` |
 
 The apk version follows the [OpenWrt scheme](https://git.openwrt.org/?p=openwrt/openwrt.git;a=commit;h=e8725a932e16eaf6ec51add8c084d959cbe32ff2), with the revision written as `-rN`. Architecture independent packages (`all` in ipk, `noarch` in apk) have no arch suffix in the apk file name.
 
@@ -48,31 +48,21 @@ The apk version follows the [OpenWrt scheme](https://git.openwrt.org/?p=openwrt/
 
 | Package | Architecture | Contents |
 |---------|--------------|----------|
-| `hybrid-failover-core` | per target | `/usr/sbin/hybrid-failover` with the built-in engine, init.d, `/etc/config/hybrid-failover`, `/etc/sysctl.d/20-hybrid-failover.conf` |
+| `hybrid-failover-core` | per target | `/usr/sbin/hybrid-failover` with the built-in engine, init.d, `/etc/config/hybrid-failover`, `/etc/sysctl.d/20-hybrid-failover.conf`, hotplug `/etc/hotplug.d/net/30-hybrid-failover-docker` |
 | `hybrid-failover-bot` | per target | `/usr/bin/hybrid-failover-bot`, init.d, UCI `hybrid-failover-bot`, `/etc/hybrid-failover-bot.json` |
 | `luci-app-hybrid-failover` | all | LuCI pages for overview, routing, clients, diagnostics, Telegram and update |
 | `luci-i18n-hybrid-failover` | all | LuCI translations |
-| `curfew` | all | night bandwidth limits for selected LAN devices (tc) |
+| `curfew` | all | night bandwidth limits for selected LAN devices (tc), see [docs/en/CURFEW.md](../docs/en/CURFEW.md) |
 | `luci-app-curfew` | all | LuCI for curfew |
 
 No external sing-box is needed, the engine is built into the core. `kmod-amneziawg` and `amneziawg-tools` are not included. For AmneziaWG 3.1 see [docs/en/INSTALL.md](../docs/en/INSTALL.md#amneziawg-31).
 
-`/etc/config/hybrid-failover`, `/etc/config/hybrid-failover-bot` and `/etc/hybrid-failover-bot.json` are declared as conffiles and survive package upgrades. The core postinst creates `/etc/hybrid-failover/pending`, runs `hybrid-failover migrate` and applies the sysctl settings. The bot postinst enables its init script, but the bot only starts with `hybrid-failover-bot.main.enabled=1`.
+Conffiles survive package upgrades: `/etc/config/hybrid-failover` and `/etc/hybrid-failover/dnsmasq-dhcp.bak` for the core, `/etc/config/hybrid-failover-bot` and `/etc/hybrid-failover-bot.json` for the bot, `/etc/config/curfew` and `/etc/dnsmasq.d/curfew.conf` for curfew. The core postinst creates `/etc/hybrid-failover/pending`, runs `hybrid-failover migrate`, applies the sysctl settings and restarts the running service on upgrade. The bot postinst sets mode `600` on its configs and enables the init script, but the bot only starts with `hybrid-failover-bot.main.enabled=1`. On upgrade a running bot is restarted.
 
 ## Installing on the router
 
-`scripts/install-on-router.sh` picks `apk` or `opkg` and downloads the matching files from GitHub Releases.
-
-```sh
-wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
-ash /tmp/install.sh
-```
-
-By default (`HF_MODE=full`) it installs `hybrid-failover-core`, `luci-i18n-hybrid-failover`, `luci-app-hybrid-failover` and `hybrid-failover-bot`, with the translations going in before the LuCI app that depends on them. `HF_MODE=core` installs the same without the bot, and `HF_MODE=bot` installs only the bot on a router that already has the core.
-
-Freshly built packages can be installed from a PC with `./scripts/install-from-local-dist.sh <router ip>`. More in [docs/en/INSTALL.md](../docs/en/INSTALL.md).
+Installing from releases and from a PC is covered in [docs/en/INSTALL.md](../docs/en/INSTALL.md). Freshly built packages are installed with `./scripts/install-from-local-dist.sh <router ip>`.
 
 ## OpenWrt SDK
 
-The Makefiles in `hybrid-failover-core/`, `hybrid-failover-bot/` and `luci-app-hybrid-failover-bot/` are kept for building inside an OpenWrt tree, but they lag behind `build-packages.sh`. The version is hardcoded as `1.0.0`, the core Makefile installs only the binary and the init script, and `luci-app-hybrid-failover-bot` describes the old standalone bot page that releases no longer ship. The binaries are built outside the SDK either way. Run `scripts/build-packages.sh` first, then put the bot binary into `packages/hybrid-failover-bot/binaries/<ARCH>/`. The core Makefile reads its binary from `dist/binaries/<ARCH>/`.
+The Makefiles in `hybrid-failover-core/`, `hybrid-failover-bot/` and `luci-app-hybrid-failover-bot/` are kept for building inside an OpenWrt tree, but they lag behind `build-packages.sh`. The version is hardcoded as `1.0.0`, the core Makefile installs only the binary, the init script and the hotplug script, the bot Makefile does not depend on `hybrid-failover-core`, and `luci-app-hybrid-failover-bot` describes the old standalone bot page that releases no longer ship. The binaries are built outside the SDK either way. Run `scripts/build-packages.sh` first, then put the bot binary into `packages/hybrid-failover-bot/binaries/<ARCH>/`. The core Makefile reads its binary from `dist/binaries/<ARCH>/`.

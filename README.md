@@ -78,13 +78,17 @@ uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot
 
 | Файл | О чём |
 |------|-------|
-| [docs/OVERVIEW.md](docs/OVERVIEW.md) | Архитектура, режимы маршрутизации, DNS, failover, правила для устройств |
-| [docs/INSTALL.md](docs/INSTALL.md) | Установка, обновление, AmneziaWG 3.1 |
+| [docs/OVERVIEW.md](docs/OVERVIEW.md) | Архитектура, режимы маршрутизации, DNS, форматы ссылок, правила для устройств, типичные проблемы |
+| [docs/INSTALL.md](docs/INSTALL.md) | Установка, обновление, AmneziaWG 3.1, мало места на overlay |
 | [docs/LUCI.md](docs/LUCI.md) | Веб-интерфейс по вкладкам |
 | [docs/UCI.md](docs/UCI.md) | Все опции `/etc/config/hybrid-failover` |
+| [docs/CLI.md](docs/CLI.md) | Команды `hybrid-failover` и методы RPC |
+| [docs/CURFEW.md](docs/CURFEW.md) | Отдельный пакет curfew: ночное ограничение скорости устройств |
 | [bot/README.md](bot/README.md) | Telegram-бот, команды, несколько роутеров |
-| [luci/README.md](luci/README.md) | Исходники LuCI и rpcd |
+| [luci/README.md](luci/README.md) | Исходники LuCI и методы rpcd, для разработчиков |
 | [packages/README.md](packages/README.md) | Сборка пакетов `.ipk` и `.apk` |
+
+Интерфейс LuCI написан на русском, есть переводы на английский и китайский.
 
 ## Структура репозитория
 
@@ -93,10 +97,11 @@ uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot
 | `core/`, `internal/` | Go core и движок |
 | `bot/` | Telegram-бот |
 | `luci/` | luci-app-hybrid-failover |
-| `openwrt/` | init.d и шаблон UCI |
-| `packages/` | Сборка пакетов |
-| `scripts/` | Установка, сборка, тестовые стенды на QEMU |
+| `openwrt/` | init.d, hotplug, sysctl и шаблон UCI |
+| `curfew/`, `luci-curfew/` | Пакет curfew и его LuCI |
+| `packages/`, `packaging/` | Файлы пакетов и релизного workflow |
+| `scripts/` | Установка, сборка, тестовые стенды на QEMU и в Docker |
+| `examples/` | Пример UCI-команд, конфиг бота для нескольких роутеров, тестовые конфиги |
 | `docs/` | Документация на русском, `docs/en/` на английском |
-| `legacy/` | Старые скрипты, в релиз не входят |
 
 Сборка пакетов локально выполняется командой `./scripts/build-packages.sh`. Релиз собирает GitHub Actions при пуше тега `v*`.

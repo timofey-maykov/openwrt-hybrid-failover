@@ -78,15 +78,17 @@ Open `/menu` in Telegram. With several routers, either give each router its own 
 
 | File | Topic |
 |------|-------|
-| [docs/en/OVERVIEW.md](docs/en/OVERVIEW.md) | Architecture, routing modes, DNS, failover, per-device rules |
-| [docs/en/INSTALL.md](docs/en/INSTALL.md) | Install, updates, AmneziaWG 3.1 |
+| [docs/en/OVERVIEW.md](docs/en/OVERVIEW.md) | Architecture, routing modes, DNS, link formats, per-device rules, troubleshooting |
+| [docs/en/INSTALL.md](docs/en/INSTALL.md) | Install, updates, AmneziaWG 3.1, low overlay space |
 | [docs/en/LUCI.md](docs/en/LUCI.md) | Web interface, tab by tab |
 | [docs/en/UCI.md](docs/en/UCI.md) | Every option in `/etc/config/hybrid-failover` |
+| [docs/en/CLI.md](docs/en/CLI.md) | `hybrid-failover` commands and RPC methods |
+| [docs/en/CURFEW.md](docs/en/CURFEW.md) | Separate curfew package: night-time bandwidth limits for devices |
 | [bot/README.en.md](bot/README.en.md) | Telegram bot, commands, multiple routers |
-| [luci/README.en.md](luci/README.en.md) | LuCI and rpcd sources |
+| [luci/README.en.md](luci/README.en.md) | LuCI sources and rpcd methods, for developers |
 | [packages/README.en.md](packages/README.en.md) | Building `.ipk` and `.apk` packages |
 
-The LuCI interface is in Russian with an English translation.
+The LuCI interface is written in Russian, with English and Chinese translations.
 
 ## Repository layout
 
@@ -95,10 +97,11 @@ The LuCI interface is in Russian with an English translation.
 | `core/`, `internal/` | Go core and engine |
 | `bot/` | Telegram bot |
 | `luci/` | luci-app-hybrid-failover |
-| `openwrt/` | init.d script and UCI template |
-| `packages/` | Package build |
-| `scripts/` | Install, build, QEMU test labs |
+| `openwrt/` | init.d, hotplug, sysctl and the UCI template |
+| `curfew/`, `luci-curfew/` | The curfew package and its LuCI app |
+| `packages/`, `packaging/` | Package and release workflow files |
+| `scripts/` | Install, build, QEMU and Docker test labs |
+| `examples/` | Sample UCI commands, multi-router bot config, test configs |
 | `docs/` | Russian docs, English ones in `docs/en/` |
-| `legacy/` | Old scripts, not shipped |
 
 Build packages locally with `./scripts/build-packages.sh`. GitHub Actions builds the release when a `v*` tag is pushed.

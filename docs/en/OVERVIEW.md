@@ -14,14 +14,12 @@ A self-contained routing stack for OpenWrt. The `hybrid-failover` binary ships i
 2. [Routing modes](#routing-modes)
 3. [Supported link formats (URI)](#supported-link-formats-uri)
 4. [UCI options](#uci-options)
-5. [OpenWrt packages](#openwrt-packages)
-6. [Installation](#installation)
-7. [LuCI](#luci)
-8. [Per-client rules](#per-client-rules)
-9. [Telegram bot](#telegram-bot)
-10. [Diagnostics](#diagnostics)
-11. [Troubleshooting](#troubleshooting)
-12. [Repository layout](#repository-layout)
+5. [Per-device rules](#per-device-rules)
+6. [Switch notifications](#switch-notifications)
+7. [Diagnostics](#diagnostics)
+8. [Troubleshooting](#troubleshooting)
+
+Installation is covered in [INSTALL.md](INSTALL.md), the web interface in [LUCI.md](LUCI.md), every option in [UCI.md](UCI.md), the commands in [CLI.md](CLI.md), the bot in [bot/README.en.md](../../bot/README.en.md).
 
 ---
 
@@ -31,7 +29,7 @@ A self-contained routing stack for OpenWrt. The `hybrid-failover` binary ships i
 
 The Go core `hybrid-failover` reads UCI and compiles it into a plan for the built-in engine. It then sets up nft tproxy (table `inet hybrid_failover`, mark `0x105`, port 1602) and runs the engine inside its own process. procd supervises `hybrid-failover monitor`. That process hosts the engine, the failover policy controller and the watchdog.
 
-There is no external sing-box anymore. The only mode is `settings.engine_mode=native`. The old `engine_mode=singbox` has been removed, and `hybrid-failover migrate` switches such configs to native. The `internal/singbox` package is still in the tree for tag naming and migration, but no traffic goes through it.
+There is no external sing-box anymore. The only mode is `settings.engine_mode=native`. The old `engine_mode=singbox` has been removed, and `hybrid-failover migrate` switches such configs to native. The `internal/singbox` package is still in the tree as a set of shared constants, tag naming and list parsing, and for migration. No traffic goes through it.
 
 LuCI and the bot talk to the core through `hybrid-failover rpc <Method>`. LuCI reaches it via rpcd (the ucode script `/usr/share/rpcd/ucode/hybrid-failover`). A manual channel switch is handed to the running engine through IPC files in `/var/run/hybrid-failover`. The native engine has no Clash API HTTP server, so nothing listens on port 9090.
 
@@ -62,17 +60,7 @@ A vpn section such as `glob` gets the following outbounds. The name is arbitrary
 
 The order of URIs in the list sets candidate priority after the primary VPN. Within urltest the live and fastest one wins.
 
-```text
-hybrid-failover migrate [--dry-run]
-hybrid-failover validate [--dry-run]
-hybrid-failover apply [--dry-run]
-hybrid-failover start|stop|reload|restart|status|health|monitor
-hybrid-failover rpc <method> [json args]
-hybrid-failover pending capture|validate|apply|rollback
-hybrid-failover check-nft|check-proxy|check-fakeip|global-check
-hybrid-failover list-update|subscription-refresh
-hybrid-failover update check|apply|status [--tag vX.Y.Z] [--force]
-```
+Every core command is listed in [CLI.md](CLI.md).
 
 ### DNS via 127.0.0.42
 
@@ -143,16 +131,9 @@ Proxies only, no `bind_interface`. URI formats and urltest options are the same.
 
 When a section has several channels, service lists can be spread over different tunnels so YouTube does not share a channel with everything else. Bindings are set on the "Сервисы и каналы" (Services and channels) tab or with `/route` in the bot and are stored in `config list_route`. A list with no binding goes through the section pool, as in the modes above. For each binding you choose what happens when its channel is down: fall back to the pool, go direct, or stay blocked. `balance` spreads the list's connections over all live channels while keeping each site on one channel. Your own named lists of domains and subnets (`config user_list`) are bound the same way as the ready-made ones. Details are in [UCI.md](UCI.md#config-list_route-name).
 
-### Common URLTest options
+### URLTest parameters
 
-| UCI option | Default | Description |
-|------------|---------|-------------|
-| `urltest_check_interval` | `3m` | Check interval |
-| `urltest_tolerance` | `50` | Latency tolerance (ms) |
-| `urltest_testing_url` | `https://www.gstatic.com/generate_204` | Probe URL |
-| `urltest_idle_timeout` | empty | urltest idle timeout (e.g. `5m`) |
-| `urltest_interrupt_exist_connections` | `0` | `1` drops existing sessions when the node changes |
-| `enable_udp_over_tcp` | `0` | For SS and SOCKS entries in the link lists |
+The check interval, latency tolerance and probe URL are set with the section's `urltest_*` options, see [UCI.md](UCI.md#urltest-parameters). It also marks which of them the native engine does not use yet.
 
 ---
 
@@ -167,18 +148,18 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 | `vless://` | yes | Reality and TLS, XTLS Vision, TCP and UDP (XUDP). Transports tcp, ws and grpc, the others (httpupgrade, xhttp, h2) are accepted but the channel shows a "transport is not supported" error. These link parameters are used: `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `serviceName`, `authority`. Vision works on plain TCP only, not over ws or grpc |
 | `ss://` | yes | Shadowsocks |
 | `trojan://` | yes | |
-| `socks4://`, `socks4a://`, `socks5://` | yes | `enable_udp_over_tcp` if needed |
+| `socks4://`, `socks4a://`, `socks5://` | yes | |
 | `hysteria2://`, `hy2://` | yes | TLS (`sni`, `insecure`), obfs, `up`/`down` in mbps |
 | `vpn://` | yes | **Amnezia** export, converted to `vless://` (xray) or `awg2://` (awg, awg2) |
 | `awg2://` | yes (internal URI) | Not a protocol, see [below](#amnezia-awg2-awg2) |
 | `amneziawg://` | subscriptions only | A whole AmneziaWG client config in base64, as subscription panels hand it out. Converted to `awg2://` when the subscription is loaded, the first peer is used |
-| `http://`, `https://` | no | Fails with `unsupported scheme` |
+| `http://`, `https://` | no | Fails with `unsupported uri scheme` |
 
 ### Amnezia `vpn://`
 
 The decoder is built into the core (`internal/amnezia`). It handles the usual **amnezia-xray** export with VLESS in `last_config`. In LuCI you can paste a `vpn://...` string as is.
 
-### Amnezia AWG2 (`awg2://`) {#amnezia-awg2-awg2}
+### Amnezia AWG2 (`awg2://`)
 
 `awg2://` is not a network protocol of its own. It is an internal core format for setting up **AmneziaWG**, including 3.1. The core does three things with it.
 
@@ -229,7 +210,7 @@ The bot validates links with the same function as the core (`internal/validation
 
 The full table is in [`UCI.md`](UCI.md), example commands in [`examples/glob-uci-commands.txt`](../../examples/glob-uci-commands.txt).
 
-The config lives in `/etc/config/hybrid-failover`. Run `hybrid-failover migrate` after installing or upgrading.
+The config lives in `/etc/config/hybrid-failover`. The installer, the core package postinst and `hybrid-failover update apply` run `hybrid-failover migrate`, so there is no need to run it by hand.
 
 ### Schema migration
 
@@ -246,87 +227,22 @@ Migration v1 also writes `settings.cache_path`. That option is a sing-box leftov
 
 ---
 
-## OpenWrt packages
-
-Packages are built by `./scripts/build-packages.sh` and published under [Releases](https://github.com/timofey-maykov/openwrt-hybrid-failover/releases).
-
-Binaries are compressed with **UPX** when `upx` is present on the build host. On `aarch64` that takes a binary from about 6 MB down to about 1.8 MB. Set `HF_UPX=0 ./scripts/build-packages.sh` to turn it off. Install upx with `brew install upx` or `apt install upx-ucl`.
-
-| Package | Architecture | Contents |
-|---------|--------------|----------|
-| `hybrid-failover-core` | per-target | `/usr/sbin/hybrid-failover`, init.d, UCI template |
-| `hybrid-failover-bot` | per-target | Bot binary, init.d, JSON and UCI templates |
-| `luci-app-hybrid-failover` | all | Routing, dashboard, clients, bot, updates |
-| `luci-i18n-hybrid-failover` | all | LuCI translations |
-
-The core package depends on `ca-bundle`, `uci` and `procd`. The installer also pulls in `curl` and `wget`. `check-fakeip` does not need `bind-dig`. Nothing requires `jq`, `python3-light` or an external sing-box. `kmod-amneziawg` and `amneziawg-tools` are not part of the HF release. If you use `vpn://` with AWG 3.1, install them yourself, see [INSTALL.md](INSTALL.md#amneziawg-31).
-
----
-
-## Installation
-
-Full instructions are in [`INSTALL.md`](INSTALL.md).
-
-```sh
-wget -O /tmp/install.sh \
-  https://raw.githubusercontent.com/timofey-maykov/openwrt-hybrid-failover/main/scripts/install-on-router.sh
-ash /tmp/install.sh
-hybrid-failover migrate
-/etc/init.d/hybrid-failover enable && /etc/init.d/hybrid-failover start
-```
-
-| Mode (`HF_MODE`) | Installs |
-|------------------|----------|
-| `full` (default) | core, bot, luci-app-hybrid-failover |
-| `core` | core and LuCI, no bot |
-| `bot` | the bot only |
-
-### After installing the bot
-
-1. Get a token from [@BotFather](https://t.me/BotFather) and put it into `/etc/hybrid-failover-bot.json`.
-2. `uci set hybrid-failover-bot.main.enabled=1 && uci commit hybrid-failover-bot`
-3. `/etc/init.d/hybrid-failover-bot restart`
-4. Send `/panel` to the bot in Telegram.
-
----
-
-## LuCI
-
-**Services -> Hybrid Failover**, at `/cgi-bin/luci/admin/services/hybrid-failover`. The interface is in Russian.
-
-The detailed guide to tabs, clients, the DHCP picker and pending changes is in [LUCI.md](LUCI.md).
-
-| Page | Purpose |
-|------|---------|
-| Обзор (Overview) | Dashboard: engine, nft, channels and latency, policy controller, switch log, manual switch |
-| Маршрутизация (Routing) | VPN + failover, URLTest, subscriptions, community lists (through pending) |
-| Сервисы и каналы (Services and channels) | Section channels with their load, binding lists to channels, your own lists, automatic spread |
-| Графики (Charts) | Live per-channel charts: traffic, connections, latency, traffic share, from 5 minutes up to a day |
-| Диагностика (Diagnostics) | validate, global-check, UCI backup |
-| Клиенты (Clients) | `client_rule` by IP, effective rules, IP picker from DHCP |
-| Telegram | Bot JSON, pending validate, apply and rollback |
-| Обновление (Update) | Check for and install new releases (`hybrid-failover update`) |
-
-Every action goes through rpcd to `hybrid-failover rpc`.
-
----
-
-## Per-client rules
+## Per-device rules
 
 Global routing (sections, domain lists) decides which traffic goes to the engine. Client rules decide which LAN devices take part and how.
 
-In UCI these are `config client_rule` sections. In LuCI they live under **Клиенты -> Правила клиентов**.
+In UCI these are `config client_rule` sections, in LuCI the **Клиенты** (Clients) tab.
 
 | `mode` | Behaviour |
 |--------|-----------|
-| `include` | The client gets the nft mark and goes through tproxy into the engine |
-| `exclude` | The client bypasses Hybrid Failover (direct) |
+| `include` | The client's traffic goes into the engine, where the section rules sort it |
+| `exclude` | The client's DNS is not intercepted and subnet traffic bypasses the engine. FakeIP domains still go through the proxy if the client asks the router for DNS |
 | `full_route` | All of the client's traffic goes through the given section (`option section`) |
-| `global_exclude` | The client is excluded from tproxy globally |
+| `global_exclude` | Only worked with sing-box. The native engine does not handle this mode |
 
-The effective rules on the Clients page come from `hybrid-failover rpc ListClients` (read-only). An empty list with the core running means there are no rules. It is not an error.
+Synonyms and details are in [UCI.md](UCI.md#config-client_rule-name). `hybrid-failover rpc ListClients` shows the effective rules. An empty list with the core running means there are no rules. It is not an error.
 
-Legacy lists (`settings.include_source_ips`, `exclude_source_ips`, per-section `fully_routed_ips`) are moved into `client_rule` by `migrate`. As long as at least one `client_rule` exists, the legacy lists are ignored.
+Legacy lists (`settings.include_source_ips`, `exclude_source_ips`, `routing_excluded_ips`, per-section `fully_routed_ips`) are moved into `client_rule` by `migrate`. As long as at least one `client_rule` exists, the legacy lists are ignored.
 
 ```sh
 # Example: route a console at 192.168.1.50 through HF
@@ -337,41 +253,15 @@ uci commit hybrid-failover
 hybrid-failover reload
 ```
 
-See also [UCI.md](UCI.md) and [LUCI.md](LUCI.md).
+Adding a rule in the web interface is covered in [LUCI.md](LUCI.md#clients).
 
 ---
 
-## Telegram bot
+## Switch notifications
 
-The full list of commands and settings is in [`bot/README.en.md`](../../bot/README.en.md).
+The core writes every switch to `/var/log/hybrid-failover/history.jsonl` (`settings.history_max_lines` sets its size).
 
-- The bot edits the `hybrid-failover` UCI config through the pending workflow (validate, apply, rollback).
-- Status, channel checks (`/health`, `/channels`) and history (`/history`) come from core RPC (`Status`, `Health`, `History`). No Clash API is involved.
-- `admin_ids` get full access. `viewer_ids` are read-only (`/status`, `/health`, `/channels`, `/history` and panel navigation).
-- Failover links are accepted in the same schemes as the core accepts.
-
-The config file is `/etc/hybrid-failover-bot.json`.
-
-| Key | Purpose |
-|-----|---------|
-| `token` | Bot token from @BotFather |
-| `router_name` | Router name in the panel, status and notifications (defaults to the hostname) |
-| `admin_ids`, `viewer_ids` | Telegram IDs of admins and viewers |
-| `log_path`, `audit_path` | Bot log and action audit log |
-| `routing_init_script` | Defaults to `/etc/init.d/hybrid-failover` |
-| `uci_package`, `main_section` | UCI package and main section (usually `glob`) |
-| `policy`, `probe_timeout_seconds` | Policy and probe timeout |
-| `notify_failover_enabled`, `notify_failover_interval_seconds` | Switch notifications and their poll interval |
-| `routers` | Managing several routers over SSH |
-| `clash_api` | Only relevant for old sing-box installs |
-
-### Several routers
-
-Telegram delivers updates for a token to a single consumer. The recommended setup is one bot per router, each with its own token and its own `router_name`. If you want a single chat for all routers, one bot can manage the others over SSH through the `routers` list, with the bot disabled on the other routers. Details and an example config are in [`bot/README.en.md`](../../bot/README.en.md).
-
-### Failover alerts
-
-**From the bot.** Set `notify_failover_enabled: true` in `hybrid-failover-bot.json`. The bot reads `/var/log/hybrid-failover/history.jsonl` every `notify_failover_interval_seconds` (30 s by default) and sends new events to every `admin_ids` entry. It stores the time of the last delivered event in `/var/run/hybrid-failover-bot/history.state`, so log rotation does not cause repeats. In the SSH setup, notifications come only from the router the bot runs on.
+**From the bot.** Set `notify_failover_enabled: true` in `/etc/hybrid-failover-bot.json` and the bot sends new events to its admins. Details are in [bot/README.en.md](../../bot/README.en.md#failover-notifications).
 
 **From a core webhook.** Put an HTTP endpoint into `hybrid-failover.settings.webhook_url`. On every automatic switch the core sends a `POST` with the event as a JSON body.
 
@@ -390,14 +280,12 @@ The engine has no HTTP API of its own. State is available through the CLI, RPC a
 ```sh
 hybrid-failover status          # JSON: engine, nft, fakeip, active outbound, controller
 hybrid-failover health          # same plus live channel probes
-hybrid-failover global-check    # same as status
 hybrid-failover check-fakeip    # DNS query to 127.0.0.42, no dig needed
 hybrid-failover check-nft       # inet hybrid_failover table is in place
-hybrid-failover rpc Health      # what LuCI and the bot see
 logread -e hybrid-failover
 ```
 
-The `clash_ok` field in the report is kept for compatibility. In native mode it simply mirrors `engine_running`. The `settings.clash_api_listen` option has no effect on the native engine.
+The other commands are in [CLI.md](CLI.md).
 
 In the bot, `/status`, `/health` and `/channels` show the same data.
 
@@ -405,9 +293,9 @@ In the bot, `/status`, `/health` and `/channels` show the same data.
 
 ## Troubleshooting
 
-### No effective rules, empty table on the Clients page
+### Empty table of effective rules on the Clients tab
 
-The core may be running fine (`engine_running: true` in the status). The message means there are no `client_rule` sections. Add a rule on the Clients page or through UCI, see [LUCI.md](LUCI.md).
+The core may be running fine (`engine_running: true` in the status). The message means there are no `client_rule` sections. Add a rule on the Clients tab or through UCI, see [LUCI.md](LUCI.md#clients).
 
 ### No leases, empty DHCP picker
 
@@ -439,19 +327,4 @@ If you are moving to Hybrid Failover, remove third-party automatic failover scri
 
 ---
 
-## Repository layout
-
-| Path | Purpose |
-|------|---------|
-| `core/`, `internal/` | Go core and the built-in engine |
-| `packages/`, `packaging/` | `.ipk` and `.apk` builds, release workflow |
-| `luci/` | luci-app-hybrid-failover |
-| `bot/` | Telegram bot |
-| `openwrt/` | init.d, UCI template |
-| `curfew/`, `luci-curfew/` | Separate curfew package (rate-limits LAN devices) and its LuCI app |
-| `examples/` | Sample UCI commands and a multi-router bot config |
-| `scripts/` | install-on-router.sh, build-packages.sh, QEMU lab |
-| `docs/` | Documentation |
-| `legacy/` | Archived migration notes |
-
-The project README is [README.en.md](../../README.en.md). Package sizes and overlay space are covered in [SING-BOX-SIZE.md](SING-BOX-SIZE.md).
+The repository layout is described in [README.en.md](../../README.en.md#repository-layout).
