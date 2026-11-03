@@ -195,6 +195,7 @@ return view.extend({
 		box.appendChild(E('div', { 'class': 'hf-mon-table-wrap' }, table));
 		box.appendChild(E('div', { 'class': 'hfs-actions' }, [
 			E('button', {
+				'type': 'button',
 				'class': 'btn cbi-button',
 				'title': _('Тяжелые сервисы раскладываются по разным живым каналам, быстрые каналы получают больше'),
 				'click': function() {
@@ -213,6 +214,7 @@ return view.extend({
 				}
 			}, _('Распределить автоматически')),
 			E('button', {
+				'type': 'button',
 				'class': 'btn cbi-button',
 				'click': function() {
 					Object.keys(st.lists).forEach(function(k) { st.lists[k] = 'auto'; });
@@ -221,12 +223,14 @@ return view.extend({
 				}
 			}, _('Все через пул')),
 			E('button', {
+				'type': 'button',
 				'class': 'btn cbi-button cbi-button-add',
 				'click': function() { self.editUserList(sec, null); }
 			}, _('+ Свой список')),
 			E('span', { 'class': 'hfs-spacer' }),
 			dirty,
 			E('button', {
+				'type': 'button',
 				'class': 'btn cbi-button cbi-button-apply',
 				'click': ui.createHandlerFn(this, function() { return self.saveSection(sec); })
 			}, _('Сохранить и применить'))
@@ -254,6 +258,7 @@ return view.extend({
 				E('div', { 'class': 'hfs-chan__top' }, [
 					E('span', { 'class': 'hfs-chan__name' }, c.name),
 					E('button', {
+						'type': 'button',
 						'class': 'hfs-chan__rename', 'title': _('Переименовать канал'),
 						'click': function() { self.renameChannel(sec, c); }
 					}, '✎')
@@ -364,8 +369,8 @@ return view.extend({
 			var tools = '';
 			if (l.kind === 'user_list')
 				tools = E('span', {}, [
-					E('button', { 'class': 'hfs-icon-btn', 'title': _('Изменить'), 'click': function() { self.editUserList(sec, l); } }, '✎'),
-					E('button', { 'class': 'hfs-icon-btn', 'title': _('Удалить'), 'click': function() { self.deleteUserList(sec, l); } }, '✕')
+					E('button', { 'type': 'button', 'class': 'hfs-icon-btn', 'title': _('Изменить'), 'click': function() { self.editUserList(sec, l); } }, '✎'),
+					E('button', { 'type': 'button', 'class': 'hfs-icon-btn', 'title': _('Удалить'), 'click': function() { self.deleteUserList(sec, l); } }, '✕')
 				]);
 			body.appendChild(E('tr', { 'class': changed ? 'hfs-row--changed' : '' }, [
 				E('td', {}, [E('div', { 'style': 'font-weight:600' }, self.listTitle(l)), E('div', { 'class': 'hfs-kind' }, KIND_LABEL[l.kind] || l.kind)]),

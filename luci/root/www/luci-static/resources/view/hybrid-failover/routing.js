@@ -456,6 +456,7 @@ var ChipsWidget = ui.AbstractElement.extend({
 		this.countEl = E('p', { 'class': 'hf-chips__count' });
 		var chips = Object.keys(this.choices).map(function(key) {
 			var chip = E('button', {
+				'type': 'button',
 				'class': 'hf-chip' + (self.values.indexOf(key) >= 0 ? ' hf-chip--on' : ''),
 				'aria-pressed': self.values.indexOf(key) >= 0 ? 'true' : 'false',
 				'click': function(ev) {
@@ -468,15 +469,16 @@ var ChipsWidget = ui.AbstractElement.extend({
 					chip.classList.toggle('hf-chip--on', i < 0);
 					chip.setAttribute('aria-pressed', i < 0 ? 'true' : 'false');
 					self.updateCount();
-					self.node.dispatchEvent(new CustomEvent('hf-chips-change', { bubbles: true }));
+					self.node.setAttribute('data-changed', 'true');
+					self.node.dispatchEvent(new Event('change', { bubbles: true }));
 				}
 			}, self.choices[key]);
 			return chip;
 		});
 		var node = E('div', { 'id': this.options.id, 'class': 'hf-chips' }, [ this.countEl ].concat(chips));
 		this.node = node;
-		this.setUpdateEvents(node, 'hf-chips-change');
-		this.setChangeEvents(node, 'hf-chips-change');
+		this.setUpdateEvents(node, 'change');
+		this.setChangeEvents(node, 'change');
 		dom.bindClassInstance(node, this);
 		this.updateCount();
 		return node;
