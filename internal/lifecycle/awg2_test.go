@@ -109,6 +109,24 @@ func TestWriteReadAWG2Endpoints(t *testing.T) {
 	}
 }
 
+func TestParseAWGShowHeaderProtectionKey(t *testing.T) {
+	text := `interface: pawgtest0001
+  public key: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+  header protection key: Fi0Ohbm7SJwrhOpMu3SrVQd3puUYTs2Yk6VkJqKrLno=
+  content padding addition: 10-100
+peer: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=
+  endpoint: 192.0.2.10:38889`
+
+	got := parseAWGShowHeaderProtectionKey(text)
+	want := "Fi0Ohbm7SJwrhOpMu3SrVQd3puUYTs2Yk6VkJqKrLno="
+	if got != want {
+		t.Fatalf("got=%q want=%q", got, want)
+	}
+	if parseAWGShowHeaderProtectionKey("no key here") != "" {
+		t.Fatal("expected empty")
+	}
+}
+
 func TestParseAWGShowPeer(t *testing.T) {
 	text := `interface: pawgtest0001
   public key: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=

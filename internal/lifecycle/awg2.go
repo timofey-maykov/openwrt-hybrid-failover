@@ -244,9 +244,14 @@ func missingAddresses(ipOutput, want string) []string {
 	return missing
 }
 
-// awg2PeerConfigMatch reports whether ifname exists with the expected peer public key.
-// Endpoint may differ when the same peer is reached via an alternate server IP.
+// awg2PeerConfigMatch reports whether ifname exists with the expected peer public key
+// and Amnezia interface junk (notably HeaderProtectionKey). Endpoint may differ when
+// the same peer is reached via an alternate server IP.
 // Handshake freshness is intentionally ignored: stale peers are rotated/bounced, not rebuilt.
+//
+// HPK must be checked: otherwise a pawg* iface that kept another node's
+// HeaderProtectionKey (same S1–S4 junk, wrong HPK) is treated as "already configured"
+// and never gets setconf — handshake sends forever with 0 B received.
 func awg2PeerConfigMatch(ifname string, params amnezia.AWG2Params) (match bool, up bool) {
 	out, err := exec.Command("ip", "link", "show", "dev", ifname).CombinedOutput()
 	if err != nil {
@@ -257,14 +262,31 @@ func awg2PeerConfigMatch(ifname string, params amnezia.AWG2Params) (match bool, 
 	if err != nil {
 		return false, up
 	}
-	_, publicKey, ok := parseAWGShowPeer(string(show))
+	text := string(show)
+	_, publicKey, ok := parseAWGShowPeer(text)
 	if !ok {
 		return false, up
 	}
 	if publicKey != params.PublicKey {
 		return false, up
 	}
+	if want := strings.TrimSpace(params.HeaderProtectionKey); want != "" {
+		if got := parseAWGShowHeaderProtectionKey(text); got != want {
+			return false, up
+		}
+	}
 	return true, up
+}
+
+func parseAWGShowHeaderProtectionKey(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		const prefix = "header protection key:"
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
 }
 
 func writeAWG2Endpoints(ifname string, endpoints []string) {
