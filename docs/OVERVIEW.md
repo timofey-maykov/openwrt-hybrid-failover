@@ -145,7 +145,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 
 | Схема | Поддержка | Примечание |
 |-------|-----------|------------|
-| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws и grpc, остальные (httpupgrade, xhttp, h2) ссылка принимает, но канал помечается ошибкой «transport is not supported». Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws и grpc |
+| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws, grpc, httpupgrade и xhttp/splithttp (режим stream-one; `auto` тоже ведёт себя как stream-one). `packet-up` и `stream-up` пока не поддерживаются. Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws, grpc, httpupgrade и xhttp |
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
 | `socks4://`, `socks4a://`, `socks5://` | да | |

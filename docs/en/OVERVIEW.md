@@ -145,7 +145,7 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 
 | Scheme | Supported | Notes |
 |--------|-----------|-------|
-| `vless://` | yes | Reality and TLS, XTLS Vision, TCP and UDP (XUDP). Transports tcp, ws and grpc, the others (httpupgrade, xhttp, h2) are accepted but the channel shows a "transport is not supported" error. These link parameters are used: `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `serviceName`, `authority`. Vision works on plain TCP only, not over ws or grpc |
+| `vless://` | yes | Reality and TLS, XTLS Vision, TCP and UDP (XUDP). Transports tcp, ws, grpc, httpupgrade and xhttp/splithttp (stream-one; `auto` is treated as stream-one). `packet-up` and `stream-up` are not supported yet. These link parameters are used: `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision works on plain TCP only, not over ws, grpc, httpupgrade or xhttp |
 | `ss://` | yes | Shadowsocks |
 | `trojan://` | yes | |
 | `socks4://`, `socks4a://`, `socks5://` | yes | |
