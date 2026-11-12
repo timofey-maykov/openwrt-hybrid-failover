@@ -153,8 +153,8 @@ func mergeLinks(existing, incoming []string) []string {
 }
 
 // ApplyLinks writes the links like ApplyToUCI and names their channels after
-// the panel's server names (channel_names, id=Name). Names the user set by
-// hand stay; names from the previous refresh are replaced.
+// the panel's server names (channel_names, id=Name). Names for subscription
+// channels follow the panel; names of hand-added channels stay.
 func ApplyLinks(uciPath, mainSection string, links []Link, merge bool) (listKey string, err error) {
 	uris := make([]string, 0, len(links))
 	for _, l := range links {
@@ -201,33 +201,49 @@ func applyNames(uciPath, mainSection string, links []Link) error {
 	return nil
 }
 
-// planNames merges the panel's server names into channel_names. Entries the
-// previous refresh wrote (ownedNames) are dropped first; an entry set by hand
-// for the same channel wins over the panel's. It returns the full list to
-// write and the part of it that the refresh now owns.
+// planNames merges the panel's server names into channel_names.
+//
+// Channels present in the subscription take the panel name (same channel id
+// as channels.ID). That replaces a stale label left from an earlier name of
+// the same peer, and also names the refresh previously wrote.
+// Names for other channel ids (hand-added links) stay. Names the previous
+// refresh owned for peers that left the subscription are dropped.
 func planNames(existing, ownedNames []string, links []Link) (final, owned []string) {
-	kept := dropOwned(existing, ownedNames)
-	manual := map[string]struct{}{}
-	for _, entry := range kept {
-		if id, _, ok := strings.Cut(entry, "="); ok {
-			manual[strings.TrimSpace(id)] = struct{}{}
-		}
-	}
-	final = append([]string(nil), kept...)
-	seen := map[string]struct{}{}
+	subName := map[string]string{}
+	var subOrder []string
 	for _, l := range links {
 		if l.Name == "" {
 			continue
 		}
 		id := channels.ID(l.URI)
-		if _, dup := seen[id]; dup {
+		if _, dup := subName[id]; dup {
 			continue
 		}
-		seen[id] = struct{}{}
-		if _, ok := manual[id]; ok {
+		subName[id] = l.Name
+		subOrder = append(subOrder, id)
+	}
+	ownedIDs := map[string]struct{}{}
+	for _, entry := range ownedNames {
+		if id, _, ok := strings.Cut(entry, "="); ok {
+			ownedIDs[strings.TrimSpace(id)] = struct{}{}
+		}
+	}
+	for _, entry := range existing {
+		id, _, ok := strings.Cut(entry, "=")
+		id = strings.TrimSpace(id)
+		if !ok || id == "" {
 			continue
 		}
-		entry := id + "=" + l.Name
+		if _, fromSub := subName[id]; fromSub {
+			continue
+		}
+		if _, wasOwned := ownedIDs[id]; wasOwned {
+			continue
+		}
+		final = append(final, entry)
+	}
+	for _, id := range subOrder {
+		entry := id + "=" + subName[id]
 		final = append(final, entry)
 		owned = append(owned, entry)
 	}

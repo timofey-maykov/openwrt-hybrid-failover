@@ -140,19 +140,21 @@ func TestPlanNamesKeepsManualNamesAndReplacesOwned(t *testing.T) {
 	if idA != channels.ID(links[3].URI) {
 		t.Fatal("test setup: both Riga links must share an id")
 	}
-	existing := []string{"deadbeef=Мой ручной", idB + "=Старое имя от панели", idA + "=Моё имя для Риги"}
+	// deadbeef is a hand-added channel; idA had a stale label (not in owned);
+	// idB was written by the previous refresh under another title.
+	existing := []string{"deadbeef=Мой ручной", idB + "=Старое имя от панели", idA + "=Гонконг"}
 	ownedBefore := []string{idB + "=Старое имя от панели"}
 
 	final, owned := planNames(existing, ownedBefore, links)
-	wantFinal := []string{"deadbeef=Мой ручной", idA + "=Моё имя для Риги", idB + "=Амстердам"}
+	wantFinal := []string{"deadbeef=Мой ручной", idA + "=Рига", idB + "=Амстердам"}
 	if !reflect.DeepEqual(final, wantFinal) {
 		t.Fatalf("final = %v, want %v", final, wantFinal)
 	}
-	if !reflect.DeepEqual(owned, []string{idB + "=Амстердам"}) {
+	if !reflect.DeepEqual(owned, []string{idA + "=Рига", idB + "=Амстердам"}) {
 		t.Fatalf("owned = %v", owned)
 	}
 
-	// Without a manual name the panel's name is written once per server.
+	// Without prior names the panel's name is written once per server.
 	final, owned = planNames(nil, nil, links)
 	if !reflect.DeepEqual(final, []string{idA + "=Рига", idB + "=Амстердам"}) || !reflect.DeepEqual(owned, final) {
 		t.Fatalf("fresh: final=%v owned=%v", final, owned)
