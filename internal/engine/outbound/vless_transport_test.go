@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -260,6 +261,8 @@ func TestVLESSTransportALPN(t *testing.T) {
 		"type=tcp":                              {"h2", "http/1.1"},
 		"type=ws&path=/x":                       {"http/1.1"},
 		"type=ws&path=/x&alpn=h2":               {"h2"},
+		"type=httpupgrade&path=/x":              {"http/1.1"},
+		"type=xhttp&path=/x&mode=stream-one":    {"h2"},
 		"type=grpc&serviceName=s":               {"h2"},
 		"type=grpc&serviceName=s&alpn=http/1.1": {"h2"},
 	}
@@ -299,7 +302,134 @@ func TestVLESSUnsupportedLinkFailsOnUseNotOnCreation(t *testing.T) {
 	if _, err := h.DialUDP(context.Background(), "udp", "203.0.113.5:53"); err == nil {
 		t.Fatal("UDP dialled over a link that cannot work")
 	}
-	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "splithttp"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "splithttp") {
+	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "xhttp", "mode": "packet-up"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "packet-up") {
+		t.Fatalf("unsupported xhttp mode: %v", err)
+	}
+	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "meek"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "meek") {
 		t.Fatalf("unknown transport: %v", err)
+	}
+}
+
+func httpUpgradeServer(t *testing.T, path string, rec *seen) int {
+	t.Helper()
+	svc := vlessService("")
+	ln := tlsListener(t, "http/1.1")
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				br := bufio.NewReader(c)
+				req, err := http.ReadRequest(br)
+				if err != nil {
+					_ = c.Close()
+					return
+				}
+				rec.set(req)
+				if req.URL.Path != path || !strings.EqualFold(req.Header.Get("Upgrade"), "websocket") {
+					_ = c.Close()
+					return
+				}
+				_, _ = io.WriteString(c, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+				serve(svc, &bufConn{Conn: c, r: br})
+			}(c)
+		}
+	}()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+func xhttpServer(t *testing.T, path string, rec *seen) int {
+	t.Helper()
+	svc := vlessService("")
+	mux := http.NewServeMux()
+	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+		rec.set(r)
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		f := w.(http.Flusher)
+		f.Flush()
+		// XHTTP stream-one carries raw VLESS bytes, not gRPC length frames.
+		serve(svc, &rawHTTPBodyConn{body: r.Body, w: w, f: f})
+	})
+	srv := &http.Server{Handler: mux, TLSConfig: &tls.Config{Certificates: []tls.Certificate{selfSigned(t)}}}
+	if err := http2.ConfigureServer(srv, &http2.Server{}); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	go func() { _ = srv.ServeTLS(ln, "", "") }()
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+type rawHTTPBodyConn struct {
+	body io.Reader
+	w    http.ResponseWriter
+	f    http.Flusher
+	wmu  sync.Mutex
+}
+
+func (c *rawHTTPBodyConn) Read(p []byte) (int, error) { return c.body.Read(p) }
+func (c *rawHTTPBodyConn) Write(p []byte) (int, error) {
+	c.wmu.Lock()
+	defer c.wmu.Unlock()
+	n, err := c.w.Write(p)
+	c.f.Flush()
+	return n, err
+}
+func (c *rawHTTPBodyConn) Close() error                       { return nil }
+func (c *rawHTTPBodyConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
+func (c *rawHTTPBodyConn) RemoteAddr() net.Addr               { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)} }
+func (c *rawHTTPBodyConn) SetDeadline(t time.Time) error      { return nil }
+func (c *rawHTTPBodyConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *rawHTTPBodyConn) SetWriteDeadline(t time.Time) error { return nil }
+
+func TestVLESSOverHTTPUpgrade(t *testing.T) {
+	rec := &seen{}
+	port := httpUpgradeServer(t, "/hu", rec)
+	link := fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&allowInsecure=1&type=httpupgrade&path=%%2Fhu&host=cdn.example.com", vlessTestUUID, port)
+	h := newTestVLESSLink(t, link)
+	echoTCP(t, h)
+	echoUDP(t, h)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.path != "/hu" {
+		t.Fatalf("path %q", rec.path)
+	}
+	if rec.host != "cdn.example.com" {
+		t.Fatalf("Host %q", rec.host)
+	}
+}
+
+func TestVLESSOverXHTTPStreamOne(t *testing.T) {
+	rec := &seen{}
+	port := xhttpServer(t, "/x", rec)
+	link := fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&allowInsecure=1&type=xhttp&path=%%2Fx&mode=stream-one&host=cdn.example.com", vlessTestUUID, port)
+	h := newTestVLESSLink(t, link)
+	echoTCP(t, h)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	if rec.path != "/x" || !strings.HasPrefix(rec.ctype, "application/grpc") {
+		t.Fatalf("request path %q ctype %q", rec.path, rec.ctype)
+	}
+	if rec.host != "cdn.example.com" {
+		t.Fatalf("Host %q", rec.host)
+	}
+}
+
+func TestVLESSSplitHTTPAliasUsesXHTTP(t *testing.T) {
+	tr, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "splithttp", "path": "/s", "mode": "auto"}}, "", "example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.kind != "xhttp" || tr.path != "/s" || tr.host != "example.com" {
+		t.Fatalf("%+v", tr)
 	}
 }

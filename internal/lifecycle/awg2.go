@@ -167,6 +167,24 @@ func listPawgInterfaces() []string {
 	return out
 }
 
+// pruneOrphanAWG2Interfaces deletes pawg* that are not in keep, plus their
+// network UCI section and endpoint list file. Returns true when anything was removed.
+func pruneOrphanAWG2Interfaces(keep map[string]struct{}) bool {
+	orphans := orphanPawgNames(listPawgInterfaces(), keep)
+	changed := false
+	for _, ifname := range orphans {
+		if out, err := exec.Command("ip", "link", "del", "dev", ifname).CombinedOutput(); err != nil {
+			log.Printf("hybrid-failover: awg2 prune %s: %v: %s", ifname, err, strings.TrimSpace(string(out)))
+			continue
+		}
+		removeAWG2NetworkUCI(ifname)
+		removeAWG2Endpoints(ifname)
+		log.Printf("hybrid-failover: awg2 pruned orphan %s", ifname)
+		changed = true
+	}
+	return changed
+}
+
 func removeAWG2NetworkUCI(ifname string) {
 	section := filepath.Base(ifname)
 	_ = exec.Command("uci", "-q", "delete", "network."+section).Run()
@@ -174,6 +192,13 @@ func removeAWG2NetworkUCI(ifname string) {
 		return
 	}
 	_ = exec.Command("uci", "-q", "commit", "network").Run()
+}
+
+func removeAWG2Endpoints(ifname string) {
+	if ifname == "" {
+		return
+	}
+	_ = os.Remove(filepath.Join(paths.AWG2EndpointsDir, ifname))
 }
 
 // ensureAWG2Addresses puts back the tunnel address when something took it off a

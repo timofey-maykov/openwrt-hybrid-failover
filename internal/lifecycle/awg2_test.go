@@ -9,6 +9,7 @@ import (
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
 )
 
 func TestWriteAWG2ConfigAWG31(t *testing.T) {
@@ -141,6 +142,97 @@ func TestAWG2RandomPortDiffersFromOld(t *testing.T) {
 		if err != nil || n < 20000 || n > 59999 || p == "20000" {
 			t.Fatalf("bad port %q", p)
 		}
+	}
+}
+
+func TestOrphanPawgNames(t *testing.T) {
+	keep := map[string]struct{}{
+		"pawgkeep1": {},
+		"pawgkeep2": {},
+	}
+	present := []string{"pawgkeep1", "pawgold", "pawgkeep2", "pawgdrop"}
+	got := orphanPawgNames(present, keep)
+	want := []string{"pawgold", "pawgdrop"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if leftover := orphanPawgNames([]string{"pawgkeep1", "pawgkeep2"}, keep); len(leftover) != 0 {
+		t.Fatalf("kept ifaces must not be orphan: %v", leftover)
+	}
+}
+
+func TestExpectedAWG2IfnamesDropsRemovedPeers(t *testing.T) {
+	linkA := "awg2://192.0.2.10:41490?address=10.8.1.2%2F32&private_key=ka&public_key=pa"
+	linkB := "awg2://192.0.2.11:41491?address=10.8.1.3%2F32&private_key=kb&public_key=pb"
+	linkC := "awg2://192.0.2.12:41492?address=10.8.1.4%2F32&private_key=kc&public_key=pc"
+
+	pkgThree, err := uci.Parse("config section 'glob'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'urltest'\n" +
+		"\tlist urltest_proxy_links '" + linkA + "'\n" +
+		"\tlist urltest_proxy_links '" + linkB + "'\n" +
+		"\tlist urltest_proxy_links '" + linkC + "'\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keepThree, err := expectedAWG2Ifnames(pkgThree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keepThree) != 3 {
+		t.Fatalf("three distinct peers → three ifaces, got %v", keepThree)
+	}
+
+	pkgOne, err := uci.Parse("config section 'glob'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'urltest'\n" +
+		"\tlist urltest_proxy_links '" + linkA + "'\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keepOne, err := expectedAWG2Ifnames(pkgOne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keepOne) != 1 {
+		t.Fatalf("one peer → one iface, got %v", keepOne)
+	}
+	for name := range keepThree {
+		if _, ok := keepOne[name]; ok {
+			continue
+		}
+		// B and C must become orphans relative to the shrunk config.
+		if orphans := orphanPawgNames([]string{name}, keepOne); len(orphans) != 1 {
+			t.Fatalf("%s should be orphan after shrink, keepOne=%v", name, keepOne)
+		}
+	}
+}
+
+func TestExpectedAWG2IfnamesSamePeerOneIface(t *testing.T) {
+	// Same public key, two endpoints: one shared interface.
+	link1 := "awg2://192.0.2.10:41490?address=10.8.1.2%2F32&private_key=k&public_key=SAMEPEER"
+	link2 := "awg2://198.51.100.10:41490?address=10.8.1.2%2F32&private_key=k&public_key=SAMEPEER"
+	pkg, err := uci.Parse("config section 'glob'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'urltest'\n" +
+		"\tlist urltest_proxy_links '" + link1 + "'\n" +
+		"\tlist urltest_proxy_links '" + link2 + "'\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keep, err := expectedAWG2Ifnames(pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keep) != 1 {
+		t.Fatalf("same peer → one iface, got %v", keep)
+	}
+}
+
+func TestRemoveAWG2EndpointsFile(t *testing.T) {
+	dir := t.TempDir()
+	old := paths.AWG2EndpointsDir
+	paths.AWG2EndpointsDir = dir
+	defer func() { paths.AWG2EndpointsDir = old }()
+
+	writeAWG2Endpoints("pawgorphan", []string{"203.0.113.10:1"})
+	removeAWG2Endpoints("pawgorphan")
+	if _, err := os.Stat(filepath.Join(dir, "pawgorphan")); !os.IsNotExist(err) {
+		t.Fatalf("endpoints file must be gone, err=%v", err)
 	}
 }
 

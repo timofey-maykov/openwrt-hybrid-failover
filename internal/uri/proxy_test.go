@@ -84,4 +84,31 @@ func TestVLESSTransportsFromTheLink(t *testing.T) {
 	if tr["type"] != "grpc" || tr["service_name"] != "svc" || tr["authority"] != "a.example.com" {
 		t.Fatalf("grpc: %v", tr)
 	}
+	hu, err := uri.ParseProxy(vlessID+"&type=httpupgrade&path=%2Fhu&host=cdn.example.com", "t-out", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ = hu.Fields["transport"].(map[string]any)
+	if tr["type"] != "httpupgrade" || tr["path"] != "/hu" {
+		t.Fatalf("httpupgrade: %v", tr)
+	}
+	if h, _ := tr["headers"].(map[string]string); h["Host"] != "cdn.example.com" {
+		t.Fatalf("httpupgrade host: %v", tr["headers"])
+	}
+	xh, err := uri.ParseProxy(vlessID+"&type=xhttp&path=%2Fx&host=cdn.example.com&mode=auto", "t-out", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ = xh.Fields["transport"].(map[string]any)
+	if tr["type"] != "xhttp" || tr["path"] != "/x" || tr["mode"] != "auto" {
+		t.Fatalf("xhttp: %v", tr)
+	}
+	sp, err := uri.ParseProxy(vlessID+"&type=splithttp&path=%2Fs&mode=stream-one", "t-out", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr, _ = sp.Fields["transport"].(map[string]any)
+	if tr["type"] != "xhttp" || tr["path"] != "/s" || tr["mode"] != "stream-one" {
+		t.Fatalf("splithttp aliases to xhttp: %v", tr)
+	}
 }

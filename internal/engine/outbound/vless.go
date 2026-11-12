@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sagernet/sing-vmess/vless"
@@ -33,10 +34,10 @@ type vlessHandler struct {
 }
 
 // vlessTransport is what the link says about carrying the stream: plain TCP,
-// WebSocket or gRPC.
+// WebSocket, HTTP Upgrade, XHTTP stream-one or gRPC.
 type vlessTransport struct {
-	kind    string // "", "ws" or "grpc"
-	host    string // Host header of ws
+	kind    string // "", "ws", "httpupgrade", "xhttp" or "grpc"
+	host    string // Host header / HTTP authority
 	path    string
 	headers map[string]string
 	grpc    grpcOptions
@@ -49,8 +50,11 @@ func vlessTransportFrom(fields map[string]any, flow, tlsName string) (vlessTrans
 	switch kind {
 	case "", "tcp":
 		return t, nil
-	case "ws":
-		t.kind = "ws"
+	case "ws", "httpupgrade", "xhttp", "splithttp":
+		if kind == "splithttp" {
+			kind = "xhttp"
+		}
+		t.kind = kind
 		t.path, _ = raw["path"].(string)
 		t.headers = map[string]string{}
 		switch h := raw["headers"].(type) {
@@ -70,6 +74,16 @@ func vlessTransportFrom(fields map[string]any, flow, tlsName string) (vlessTrans
 			t.host = tlsName
 		}
 		delete(t.headers, "Host")
+		if kind == "xhttp" {
+			mode, _ := raw["mode"].(string)
+			mode = strings.TrimSpace(strings.ToLower(mode))
+			if mode == "" || mode == "auto" {
+				mode = "stream-one"
+			}
+			if mode != "stream-one" {
+				return t, fmt.Errorf("vless: xhttp mode %q is not supported (only stream-one)", mode)
+			}
+		}
 	case "grpc":
 		t.kind = "grpc"
 		t.grpc.service, _ = raw["service_name"].(string)
@@ -81,10 +95,11 @@ func vlessTransportFrom(fields map[string]any, flow, tlsName string) (vlessTrans
 			t.grpc.pingTimeout, _ = time.ParseDuration(v)
 		}
 	default:
-		return t, fmt.Errorf("vless: transport %q is not supported by the native engine (tcp, ws and grpc are)", kind)
+		return t, fmt.Errorf("vless: transport %q is not supported by the native engine (tcp, ws, httpupgrade, xhttp and grpc are)", kind)
 	}
 	if flow == vless.FlowVision {
-		return t, fmt.Errorf("vless: flow xtls-rprx-vision works on plain TCP only, not over %s", t.kind)
+		// Vision reflects into a real TLS conn; WS/HTTP/gRPC wrap that away.
+		return t, fmt.Errorf("vless: flow xtls-rprx-vision needs plain TCP(+TLS/Reality), not %s", t.kind)
 	}
 	return t, nil
 }
@@ -122,11 +137,11 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 			userALPN = len(alpnFromField(raw["alpn"])) > 0
 		}
 		switch transport.kind {
-		case "ws":
+		case "ws", "httpupgrade":
 			if !userALPN {
 				tlsCfg.SetNextProtos([]string{"http/1.1"})
 			}
-		case "grpc":
+		case "grpc", "xhttp":
 			tlsCfg.SetNextProtos([]string{"h2"})
 		}
 	}
@@ -166,6 +181,20 @@ func (h *vlessHandler) dialStream(ctx context.Context) (net.Conn, error) {
 			return nil, err
 		}
 		return ws, nil
+	case "httpupgrade":
+		hu, err := newHTTPUpgradeClient(ctx, tlsConn, h.transport.host, h.transport.path, h.transport.headers)
+		if err != nil {
+			_ = tlsConn.Close()
+			return nil, err
+		}
+		return hu, nil
+	case "xhttp":
+		xh, err := newXHTTPStreamOne(ctx, tlsConn, h.transport.host, h.transport.path, h.transport.headers)
+		if err != nil {
+			_ = tlsConn.Close()
+			return nil, err
+		}
+		return xh, nil
 	case "grpc":
 		g, err := newGRPCClient(tlsConn, h.serverName, h.transport.grpc)
 		if err != nil {

@@ -287,6 +287,26 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 			transport["headers"] = map[string]string{"Host": host}
 		}
 		ob["transport"] = transport
+	case "httpupgrade":
+		transport := map[string]any{
+			"type": "httpupgrade",
+			"path": q.Get("path"),
+		}
+		if host := q.Get("host"); host != "" {
+			transport["headers"] = map[string]string{"Host": host}
+		}
+		ob["transport"] = transport
+	case "xhttp", "splithttp":
+		// splithttp is the older name for the same Xray transport.
+		transport := map[string]any{
+			"type": "xhttp",
+			"path": q.Get("path"),
+			"mode": firstNonEmpty(q.Get("mode"), "auto"),
+		}
+		if host := q.Get("host"); host != "" {
+			transport["headers"] = map[string]string{"Host": host}
+		}
+		ob["transport"] = transport
 	case "grpc":
 		ob["transport"] = map[string]any{
 			"type":                  "grpc",

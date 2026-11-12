@@ -23,11 +23,14 @@ type awg2PeerGroup struct {
 // SetupAWG2FromUCI scans routing sections for awg2:// (and vpn://→awg2) links and brings up interfaces.
 // Multiple awg2 links with the same peer public key share one interface; alternate Host:Port
 // values are kept for endpoint rotation when the current IP path dies.
-// The second return value is true when at least one interface was created or reconfigured.
+// After setup it deletes pawg* interfaces that no longer match any current link
+// (subscription shrink, manual link removal, apply, watchdog).
+// The second return value is true when at least one interface was created, reconfigured, or removed.
 func SetupAWG2FromUCI(pkg *uci.Package) (bool, error) {
 	if pkg == nil {
 		return false, nil
 	}
+	keep := make(map[string]struct{})
 	var changed bool
 	for _, name := range pkg.SectionNames("section") {
 		sec := pkg.Section(name)
@@ -40,6 +43,7 @@ func SetupAWG2FromUCI(pkg *uci.Package) (bool, error) {
 		}
 		for _, g := range groups {
 			ifname := amnezia.AWG2InterfaceName(g.primary.peerSection)
+			keep[ifname] = struct{}{}
 			writeAWG2Endpoints(ifname, g.endpoints)
 			_, synced, err := setupAWG2Interface(g.primary.peerSection, g.primary.raw, g.primary.updateUCI)
 			if err != nil {
@@ -48,7 +52,47 @@ func SetupAWG2FromUCI(pkg *uci.Package) (bool, error) {
 			changed = changed || synced
 		}
 	}
+	if pruneOrphanAWG2Interfaces(keep) {
+		changed = true
+	}
 	return changed, nil
+}
+
+// expectedAWG2Ifnames is the set of pawg* names the current UCI still needs.
+func expectedAWG2Ifnames(pkg *uci.Package) (map[string]struct{}, error) {
+	keep := make(map[string]struct{})
+	if pkg == nil {
+		return keep, nil
+	}
+	for _, name := range pkg.SectionNames("section") {
+		sec := pkg.Section(name)
+		if sec == nil {
+			continue
+		}
+		groups, err := awg2PeerGroupsForSection(name, sec)
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range groups {
+			keep[amnezia.AWG2InterfaceName(g.primary.peerSection)] = struct{}{}
+		}
+	}
+	return keep, nil
+}
+
+// orphanPawgNames returns present pawg* names that are not in keep.
+func orphanPawgNames(present []string, keep map[string]struct{}) []string {
+	var out []string
+	for _, name := range present {
+		if !strings.HasPrefix(name, "pawg") {
+			continue
+		}
+		if _, ok := keep[name]; ok {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out
 }
 
 func awg2PeerGroupsForSection(section string, sec *uci.Section) ([]awg2PeerGroup, error) {
