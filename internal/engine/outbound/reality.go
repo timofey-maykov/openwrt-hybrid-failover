@@ -30,6 +30,19 @@ type realityConfig struct {
 	shortID   [8]byte
 }
 
+// realityECDHE is the X25519 private key Reality uses to seal SessionId.
+// Chrome fingerprints that offer X25519MLKEM768 put that share first and keep
+// the classical X25519 key in MlkemEcdhe (same as Xray's Reality client).
+func realityECDHE(keys *utls.KeySharePrivateKeys) *ecdh.PrivateKey {
+	if keys == nil {
+		return nil
+	}
+	if keys.Ecdhe != nil {
+		return keys.Ecdhe
+	}
+	return keys.MlkemEcdhe
+}
+
 func newRealityConfig(opt tlsOptions) (aTLS.Config, error) {
 	u, err := newUTLSConfig(opt)
 	if err != nil {
@@ -73,29 +86,9 @@ func (e *realityConfig) ClientHandshake(ctx context.Context, conn net.Conn) (aTL
 	if err := uConn.BuildHandshakeState(); err != nil {
 		return nil, err
 	}
-	for _, extension := range uConn.Extensions {
-		if ce, ok := extension.(*utls.SupportedCurvesExtension); ok {
-			filtered := ce.Curves[:0]
-			for _, curveID := range ce.Curves {
-				if curveID != utls.X25519MLKEM768 {
-					filtered = append(filtered, curveID)
-				}
-			}
-			ce.Curves = filtered
-		}
-		if ks, ok := extension.(*utls.KeyShareExtension); ok {
-			filtered := ks.KeyShares[:0]
-			for _, share := range ks.KeyShares {
-				if share.Group != utls.X25519MLKEM768 {
-					filtered = append(filtered, share)
-				}
-			}
-			ks.KeyShares = filtered
-		}
-	}
-	if err := uConn.BuildHandshakeState(); err != nil {
-		return nil, err
-	}
+	// Keep X25519MLKEM768 in the ClientHello. Xray-core ≥ 26.9.8 rejects REALITY
+	// handshakes that lack that key share and falls back to the decoy site, which
+	// shows up here as "reality verification failed".
 	if len(uConfig.NextProtos) > 0 {
 		for _, extension := range uConn.Extensions {
 			if alpnExtension, isALPN := extension.(*utls.ALPNExtension); isALPN {
@@ -118,11 +111,11 @@ func (e *realityConfig) ClientHandshake(ctx context.Context, conn net.Conn) (aTL
 	if err != nil {
 		return nil, err
 	}
-	keyShareKeys := uConn.HandshakeState.State13.KeyShareKeys
-	if keyShareKeys == nil || keyShareKeys.Ecdhe == nil {
-		return nil, fmt.Errorf("reality: missing ecdhe key")
+	ecdhe := realityECDHE(uConn.HandshakeState.State13.KeyShareKeys)
+	if ecdhe == nil {
+		return nil, fmt.Errorf("reality: missing ecdhe key for fingerprint %s %s", uConn.ClientHelloID.Client, uConn.ClientHelloID.Version)
 	}
-	authKey, err := keyShareKeys.Ecdhe.ECDH(publicKey)
+	authKey, err := ecdhe.ECDH(publicKey)
 	if err != nil || authKey == nil {
 		return nil, fmt.Errorf("reality: ecdh failed")
 	}
