@@ -36,6 +36,9 @@ func newHysteria2Handler(ctx context.Context, p plan.OutboundPlan) (Handler, err
 	if tlsCfg == nil {
 		tlsCfg, _ = buildTLSConfig(map[string]any{"tls": map[string]any{"enabled": true, "server_name": server}}, server)
 	}
+	if err := pinHysteriaCertificate(tlsCfg, p.ProxyURI); err != nil {
+		return nil, err
+	}
 	var salamander string
 	if obfs, ok := ob.Fields["obfs"].(map[string]any); ok {
 		if t, _ := obfs["type"].(string); t == "salamander" {
