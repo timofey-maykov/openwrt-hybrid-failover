@@ -320,10 +320,13 @@ func (r *Router) DialUDP(ctx context.Context, meta plan.ConnMeta) (net.PacketCon
 // FakeIP addresses are mapped back to the original domain before dialing.
 func (r *Router) dialTarget(meta plan.ConnMeta) string {
 	host := strings.TrimSpace(meta.DstIP)
-	if meta.Domain != "" {
-		host = meta.Domain
-	} else if d, ok := r.fakeIP.LookupDomain(meta.DstIP); ok {
+	// SNI is a routing hint, not an instruction to change a real destination.
+	// VPNs with TLS camouflage intentionally use a different SNI: replacing
+	// their server IP sends the handshake to the cover site on the VPN port.
+	if d, ok := r.fakeIP.LookupDomain(host); ok {
 		host = d
+	} else if meta.Domain != "" && (host == "" || r.fakeIP.network.Contains(net.ParseIP(host))) {
+		host = meta.Domain
 	}
 	return net.JoinHostPort(host, fmtPort(meta.DstPort))
 }
