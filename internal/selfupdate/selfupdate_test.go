@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewer(t *testing.T) {
@@ -277,5 +280,74 @@ func TestLeaveServiceCgroupWritesOwnPID(t *testing.T) {
 	leaveServiceCgroup()
 	if _, err := os.Stat(cgroupProcs); err == nil {
 		t.Fatal("must not create the file")
+	}
+}
+
+func TestDownloadRetriesIncompleteAndTimedOutBodies(t *testing.T) {
+	for _, mode := range []string{"truncated", "timeout"} {
+		t.Run(mode, func(t *testing.T) {
+			body := []byte("complete verified package")
+			hash := sha256.Sum256(body)
+			want := Asset{Size: int64(len(body)), SHA256: hex.EncodeToString(hash[:])}
+			var mu sync.Mutex
+			requests := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				requests++
+				n := requests
+				mu.Unlock()
+				w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+				if n == 1 {
+					_, _ = w.Write(body[:3])
+					if mode == "timeout" {
+						w.(http.Flusher).Flush()
+						<-r.Context().Done()
+					}
+					return
+				}
+				_, _ = w.Write(body)
+			}))
+			defer srv.Close()
+			client := srv.Client()
+			client.Timeout = 100 * time.Millisecond
+			c := Client{HTTP: client, WebBase: srv.URL, Repo: "o/r"}
+			dir := t.TempDir()
+			path, err := c.Download(context.Background(), "v1.0.0", "core.apk", want, dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != string(body) {
+				t.Fatalf("package=%q error=%v", got, err)
+			}
+			mu.Lock()
+			count := requests
+			mu.Unlock()
+			if count != 2 {
+				t.Fatalf("requests=%d", count)
+			}
+		})
+	}
+}
+
+func TestDownloadCancellationDoesNotRetryOrKeepPartialFile(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		_, _ = io.WriteString(w, "partial")
+		w.(http.Flusher).Flush()
+		cancel()
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	c := Client{HTTP: srv.Client(), WebBase: srv.URL, Repo: "o/r"}
+	dir := t.TempDir()
+	_, err := c.Download(ctx, "v1.0.0", "core.apk", Asset{Size: 1000}, dir)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "core.apk")); !os.IsNotExist(err) {
+		t.Fatalf("partial file left: %v", err)
 	}
 }

@@ -125,9 +125,13 @@ func (c *Client) http() *http.Client {
 }
 
 func (c *Client) get(ctx context.Context, url string) (*http.Response, error) {
+	return c.getWithClient(ctx, c.http(), url)
+}
+
+func (c *Client) getWithClient(ctx context.Context, client *http.Client, url string) (*http.Response, error) {
 	var last error
-	// Downloads from GitHub get reset mid-way now and then on some ISPs;
-	// a few tries cost nothing.
+	// Retry connection/header failures here. Package body failures are retried
+	// separately by Download, after the partial file has been removed.
 	for attempt := 0; attempt < 4; attempt++ {
 		if attempt > 0 {
 			select {
@@ -142,7 +146,7 @@ func (c *Client) get(ctx context.Context, url string) (*http.Response, error) {
 		}
 		req.Header.Set("User-Agent", "hybrid-failover-selfupdate")
 		req.Header.Set("Accept", "application/vnd.github+json, application/octet-stream, */*")
-		resp, err := c.http().Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			last = err
 			continue
@@ -354,37 +358,68 @@ func SelectAssets(m Manifest, pm string, archs []string, pkgs []string) (map[str
 
 // Download fetches one release file and checks it against the manifest.
 func (c *Client) Download(ctx context.Context, tag, name string, want Asset, dir string) (string, error) {
-	resp, err := c.get(ctx, c.web()+"/"+c.repo()+"/releases/download/"+tag+"/"+name)
+	client := c.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	var last error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(time.Duration(attempt) * time.Second):
+			}
+		}
+		path, err, retry := c.downloadOnce(ctx, client, tag, name, want, dir)
+		if err == nil {
+			return path, nil
+		}
+		last = err
+		if !retry {
+			break
+		}
+	}
+	return "", last
+}
+
+func (c *Client) downloadOnce(ctx context.Context, client *http.Client, tag, name string, want Asset, dir string) (string, error, bool) {
+	resp, err := c.getWithClient(ctx, client, c.web()+"/"+c.repo()+"/releases/download/"+tag+"/"+name)
 	if err != nil {
-		return "", err
+		return "", err, false
 	}
 	defer resp.Body.Close()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
+		return "", err, false
 	}
 	path := filepath.Join(dir, name)
 	f, err := os.Create(path)
 	if err != nil {
-		return "", err
+		return "", err, false
 	}
 	h := sha256.New()
 	n, err := io.Copy(io.MultiWriter(f, h), io.LimitReader(resp.Body, 64<<20))
+	readErr := err
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
 	if err != nil {
 		os.Remove(path)
-		return "", err
+		var diskErr *os.PathError
+		return "", err, readErr != nil && !errors.As(err, &diskErr) && ctx.Err() == nil
 	}
 	if want.Size > 0 && n != want.Size {
 		os.Remove(path)
-		return "", fmt.Errorf("%s: size %d, manifest says %d", name, n, want.Size)
+		return "", fmt.Errorf("%s: size %d, manifest says %d", name, n, want.Size), false
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(got, want.SHA256) {
 		os.Remove(path)
-		return "", fmt.Errorf("%s: sha256 %s, manifest says %s", name, got, want.SHA256)
+		return "", fmt.Errorf("%s: sha256 %s, manifest says %s", name, got, want.SHA256), false
 	}
-	return path, nil
+	return path, nil, false
 }
 
 // SortedPackages lists the packages to update: the base set first, then the
