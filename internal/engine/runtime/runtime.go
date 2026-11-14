@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/control"
@@ -15,14 +16,15 @@ import (
 )
 
 type Runtime struct {
-	mu           sync.Mutex
-	plan         *plan.Plan
-	control      *control.Control
-	registry     *outbound.Registry
-	router       *router.Router
-	tproxy       *tproxy.Server
-	dnsServer    *dns.Server
-	listDownload *listdownload.Server
+	mu                   sync.Mutex
+	plan                 *plan.Plan
+	control              *control.Control
+	registry             *outbound.Registry
+	router               *router.Router
+	tproxy               *tproxy.Server
+	dnsServer            *dns.Server
+	listDownload         *listdownload.Server
+	subscriptionDownload *listdownload.Server
 }
 
 func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, error) {
@@ -57,6 +59,7 @@ func New(ctx context.Context, p *plan.Plan, ctrl *control.Control) (*Runtime, er
 		rt.listDownload = listdownload.New(p.ListDownload.Section, p.ListDownload.Port, reg, ctrl)
 	}
 	ctrl.SetSelector(reg)
+	rt.subscriptionDownload = listdownload.NewSubscription(subscriptionChannels(p), reg)
 	return rt, nil
 }
 
@@ -80,10 +83,17 @@ func (r *Runtime) Start(ctx context.Context) error {
 		_ = r.dnsServer.Stop()
 		return fmt.Errorf("urltest: %w", err)
 	}
+	if err := r.subscriptionDownload.Start(ctx); err != nil {
+		// This optional download helper must not take down LAN routing.
+		log.Printf("hybrid-failover: subscription tunnel fallback unavailable: %v", err)
+	}
 	return nil
 }
 
 func (r *Runtime) Stop() {
+	if r.subscriptionDownload != nil {
+		r.subscriptionDownload.Stop()
+	}
 	if r.listDownload != nil {
 		r.listDownload.Stop()
 	}
@@ -134,4 +144,21 @@ func (r *Runtime) BindingActive(tag string) string {
 		return m
 	}
 	return tag
+}
+
+// Retry concrete tunnel outbounds, including JSON-configured proxies. Selectors
+// and their direct fallback must not turn a tunnel retry into another WAN try.
+func subscriptionChannels(p *plan.Plan) []plan.ChannelPlan {
+	var channels []plan.ChannelPlan
+	for _, ob := range p.Outbounds {
+		switch ob.Kind {
+		case plan.OutboundVLESS, plan.OutboundTrojan, plan.OutboundShadowsocks, plan.OutboundSocks, plan.OutboundHysteria2:
+			channels = append(channels, plan.ChannelPlan{Tag: ob.Tag})
+		case plan.OutboundDirectBind, plan.OutboundAWG2Bind:
+			if ob.BindIface != "" {
+				channels = append(channels, plan.ChannelPlan{Tag: ob.Tag})
+			}
+		}
+	}
+	return channels
 }

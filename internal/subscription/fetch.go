@@ -1,6 +1,7 @@
 package subscription
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -12,16 +13,19 @@ import (
 	"time"
 
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/amnezia"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/netfetch"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/validation"
 )
 
 type Fetcher struct {
 	HTTP *http.Client
+	// FallbackClients is lazy: a successful direct download never contacts the engine.
+	FallbackClients func(context.Context) []*http.Client
 }
 
 func NewFetcher() *Fetcher {
-	return &Fetcher{HTTP: &http.Client{Timeout: 60 * time.Second}}
+	return &Fetcher{HTTP: &http.Client{Timeout: 15 * time.Second}, FallbackClients: netfetch.SubscriptionClients}
 }
 
 // Link is one server from a subscription. Name is what the panel called it
@@ -73,10 +77,18 @@ func (f *Fetcher) FetchURLs(urls []string) ([]string, error) {
 // the Sources collected so far (the failed one included, with its Error set)
 // are returned with it, so the caller can record what happened.
 func (f *Fetcher) Fetch(urls []string) (Result, error) {
+	return f.FetchContext(context.Background(), urls)
+}
+
+// FetchContext bounds the entire refresh, not each URL separately: callers such
+// as the bot must have time left to apply the result before their RPC expires.
+func (f *Fetcher) FetchContext(ctx context.Context, urls []string) (Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
 	seen := map[string]struct{}{}
 	var res Result
 	for _, u := range urls {
-		src, entries, err := f.fetchOne(u)
+		src, entries, err := f.fetchOne(ctx, u)
 		if err != nil {
 			src.Error = err.Error()
 			res.Sources = append(res.Sources, src)
@@ -139,21 +151,73 @@ func entryName(raw string) string {
 
 // FetchOne returns the raw entries of one subscription.
 func (f *Fetcher) FetchOne(subURL string) ([]string, error) {
-	_, entries, err := f.fetchOne(subURL)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	_, entries, err := f.fetchOne(ctx, subURL)
 	return entries, err
 }
 
-func (f *Fetcher) fetchOne(subURL string) (Source, []string, error) {
+func (f *Fetcher) fetchOne(ctx context.Context, subURL string) (Source, []string, error) {
+	if err := ctx.Err(); err != nil {
+		return Source{URL: secrets.MaskURL(subURL)}, nil, err
+	}
+	src, entries, err := fetchWithClient(ctx, f.HTTP, subURL)
+	if err == nil && supportedEntries(entries) {
+		return src, entries, nil
+	}
+	if err == nil {
+		err = fmt.Errorf("subscription has no supported links: %s", src.URL)
+	}
+	if f.FallbackClients == nil || ctx.Err() != nil {
+		return src, nil, err
+	}
+	clients := f.FallbackClients(ctx)
+	defer func() {
+		for _, client := range clients {
+			client.CloseIdleConnections()
+		}
+	}()
+	for _, client := range clients {
+		if ctx.Err() != nil {
+			break
+		}
+		next, links, retryErr := fetchWithClient(ctx, client, subURL)
+		if retryErr == nil && supportedEntries(links) {
+			return next, links, nil
+		}
+	}
+	// Keep the panel's original reason (for example an expired subscription),
+	// rather than replacing it with the last failed tunnel's transport error.
+	return src, nil, err
+}
+
+func supportedEntries(entries []string) bool {
+	for _, entry := range entries {
+		if _, ok := usableLink(entry); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func fetchWithClient(ctx context.Context, client *http.Client, subURL string) (Source, []string, error) {
 	src := Source{URL: secrets.MaskURL(subURL)}
-	resp, err := f.HTTP.Get(strings.TrimSpace(subURL))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(subURL), nil)
+	if err != nil {
+		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		// net/http puts the whole URL, token included, into its errors.
 		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, (4<<20)+1))
 	if err != nil {
 		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
+	}
+	if len(body) > 4<<20 {
+		return src, nil, fmt.Errorf("subscription exceeds 4 MiB: %s", src.URL)
 	}
 	if resp.StatusCode/100 != 2 {
 		return src, nil, fmt.Errorf("%s: %s", src.URL, httpStatusText(resp.StatusCode, body))
