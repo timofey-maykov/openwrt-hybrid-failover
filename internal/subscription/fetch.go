@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -19,13 +18,14 @@ import (
 )
 
 type Fetcher struct {
-	HTTP *http.Client
+	HTTP     *http.Client
+	Identity ClientIdentity
 	// FallbackClients is lazy: a successful direct download never contacts the engine.
 	FallbackClients func(context.Context) []*http.Client
 }
 
 func NewFetcher() *Fetcher {
-	return &Fetcher{HTTP: &http.Client{Timeout: 15 * time.Second}, FallbackClients: netfetch.SubscriptionClients}
+	return &Fetcher{HTTP: &http.Client{Timeout: 15 * time.Second}, Identity: DefaultIdentity(), FallbackClients: netfetch.SubscriptionClients}
 }
 
 // Link is one server from a subscription. Name is what the panel called it
@@ -87,7 +87,7 @@ func (f *Fetcher) FetchContext(ctx context.Context, urls []string) (Result, erro
 	defer cancel()
 	seen := map[string]struct{}{}
 	var res Result
-	for _, u := range urls {
+	for _, u := range NormalizeURLs(urls) {
 		src, entries, err := f.fetchOne(ctx, u)
 		if err != nil {
 			src.Error = err.Error()
@@ -158,10 +158,14 @@ func (f *Fetcher) FetchOne(subURL string) ([]string, error) {
 }
 
 func (f *Fetcher) fetchOne(ctx context.Context, subURL string) (Source, []string, error) {
+	if err := validateSubscriptionURL(subURL); err != nil {
+		// A missing scheme also prevents MaskURL from recognizing the token.
+		return Source{URL: "[invalid subscription URL]"}, nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return Source{URL: secrets.MaskURL(subURL)}, nil, err
 	}
-	src, entries, err := fetchWithClient(ctx, f.HTTP, subURL)
+	src, entries, err := f.fetchRoute(ctx, f.HTTP, subURL)
 	if err == nil && supportedEntries(entries) {
 		return src, entries, nil
 	}
@@ -181,7 +185,7 @@ func (f *Fetcher) fetchOne(ctx context.Context, subURL string) (Source, []string
 		if ctx.Err() != nil {
 			break
 		}
-		next, links, retryErr := fetchWithClient(ctx, client, subURL)
+		next, links, retryErr := f.fetchRoute(ctx, client, subURL)
 		if retryErr == nil && supportedEntries(links) {
 			return next, links, nil
 		}
@@ -200,12 +204,40 @@ func supportedEntries(entries []string) bool {
 	return false
 }
 
-func fetchWithClient(ctx context.Context, client *http.Client, subURL string) (Source, []string, error) {
+// responseError means the panel answered, but its chosen client format did
+// not provide usable servers. Network/body-read errors skip UA negotiation and
+// go straight to the next tunnel, keeping blocked WAN attempts bounded.
+type responseError struct{ error }
+
+func (f *Fetcher) fetchRoute(ctx context.Context, client *http.Client, subURL string) (Source, []string, error) {
+	var first Source
+	var firstErr error
+	for _, agent := range f.Identity.userAgents() {
+		src, entries, err := fetchWithClient(ctx, client, subURL, f.Identity.headers(agent))
+		if err == nil && supportedEntries(entries) {
+			return src, entries, nil
+		}
+		if err == nil {
+			err = responseError{fmt.Errorf("subscription has no supported links: %s", src.URL)}
+		}
+		if firstErr == nil {
+			first, firstErr = src, err
+		}
+		var response responseError
+		if ctx.Err() != nil || !errors.As(err, &response) {
+			break
+		}
+	}
+	return first, nil, firstErr
+}
+
+func fetchWithClient(ctx context.Context, client *http.Client, subURL string, headers http.Header) (Source, []string, error) {
 	src := Source{URL: secrets.MaskURL(subURL)}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(subURL), nil)
 	if err != nil {
 		return src, nil, errors.New(secrets.MaskSecrets(err.Error()))
 	}
+	req.Header = headers.Clone()
 	resp, err := client.Do(req)
 	if err != nil {
 		// net/http puts the whole URL, token included, into its errors.
@@ -220,26 +252,26 @@ func fetchWithClient(ctx context.Context, client *http.Client, subURL string) (S
 		return src, nil, fmt.Errorf("subscription exceeds 4 MiB: %s", src.URL)
 	}
 	if resp.StatusCode/100 != 2 {
-		return src, nil, fmt.Errorf("%s: %s", src.URL, httpStatusText(resp.StatusCode, body))
+		err := fmt.Errorf("%s: %s", src.URL, httpStatusText(resp.StatusCode, body))
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusNotAcceptable, http.StatusUnsupportedMediaType:
+			return src, nil, responseError{err}
+		}
+		return src, nil, err
 	}
 	src.Title = strings.TrimSpace(resp.Header.Get("Profile-Title"))
 	src.SupportURL = strings.TrimSpace(resp.Header.Get("Support-Url"))
 	src.Expire = parseExpire(resp.Header.Get("Subscription-Userinfo"))
 
-	text := strings.TrimSpace(string(body))
-	if dec, err := base64.StdEncoding.DecodeString(text); err == nil {
-		text = string(dec)
-	}
-	var entries []string
-	for _, line := range strings.Split(text, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		entries = append(entries, line)
+	entries, err := parseSubscription(body)
+	if err != nil {
+		return src, nil, responseError{err}
 	}
 	if len(entries) == 0 {
-		return src, nil, fmt.Errorf("subscription empty: %s", src.URL)
+		return src, nil, responseError{fmt.Errorf("subscription empty: %s", src.URL)}
+	}
+	if notice := providerNotice(entries); notice != "" {
+		return src, nil, responseError{fmt.Errorf("subscription provider: %s (no server configurations returned)", secrets.MaskSecrets(notice))}
 	}
 	return src, entries, nil
 }

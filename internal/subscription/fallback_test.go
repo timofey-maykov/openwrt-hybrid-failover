@@ -39,7 +39,7 @@ func TestSubscriptionFallback(t *testing.T) {
 					return &http.Response{StatusCode: code, Header: http.Header{"Profile-Title": []string{"Panel"}}, Body: reader}, nil
 				})}
 			}
-			f := &Fetcher{HTTP: client("direct", true), FallbackClients: func(context.Context) []*http.Client {
+			f := &Fetcher{Identity: ClientIdentity{UserAgent: "test-client"}, HTTP: client("direct", true), FallbackClients: func(context.Context) []*http.Client {
 				return []*http.Client{client("dead tunnel", true), client("working tunnel", false), client("unused", false)}
 			}}
 			res, err := f.Fetch([]string{"https://panel.example/sub/private-token"})

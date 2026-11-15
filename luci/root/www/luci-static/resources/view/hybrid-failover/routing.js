@@ -768,7 +768,45 @@ return view.extend({
 
 		o = st.taboption('subs', form.DynamicList, 'subscription_urls', _('Ссылки на подписки'));
 		o.placeholder = 'https://…';
+		o.write = function(sectionid, value) {
+			var urls = L.toArray(value).map(function(v) { return String(v).trim(); }).filter(function(v, i, all) { return v && all.indexOf(v) === i; });
+			if (urls.length)
+				uci.set('hybrid-failover', sectionid, 'subscription_urls', urls);
+			else
+				uci.unset('hybrid-failover', sectionid, 'subscription_urls');
+		};
+		o.validate = function(sectionid, value) {
+			var valid = L.toArray(value).every(function(v) {
+				v = String(v).trim();
+				if (!v) return true;
+				try {
+					var url = new URL(v);
+					return (url.protocol === 'http:' || url.protocol === 'https:') && !!url.hostname;
+				} catch (e) { return false; }
+			});
+			return valid || _('Укажите полный адрес подписки с http:// или https://');
+		};
 		o.description = _('Каналы из подписки появляются в списке каналов основной секции, с названиями серверов из подписки.');
+
+        [
+            ['subscription_user_agent', _('Клиент подписки (User-Agent)'), _('Автоматический подбор')],
+            ['subscription_hwid', _('ID устройства (HWID)'), _('Автоматически, постоянный ID роутера')],
+            ['subscription_device_os', _('Операционная система клиента'), 'OpenWrt Linux'],
+            ['subscription_os_version', _('Версия ОС клиента'), _('Версия ядра роутера')],
+            ['subscription_device_model', _('Модель устройства клиента'), _('Модель роутера')]
+        ].forEach(function(field) {
+            var option = st.taboption('subs', form.Value, field[0], field[1]);
+            option.placeholder = field[2];
+            option.rmempty = true;
+            option.password = field[0] === 'subscription_hwid';
+            option.validate = function(sectionid, value) {
+                return !/[\r\n\x00]/.test(String(value || '')) || _('Значение должно занимать одну строку');
+            };
+            if (field[0] === 'subscription_user_agent')
+                option.description = _('Для всех ссылок подписок. Свой User-Agent отключает автоматический подбор.');
+            if (field[0] === 'subscription_hwid')
+                option.description = _('Если подписка привязана к приложению, укажите его ID и параметры клиента. Пустые поля заполняются данными роутера.');
+        });
 
 		o = st.taboption('subs', form.DummyValue, '_sub_status', _('Состояние подписок'));
 		o.renderWidget = function() {

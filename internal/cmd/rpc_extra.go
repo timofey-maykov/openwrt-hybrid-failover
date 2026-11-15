@@ -413,7 +413,7 @@ func runRPCSubscriptionStatus() int {
 	var settings *uci.Section
 	if pkg, err := uci.Load(paths.UCIConfig); err == nil {
 		if settings = pkg.Section("settings"); settings != nil {
-			out.Configured = len(settings.GetList("subscription_urls"))
+			out.Configured = len(subscription.NormalizeURLs(settings.GetList("subscription_urls")))
 			out.Interval = settings.Get("subscription_update_interval", "off")
 		}
 	}

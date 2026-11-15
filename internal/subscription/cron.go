@@ -22,7 +22,7 @@ func InstallCron(uciPath string) error {
 		return err
 	}
 	settings := pkg.Section("settings")
-	if settings == nil || len(settings.GetList("subscription_urls")) == 0 {
+	if settings == nil || len(NormalizeURLs(settings.GetList("subscription_urls"))) == 0 {
 		return nil
 	}
 	interval := settings.Get("subscription_update_interval", "off")

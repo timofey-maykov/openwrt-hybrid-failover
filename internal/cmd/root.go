@@ -520,12 +520,17 @@ func runSubscriptionRefresh(args []string) int {
 	if override := settings.Get("main_section", ""); override != "" {
 		mainSection = override
 	}
-	urls := settings.GetList("subscription_urls")
+	urls := subscription.NormalizeURLs(settings.GetList("subscription_urls"))
 	if len(urls) == 0 {
 		fmt.Println("subscription: no urls configured")
 		return 0
 	}
 	f := subscription.NewFetcher()
+	f.Identity, err = subscription.IdentityFromSettings(settings)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	res, err := f.Fetch(urls)
 	if err != nil {
 		if !*dryRun {

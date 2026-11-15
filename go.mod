@@ -11,6 +11,7 @@ require (
 	github.com/sagernet/sing-vmess v0.2.7
 	golang.org/x/crypto v0.33.0
 	golang.org/x/net v0.35.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
