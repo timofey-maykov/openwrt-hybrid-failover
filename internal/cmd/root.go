@@ -508,7 +508,7 @@ func runSubscriptionRefresh(args []string) int {
 	_ = fs.Parse(args)
 	pkg, err := uci.Load(*uciPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
 		return 1
 	}
 	settings := pkg.Section("settings")
@@ -525,10 +525,20 @@ func runSubscriptionRefresh(args []string) int {
 		fmt.Println("subscription: no urls configured")
 		return 0
 	}
+	if !*dryRun {
+		if err := subscription.ValidateTarget(pkg.Section(mainSection)); err != nil {
+			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err.Error()})
+			fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
+			return 1
+		}
+	}
 	f := subscription.NewFetcher()
 	f.Identity, err = subscription.IdentityFromSettings(settings)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if !*dryRun {
+			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error())})
+		}
+		fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
 		return 1
 	}
 	res, err := f.Fetch(urls)
@@ -536,11 +546,19 @@ func runSubscriptionRefresh(args []string) int {
 		if !*dryRun {
 			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error()), Sources: res.Sources})
 		}
+		fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
+		return 1
+	}
+	links, excluded := subscription.FilterLinks(res.Links, settings.GetList("subscription_exclude_keywords"))
+	fmt.Printf("subscription: fetched %d links, excluded %d, kept %d for section %q\n", len(res.Links), excluded, len(links), mainSection)
+	if len(links) == 0 && excluded > 0 {
+		err := "all subscription servers were excluded by keywords; existing channels were kept"
+		if !*dryRun {
+			_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: err, Sources: res.Sources, Excluded: excluded})
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	links := res.Links
-	fmt.Printf("subscription: fetched %d links for section %q\n", len(links), mainSection)
 	if *dryRun {
 		fmt.Println("subscription: dry-run, UCI not modified")
 		return 0
@@ -548,16 +566,17 @@ func runSubscriptionRefresh(args []string) int {
 	listKey, err := subscription.ApplyLinks(*uciPath, mainSection, links, *merge)
 	if err != nil {
 		_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error()), Sources: res.Sources})
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
 		return 1
 	}
-	_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), OK: true, Sources: res.Sources})
 	fmt.Printf("subscription: wrote %d links to %s.%s\n", len(links), mainSection, listKey)
-	if res, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{UCIPath: *uciPath}); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if applied, err := lifecycle.ApplyAndReloadIfChanged(lifecycle.Options{UCIPath: *uciPath}); err != nil {
+		_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), Error: secrets.MaskSecrets(err.Error()), Sources: res.Sources})
+		fmt.Fprintln(os.Stderr, secrets.MaskSecrets(err.Error()))
 		return 1
 	} else {
-		fmt.Printf("subscription: applied changed=%v\n", res.Changed)
+		fmt.Printf("subscription: applied changed=%v\n", applied.Changed)
 	}
+	_ = subscription.WriteStatus(subscription.Status{UpdatedAt: time.Now(), OK: true, Sources: res.Sources, Applied: len(links), Excluded: excluded})
 	return 0
 }

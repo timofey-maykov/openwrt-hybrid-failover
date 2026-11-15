@@ -29,6 +29,18 @@ func listKeyForSection(sec *uci.Section) (string, error) {
 	}
 }
 
+// ValidateTarget prevents importing into a list that the selected section mode
+// does not use. Enabling backups or changing VPN routing is the user's choice.
+func ValidateTarget(sec *uci.Section) error {
+	if _, err := listKeyForSection(sec); err != nil {
+		return err
+	}
+	if sec.Get("connection_type", "") == "vpn" && !sec.GetBool("failover_vpn_enabled", false) {
+		return fmt.Errorf("subscription channels are disabled in this VPN section: enable backup channels or select proxy channels with multiple links")
+	}
+	return nil
+}
+
 // ApplyToUCI writes links to failover_proxy_links or urltest_proxy_links on mainSection.
 // When merge is true, existing list entries are kept and new unique links are appended.
 // Links that the previous refresh wrote are replaced, so servers dropped from the
@@ -39,6 +51,9 @@ func ApplyToUCI(uciPath, mainSection string, links []string, merge bool) (listKe
 		return "", err
 	}
 	sec := pkg.Section(mainSection)
+	if err := ValidateTarget(sec); err != nil {
+		return "", err
+	}
 	listKey, err = listKeyForSection(sec)
 	if err != nil {
 		return "", err

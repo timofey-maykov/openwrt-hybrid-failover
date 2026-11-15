@@ -13,10 +13,12 @@ import (
 // it are masked; it holds no secret.
 type Status struct {
 	UpdatedAt time.Time `json:"updated_at"`
-	// OK is false when the refresh failed before writing any links.
-	OK      bool     `json:"ok"`
-	Error   string   `json:"error,omitempty"`
-	Sources []Source `json:"sources"`
+	// OK is true only after the channels have been applied successfully.
+	OK       bool     `json:"ok"`
+	Error    string   `json:"error,omitempty"`
+	Sources  []Source `json:"sources"`
+	Applied  int      `json:"applied,omitempty"`
+	Excluded int      `json:"excluded,omitempty"`
 }
 
 // WriteStatus records the outcome of a refresh.

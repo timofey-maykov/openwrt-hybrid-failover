@@ -82,6 +82,8 @@ function subscriptionStatusNode(st) {
 			row.appendChild(E('div', { 'class': 'hf-bad', 'style': 'font-size:12px' }, '⚠ ' + src.error));
 		box.appendChild(row);
 	});
+	if (st.applied || st.excluded)
+		box.appendChild(E('div', {}, _('Добавлено каналов: %d; исключено по словам: %d').format(st.applied || 0, st.excluded || 0)));
 	if (st.error)
 		box.appendChild(E('div', { 'class': 'hf-bad', 'style': 'margin-top:4px' }, _('Последнее обновление не удалось: %s').format(st.error)));
 	else if (st.updated_at)
@@ -796,7 +798,12 @@ return view.extend({
 			});
 			return valid || _('Укажите полный адрес подписки с http:// или https://');
 		};
-		o.description = _('Каналы из подписки появляются в списке каналов основной секции, с названиями серверов из подписки.');
+		o.description = _('Каналы из подписки добавляются в основную секцию. Для VPN включите резервные каналы. Для работы только через подписку выберите «Через прокси-каналы» и «Несколько ссылок, работает самая быстрая».');
+
+		o = st.taboption('subs', form.DynamicList, 'subscription_exclude_keywords', _('Исключить серверы по словам'));
+		o.placeholder = _('Например: Россия');
+		o.description = _('Сервер не добавляется, если его название содержит хотя бы одно из этих слов или фраз. Регистр не учитывается. Фильтр применяется при обновлении подписки; каналы, добавленные вручную, остаются. Если исключены все серверы, текущие каналы сохраняются и появляется ошибка.');
+		o.rmempty = true;
 
         [
             ['subscription_user_agent', _('Клиент подписки (User-Agent)'), _('Автоматический подбор')],

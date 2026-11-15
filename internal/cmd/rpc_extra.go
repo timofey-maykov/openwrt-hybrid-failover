@@ -24,6 +24,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/notify"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/partner"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/paths"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/singbox"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/subscription"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/uci"
@@ -327,7 +328,11 @@ func runRPCListUpdateRPC() int {
 
 func runRPCSubscriptionRefreshRPC() int {
 	if code := runSubscriptionRefresh(nil); code != 0 {
-		emitJSON(map[string]any{"ok": false, "error": "subscription-refresh failed"})
+		message := "subscription-refresh failed"
+		if st, ok := subscription.ReadStatus(); ok && st.Error != "" {
+			message = secrets.MaskSecrets(st.Error)
+		}
+		emitJSON(map[string]any{"ok": false, "error": message})
 		return code
 	}
 	emitJSON(map[string]any{"ok": true, "message": "subscription-refresh completed"})
@@ -406,6 +411,8 @@ type subscriptionStatusReport struct {
 	UpdatedAt  string                `json:"updated_at,omitempty"`
 	Error      string                `json:"error,omitempty"`
 	Sources    []subscription.Source `json:"sources"`
+	Applied    int                   `json:"applied,omitempty"`
+	Excluded   int                   `json:"excluded,omitempty"`
 }
 
 func runRPCSubscriptionStatus() int {
@@ -422,6 +429,8 @@ func runRPCSubscriptionStatus() int {
 		out.Refreshed = true
 		out.UpdatedAt = st.UpdatedAt.UTC().Format(time.RFC3339)
 		out.Error = st.Error
+		out.Applied = st.Applied
+		out.Excluded = st.Excluded
 		if st.Sources != nil {
 			out.Sources = st.Sources
 		}
