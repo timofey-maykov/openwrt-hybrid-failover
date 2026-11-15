@@ -14,6 +14,8 @@ jobs:
         with:
           go-version: '1.23'
           cache: false
+      - name: Test routing widgets
+        run: node tests/routing-widgets.cjs
       - name: Test core
         env:
           GOTOOLCHAIN: local

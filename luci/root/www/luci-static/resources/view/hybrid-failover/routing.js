@@ -439,14 +439,14 @@ var ChannelListWidget = ui.AbstractElement.extend({
 	},
 
 	setValue: function(v) {
-		this.values = L.toArray(v);
+		this.values = L.toArray(v).slice();
 		this.redraw();
 	}
 });
 
 var ChipsWidget = ui.AbstractElement.extend({
 	__init__: function(values, choices, options) {
-		this.values = L.toArray(values);
+		this.values = L.toArray(values).slice();
 		this.choices = choices;
 		this.options = Object.assign({}, options);
 	},
@@ -454,6 +454,7 @@ var ChipsWidget = ui.AbstractElement.extend({
 	render: function() {
 		var self = this;
 		this.countEl = E('p', { 'class': 'hf-chips__count' });
+		this.chips = {};
 		var chips = Object.keys(this.choices).map(function(key) {
 			var chip = E('button', {
 				'type': 'button',
@@ -473,6 +474,7 @@ var ChipsWidget = ui.AbstractElement.extend({
 					self.node.dispatchEvent(new Event('change', { bubbles: true }));
 				}
 			}, self.choices[key]);
+			self.chips[key] = chip;
 			return chip;
 		});
 		var node = E('div', { 'id': this.options.id, 'class': 'hf-chips' }, [ this.countEl ].concat(chips));
@@ -493,7 +495,15 @@ var ChipsWidget = ui.AbstractElement.extend({
 	},
 
 	setValue: function(v) {
-		this.values = L.toArray(v);
+		this.values = L.toArray(v).slice();
+        if (this.chips) {
+            Object.keys(this.chips).forEach(function(key) {
+                var on = this.values.indexOf(key) >= 0;
+                this.chips[key].classList.toggle('hf-chip--on', on);
+                this.chips[key].setAttribute('aria-pressed', on ? 'true' : 'false');
+            }, this);
+            this.updateCount();
+        }
 	}
 });
 
