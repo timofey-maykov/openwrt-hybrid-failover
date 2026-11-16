@@ -65,6 +65,7 @@ func buildStatusReport(health bool) diag.Report {
 	if states, err := failover.ReadRuntimeState(); err == nil && len(states) > 0 {
 		report.Controller = diag.MapControllerStates(states)
 	}
+	report = diag.WithSectionState(report, mainSection, sec)
 	_ = diag.WritePrometheusTextfile(report, paths.MetricsPromFile)
 	return report
 }

@@ -79,6 +79,8 @@ return view.extend({
 
 	buildSwitchCard: function() {
 		var self = this;
+		if (hfui.sectionDisabled(this._lastStatus, this._sectionFilter))
+			return E('div', { 'class': 'hf-ent-card' }, _('Секция выключена. Включите её перед переключением каналов.'));
 		return E('div', { 'class': 'hf-ent-card', 'id': 'hf-switch-block' }, [
 			E('p', { 'class': 'hf-ent-card__title' }, _('Переключить вручную')),
 			E('div', { 'class': 'hf-mon-switch' }, [
@@ -202,7 +204,8 @@ return view.extend({
 		if (this._loadError) {
 			content = hfui.buildErrorBanner(this._loadError);
 		} else {
-			var channels = this._channelData || (this._lastStatus && this._lastStatus.channels) || [];
+			var disabled = hfui.sectionDisabled(this._lastStatus, section);
+			var channels = disabled ? [] : (this._channelData || (this._lastStatus && this._lastStatus.channels) || []);
 			var tabs = [
 				{ id: 'overview', label: _('Сводка') },
 				{ id: 'channels', label: _('Каналы') },
@@ -274,6 +277,8 @@ return view.extend({
 				]);
 			}
 
+			if (disabled && (self._activeTab === 'overview' || self._activeTab === 'channels'))
+				tabBody = E('div', { 'class': 'hf-panel' }, _('Каналы выключенной секции не проверяются и не учитываются как недоступные.'));
 			content = E('div', {}, [hero, tabBar, tabBody]);
 		}
 
@@ -336,6 +341,8 @@ return view.extend({
 	applyLoadResults: function(results) {
 		if (results[0] && results[0].ok) {
 			this._lastStatus = results[0].data;
+			this._channelData = null;
+			if (hfui.sectionDisabled(this._lastStatus)) this._channelsProbed = false;
 			this._loadError = null;
 			hfui.recordDelayHistoryLocal(this._lastStatus.channels || []);
 		} else {
@@ -356,7 +363,7 @@ return view.extend({
 
 	headerPills: function() {
 		var data = this._lastStatus;
-		var pills = [ hfui.buildStatusPill(hfui.overallState(data)) ];
+		var pills = [ hfui.buildStatusPill(hfui.overallState(data, this._sectionFilter)) ];
 		var tag = hfui.activeChannelTag(data, this._sectionFilter);
 		if (tag)
 			pills.push(hfui.pill(_('Сейчас через: ') + hfui.tagTitle(tag, data), 'plain'));
@@ -384,6 +391,8 @@ return view.extend({
 
 	runHealthProbe: function() {
 		var self = this;
+		if (hfui.sectionDisabled(self._lastStatus, self._sectionFilter))
+			return Promise.resolve();
 		if (self.healthBusy)
 			return Promise.resolve();
 		self.healthBusy = true;

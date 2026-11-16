@@ -18,20 +18,21 @@ import (
 )
 
 type Report struct {
-	SingboxRunning bool            `json:"singbox_running"`
-	EngineRunning  bool            `json:"engine_running,omitempty"`
-	EngineMode     string          `json:"engine_mode,omitempty"`
-	NFTOK          bool            `json:"nft_ok"`
-	ClashOK        bool            `json:"clash_ok"`
-	FakeIPOK       *bool           `json:"fakeip_ok,omitempty"`
-	FakeIPSkipped  bool            `json:"fakeip_skipped,omitempty"`
-	ActiveOutbound string          `json:"active_outbound,omitempty"`
-	Errors         []string        `json:"errors,omitempty"`
-	Failover       *FailoverInfo   `json:"failover,omitempty"`
-	Channels       []ChannelStatus `json:"channels,omitempty"`
-	Controller     []ControllerSection `json:"controller,omitempty"`
-	Meta           MetaInfo        `json:"meta,omitempty"`
-	DryRun         []DryRunHint    `json:"dry_run,omitempty"`
+	SingboxRunning  bool                `json:"singbox_running"`
+	EngineRunning   bool                `json:"engine_running,omitempty"`
+	EngineMode      string              `json:"engine_mode,omitempty"`
+	NFTOK           bool                `json:"nft_ok"`
+	ClashOK         bool                `json:"clash_ok"`
+	FakeIPOK        *bool               `json:"fakeip_ok,omitempty"`
+	FakeIPSkipped   bool                `json:"fakeip_skipped,omitempty"`
+	ActiveOutbound  string              `json:"active_outbound,omitempty"`
+	SectionDisabled bool                `json:"section_disabled,omitempty"`
+	Errors          []string            `json:"errors,omitempty"`
+	Failover        *FailoverInfo       `json:"failover,omitempty"`
+	Channels        []ChannelStatus     `json:"channels,omitempty"`
+	Controller      []ControllerSection `json:"controller,omitempty"`
+	Meta            MetaInfo            `json:"meta,omitempty"`
+	DryRun          []DryRunHint        `json:"dry_run,omitempty"`
 }
 
 // ControllerSection is runtime state from the failover policy loop.

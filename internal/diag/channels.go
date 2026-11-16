@@ -21,7 +21,7 @@ type ChannelStatus struct {
 	Type      string `json:"type,omitempty"`
 	DelayMs   int    `json:"delay_ms,omitempty"`
 	Available bool   `json:"available"`
-	Selected  bool    `json:"selected"`
+	Selected  bool   `json:"selected"`
 	Detail    string `json:"detail,omitempty"`
 	Probed    bool   `json:"probed,omitempty"`
 }
@@ -60,6 +60,10 @@ func failoverInfoFromSection(section string, sec *uci.Section) *FailoverInfo {
 
 // EnrichReport adds per-channel status and failover parameters when Clash API is up.
 func EnrichReport(r Report, clashURL, mainSection string, sec *uci.Section) Report {
+	r = WithSectionState(r, mainSection, sec)
+	if r.SectionDisabled {
+		return r
+	}
 	if r.EngineMode == "native" || !r.ClashOK || mainSection == "" {
 		return r
 	}
@@ -118,6 +122,10 @@ func MapControllerStates(states []failover.SectionRuntime) []ControllerSection {
 
 // ProbeChannels runs live delay probes for each listed channel (slower, like bot /health).
 func ProbeChannels(r Report, clashURL, mainSection string, sec *uci.Section) Report {
+	r = WithSectionState(r, mainSection, sec)
+	if r.SectionDisabled {
+		return r
+	}
 	if r.EngineMode == "native" || !r.ClashOK {
 		return r
 	}

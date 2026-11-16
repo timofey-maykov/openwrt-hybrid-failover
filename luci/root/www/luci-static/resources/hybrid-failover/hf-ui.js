@@ -624,6 +624,8 @@ function controllerForSection(data, section) {
 }
 
 function activeOutboundTag(data, section) {
+	if (sectionDisabled(data, section))
+		return '';
 	var ctrl = controllerForSection(data, section);
 	if (ctrl && ctrl.active)
 		return ctrl.active;
@@ -656,9 +658,15 @@ function visibleErrors(data) {
 	});
 }
 
-function overallState(data) {
+function sectionDisabled(data, section) {
+	return !!(data && data.section_disabled && (!section || !data.failover || section === data.failover.section));
+}
+
+function overallState(data, section) {
 	if (!data || typeof data !== 'object')
 		return 'unknown';
+	if (sectionDisabled(data, section))
+		return 'disabled';
 	var engineUp = proxyRunning(data);
 	var critical = engineUp && data.nft_ok && controlOk(data);
 	if (!critical)
@@ -1058,6 +1066,8 @@ function wrapTable(tableEl) {
 
 function buildStatusPill(state) {
 	switch (state) {
+	case 'disabled':
+		return pill(_('Секция выключена'), 'plain');
 	case 'up':
 		return pill(_('Всё работает'), 'ok');
 	case 'degraded':
@@ -1078,16 +1088,19 @@ function buildEnterpriseMeta(data) {
 
 function buildStatusHero(data, opts) {
 	opts = opts || {};
-	var state = overallState(data);
+	var state = overallState(data, opts.section);
 	var heroCls = 'hf-ent-hero hf-ent-hero--' +
 		(state === 'up' ? 'ok' : state === 'degraded' ? 'warn' : state === 'down' ? 'bad' : 'neutral');
 	var title, sub;
-	if (state === 'up') {
-		title = _('Трафик идёт через туннель');
-		sub = _('Движок, перехват трафика и DNS работают.');
+	if (state === 'disabled') {
+		title = _('Секция выключена');
+		sub = _('Правила и каналы этой секции не применяются. Включите её в разделе «Маршрутизация».');
+	} else if (state === 'up') {
+		title = _('Движок и маршрутизация работают');
+		sub = _('Перехват трафика и DNS работают. Маршрут зависит от правил секции и выбранного канала.');
 	} else if (state === 'degraded') {
 		title = _('Работает с предупреждениями');
-		sub = _('Трафик идёт, но что-то требует внимания. Подробности ниже.');
+		sub = _('Сервис запущен, но есть проблемы. Подробности ниже.');
 	} else if (state === 'down') {
 		title = _('Туннель не работает');
 		sub = _('Движок или перехват трафика не отвечают. Запустите полную проверку на странице «Диагностика».');
@@ -1151,9 +1164,13 @@ function buildErrorBanner(msg) {
 
 function buildSummaryBanner(data, opts) {
 	opts = opts || {};
-	var state = overallState(data);
+	var state = overallState(data, opts.section);
 	var title, cls, text;
-	if (state === 'up') {
+	if (state === 'disabled') {
+		cls = 'hf-mon-banner hf-mon-banner--sticky';
+		title = _('Секция выключена');
+		text = _('Правила и каналы этой секции не применяются.');
+	} else if (state === 'up') {
 		cls = 'hf-mon-banner hf-mon-banner--ok hf-mon-banner--sticky';
 		title = _('Маршрутизация активна');
 		text = _('Все критичные компоненты работают.');
@@ -1210,6 +1227,7 @@ function buildMetricCards(data, section) {
 	if (ctrl && primaryProbeApplicable(ctrl) && ctrl.mode === 'backup' && !ctrl.primary_ok)
 		activeState = 'warn';
 	var ch = (data && data.channels) || [];
+	if (sectionDisabled(data, section)) ch = [];
 	var alive = 0, total = 0;
 	for (var i = 0; i < ch.length; i++) {
 		if (channelKind(ch[i]) !== 'reserve')
@@ -1224,7 +1242,7 @@ function buildMetricCards(data, section) {
 		stat(_('DNS (fake-IP)'), dnsVal, dnsState),
 		stat(_('Сейчас через'), tag ? tagTitle(tag, data) : '-', activeState),
 		stat(_('Каналы на связи'), total ? (alive + ' / ' + total) : '-', !total ? '' : (alive === total ? 'ok' : (alive ? 'warn' : 'bad'))),
-		stat(_('Режим'), policyName(policy), '', policyHint(policy))
+		stat(_('Режим'), sectionDisabled(data, section) ? _('Секция выключена') : policyName(policy), '', sectionDisabled(data, section) ? '' : policyHint(policy))
 	];
 	if (!isNativeEngine(data))
 		stats.splice(2, 0, stat('Clash API', controlOk(data) ? _('в порядке') : _('недоступен'), controlOk(data) ? 'ok' : 'bad'));
@@ -1606,6 +1624,7 @@ return baseclass.extend({
 	isNativeEngine: isNativeEngine,
 	controllerForSection: controllerForSection,
 	activeOutboundTag: activeOutboundTag,
+	sectionDisabled: sectionDisabled,
 	activeOutboundDisplay: activeOutboundDisplay,
 	overallState: overallState,
 	badge: badge,

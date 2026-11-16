@@ -21,6 +21,10 @@ import (
 
 // EnrichNativeReport fills failover summary and channel list for engine_mode=native.
 func EnrichNativeReport(r Report, mainSection string, sec *uci.Section, states []failover.SectionRuntime) Report {
+	r = WithSectionState(r, mainSection, sec)
+	if r.SectionDisabled {
+		return r
+	}
 	if mainSection == "" {
 		return r
 	}
@@ -62,6 +66,10 @@ func EnrichNativeReport(r Report, mainSection string, sec *uci.Section, states [
 // ProbeNativeChannels refreshes channel delays. Uses the running engine when available
 // to avoid spawning a second outbound registry (large memory spike on small routers).
 func ProbeNativeChannels(r Report, mainSection string, sec *uci.Section) Report {
+	r = WithSectionState(r, mainSection, sec)
+	if r.SectionDisabled {
+		return r
+	}
 	if mainSection == "" || sec == nil {
 		return r
 	}
