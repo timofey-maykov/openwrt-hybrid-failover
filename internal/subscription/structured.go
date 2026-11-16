@@ -32,6 +32,12 @@ func xrayURIs(out map[string]any, name string) []string {
 			}
 		}
 		tls = map[string]any{"enabled": true, "server_name": source["serverName"], "insecure": source["allowInsecure"], "alpn": source["alpn"]}
+		if value, present := source["pinnedPeerCertSha256"]; present {
+			if _, ok := value.(string); !ok {
+				return nil
+			}
+			tls["pinned_peer_cert_sha256"] = value
+		}
 		if fp := textValue(source, "fingerprint"); fp != "" {
 			tls["utls"] = map[string]any{"enabled": true, "fingerprint": fp}
 		}
@@ -75,6 +81,9 @@ func xrayURIs(out map[string]any, name string) []string {
 	add := func(server, port any, user map[string]any) {
 		node := map[string]any{"type": kind, "server": server, "server_port": port, "tls": tls, "transport": tr,
 			"uuid": user["id"], "flow": user["flow"], "encryption": user["encryption"], "password": user["password"], "method": user["method"], "username": user["user"]}
+		if fm, present := stream["finalmask"]; present {
+			node["finalmask"] = fm
+		}
 		if uri, ok := singboxURI(node, name); ok {
 			result = append(result, uri)
 		}

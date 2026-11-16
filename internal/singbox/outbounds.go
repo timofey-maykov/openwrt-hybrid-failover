@@ -179,6 +179,14 @@ func (b *Builder) addProxyLink(section, link string, udpOverTCP bool) error {
 	if err != nil {
 		return err
 	}
+	if _, present := ob.Fields["finalmask"]; present {
+		return fmt.Errorf("fm finalmask requires the native engine")
+	}
+	if tlsFields, ok := ob.Fields["tls"].(map[string]any); ok {
+		if _, present := tlsFields["pinned_peer_cert_sha256"]; present {
+			return fmt.Errorf("pcs certificate pin requires the native engine")
+		}
+	}
 	b.cfg.AddOutbound(ob.Fields)
 	return nil
 }

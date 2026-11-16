@@ -238,6 +238,9 @@ func truthy(v string) bool {
 }
 
 func addTLSAndTransport(ob map[string]any, q url.Values) {
+	if _, present := q["fm"]; present {
+		ob["finalmask"] = strings.Join(q["fm"], "\n")
+	}
 	sec := q.Get("security")
 	if sec == "" {
 		sec = "none"
@@ -276,6 +279,15 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 			tlsMap["alpn"] = strings.Split(alpn, ",")
 		}
 		ob["tls"] = tlsMap
+	}
+	if values, present := q["pcs"]; present {
+		tlsMap, _ := ob["tls"].(map[string]any)
+		if tlsMap == nil {
+			tlsMap = map[string]any{}
+			ob["tls"] = tlsMap
+		}
+		// Keep repeated parameters invalid rather than silently picking one.
+		tlsMap["pinned_peer_cert_sha256"] = strings.Join(values, ",")
 	}
 	switch netType {
 	case "ws":

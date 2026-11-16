@@ -91,7 +91,7 @@ func (e *realityConfig) ClientHandshake(ctx context.Context, conn net.Conn) (aTL
 	uConfig.InsecureSkipVerify = true
 	uConfig.SessionTicketsDisabled = true
 	uConfig.VerifyPeerCertificate = verifier.VerifyPeerCertificate
-	uConn := utls.UClient(conn, uConfig, e.uClient.id)
+	uConn := utls.UClient(wrapFragment(conn, e.uClient.fragment), uConfig, e.uClient.id)
 	verifier.UConn = uConn
 	if err := uConn.BuildHandshakeState(); err != nil {
 		return nil, err

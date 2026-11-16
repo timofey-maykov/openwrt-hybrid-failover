@@ -156,6 +156,17 @@ func singboxURI(m map[string]any, name string) (string, bool) {
 		return "", false
 	}
 	q := make(url.Values)
+	if fm, present := m["finalmask"]; present {
+		if text, ok := fm.(string); ok {
+			q.Set("fm", text)
+		} else {
+			raw, err := json.Marshal(fm)
+			if err != nil {
+				return "", false
+			}
+			q.Set("fm", string(raw))
+		}
+	}
 	tls := object(m["tls"])
 	transportKind := textValue(object(m["transport"]), "type")
 	if (kind == "shadowsocks" || kind == "socks") && (enabled(tls["enabled"]) || (transportKind != "" && transportKind != "tcp")) {
@@ -234,6 +245,9 @@ func singboxURI(m map[string]any, name string) (string, bool) {
 
 func tlsQuery(q url.Values, tls map[string]any) bool {
 	if !enabled(tls["enabled"]) {
+		if _, present := tls["pinned_peer_cert_sha256"]; present {
+			return false
+		}
 		return true
 	}
 	// Certificate pin formats are not interchangeable. A sing-box SPKI pin must
@@ -249,6 +263,13 @@ func tlsQuery(q url.Values, tls map[string]any) bool {
 	q.Set("security", "tls")
 	put(q, "sni", textValue(tls, "server_name"))
 	put(q, "alpn", listText(tls["alpn"]))
+	if value, present := tls["pinned_peer_cert_sha256"]; present {
+		text, ok := value.(string)
+		if !ok {
+			return false
+		}
+		q.Set("pcs", text)
+	}
 	if enabled(tls["insecure"]) {
 		q.Set("insecure", "1")
 	}

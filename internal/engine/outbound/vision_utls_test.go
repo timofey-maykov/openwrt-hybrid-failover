@@ -4,11 +4,14 @@ package outbound
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"io"
 	"net"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,14 +74,32 @@ func TestVisionTLSRoundTripWithFingerprints(t *testing.T) {
 			}(c)
 		}
 	}()
-	for _, fp := range []string{"chrome", "qq", "firefox", "random", "randomized", "none"} {
-		t.Run(fp, func(t *testing.T) {
-			h := newTestVLESSLink(t, fmt.Sprintf("vless://%s@%s?security=tls&sni=localhost&fp=%s&flow=xtls-rprx-vision", vlessTestUUID, ln.Addr(), fp)).(*vlessHandler)
+	for _, name := range []string{"chrome", "qq", "firefox", "random", "randomized", "none", "pinned-firefox", "fragment-firefox", "pinned-fragment-firefox"} {
+		t.Run(name, func(t *testing.T) {
+			fp := name
+			if strings.Contains(name, "firefox") {
+				fp = "firefox"
+			}
+			q := url.Values{"security": {"tls"}, "sni": {"localhost"}, "fp": {fp}, "flow": {"xtls-rprx-vision"}}
+			pinned := strings.Contains(name, "pinned")
+			if pinned {
+				pin := sha256.Sum256(cert.Certificate[0])
+				q.Set("pcs", fmt.Sprintf("%X", pin))
+				q.Set("sni", "")
+			}
+			if strings.Contains(name, "fragment") {
+				q.Set("fm", helloFragment)
+			}
+			h := newTestVLESSLink(t, fmt.Sprintf("vless://%s@%s?%s", vlessTestUUID, ln.Addr(), q.Encode())).(*vlessHandler)
 			switch cfg := h.tls.(type) {
 			case *utlsConfig:
-				cfg.cfg.RootCAs = roots
+				if !pinned {
+					cfg.cfg.RootCAs = roots
+				}
 			case *stdTLSConfig:
-				cfg.cfg.RootCAs = roots
+				if !pinned {
+					cfg.cfg.RootCAs = roots
+				}
 			default:
 				t.Fatalf("unexpected TLS type %T", cfg)
 			}

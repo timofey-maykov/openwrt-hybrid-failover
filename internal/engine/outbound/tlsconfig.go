@@ -25,12 +25,24 @@ type tlsOptions struct {
 	reality     bool
 	publicKey   []byte
 	shortID     [8]byte
+	pins        [][]byte
+	fragment    *fragmentOptions
 }
 
 func tlsFromFields(fields map[string]any, serverHost string) (tlsOptions, error) {
 	opt := tlsOptions{serverName: serverHost}
+	var err error
+	if value, present := fields["finalmask"]; present {
+		opt.fragment, err = parseFinalMask(value)
+		if err != nil {
+			return opt, err
+		}
+	}
 	raw, _ := fields["tls"].(map[string]any)
 	if raw == nil {
+		if opt.fragment != nil {
+			return opt, fmt.Errorf("finalmask fragment requires TLS")
+		}
 		return opt, nil
 	}
 	if v, ok := raw["enabled"].(bool); ok {
@@ -43,6 +55,18 @@ func tlsFromFields(fields map[string]any, serverHost string) (tlsOptions, error)
 		opt.insecure = v
 	}
 	opt.alpn = alpnFromField(raw["alpn"])
+	if value, present := raw["pinned_peer_cert_sha256"]; present {
+		opt.pins, err = parseCertificatePins(value)
+		if err != nil {
+			return opt, err
+		}
+		if !opt.enabled {
+			return opt, fmt.Errorf("pcs certificate pin requires TLS")
+		}
+	}
+	if opt.fragment != nil && !opt.enabled {
+		return opt, fmt.Errorf("finalmask fragment requires TLS")
+	}
 	if utlsMap, ok := raw["utls"].(map[string]any); ok {
 		if fp, ok := utlsMap["fingerprint"].(string); ok && utlsMap["enabled"] != false {
 			opt.fingerprint = fp
@@ -85,6 +109,9 @@ func buildTLSConfig(fields map[string]any, serverHost string) (aTLS.Config, erro
 		return nil, nil
 	}
 	if opt.reality {
+		if len(opt.pins) > 0 {
+			return nil, fmt.Errorf("pcs certificate pin cannot be combined with REALITY")
+		}
 		if strings.EqualFold(strings.TrimSpace(opt.fingerprint), "none") {
 			return nil, fmt.Errorf("reality requires a uTLS fingerprint")
 		}
@@ -97,7 +124,8 @@ func buildTLSConfig(fields map[string]any, serverHost string) (aTLS.Config, erro
 }
 
 type stdTLSConfig struct {
-	cfg *tls.Config
+	cfg      *tls.Config
+	fragment *fragmentOptions
 }
 
 func newSTDConfig(opt tlsOptions) aTLS.Config {
@@ -106,7 +134,13 @@ func newSTDConfig(opt tlsOptions) aTLS.Config {
 		InsecureSkipVerify: opt.insecure,
 		NextProtos:         nextProtosOrDefault(opt.alpn),
 	}
-	return &stdTLSConfig{cfg: cfg}
+	if len(opt.pins) > 0 {
+		cfg.InsecureSkipVerify = true // Authentication is performed by the mandatory pin verifier.
+		cfg.VerifyConnection = func(state tls.ConnectionState) error {
+			return verifyCertificatePins(opt.pins, state.PeerCertificates, state.ServerName)
+		}
+	}
+	return &stdTLSConfig{cfg: cfg, fragment: opt.fragment}
 }
 
 func (c *stdTLSConfig) ServerName() string               { return c.cfg.ServerName }
@@ -115,15 +149,16 @@ func (c *stdTLSConfig) NextProtos() []string             { return c.cfg.NextProt
 func (c *stdTLSConfig) SetNextProtos(nextProto []string) { c.cfg.NextProtos = nextProto }
 func (c *stdTLSConfig) Config() (*aTLS.STDConfig, error) { return c.cfg, nil }
 func (c *stdTLSConfig) Client(conn net.Conn) (aTLS.Conn, error) {
-	return tls.Client(conn, c.cfg), nil
+	return tls.Client(wrapFragment(conn, c.fragment), c.cfg), nil
 }
 func (c *stdTLSConfig) Clone() aTLS.Config {
-	return &stdTLSConfig{cfg: c.cfg.Clone()}
+	return &stdTLSConfig{cfg: c.cfg.Clone(), fragment: c.fragment}
 }
 
 type utlsConfig struct {
-	cfg *utls.Config
-	id  utls.ClientHelloID
+	cfg      *utls.Config
+	id       utls.ClientHelloID
+	fragment *fragmentOptions
 }
 
 func newUTLSConfig(opt tlsOptions) (aTLS.Config, error) {
@@ -137,7 +172,13 @@ func newUTLSConfig(opt tlsOptions) (aTLS.Config, error) {
 		NextProtos:         nextProtosOrDefault(opt.alpn),
 		OmitEmptyPsk:       true,
 	}
-	return &utlsConfig{cfg: cfg, id: id}, nil
+	if len(opt.pins) > 0 {
+		cfg.InsecureSkipVerify = true // Authentication is performed by the mandatory pin verifier.
+		cfg.VerifyConnection = func(state utls.ConnectionState) error {
+			return verifyCertificatePins(opt.pins, state.PeerCertificates, state.ServerName)
+		}
+	}
+	return &utlsConfig{cfg: cfg, id: id, fragment: opt.fragment}, nil
 }
 
 func (c *utlsConfig) ServerName() string              { return c.cfg.ServerName }
@@ -150,7 +191,7 @@ func (c *utlsConfig) Config() (*aTLS.STDConfig, error) {
 	return nil, fmt.Errorf("utls has no std config")
 }
 func (c *utlsConfig) Client(conn net.Conn) (aTLS.Conn, error) {
-	return &utlsConnWrap{UConn: utls.UClient(conn, c.cfg.Clone(), c.id)}, nil
+	return &utlsConnWrap{UConn: utls.UClient(wrapFragment(conn, c.fragment), c.cfg.Clone(), c.id)}, nil
 }
 
 type utlsConnWrap struct {
@@ -182,7 +223,7 @@ func (c *utlsConnWrap) Upstream() any { return c.UConn }
 func (c *utlsConnWrap) ReaderReplaceable() bool { return true }
 func (c *utlsConnWrap) WriterReplaceable() bool { return true }
 func (c *utlsConfig) Clone() aTLS.Config {
-	return &utlsConfig{cfg: c.cfg.Clone(), id: c.id}
+	return &utlsConfig{cfg: c.cfg.Clone(), id: c.id, fragment: c.fragment}
 }
 
 func utlsFingerprint(name string) (utls.ClientHelloID, error) {
