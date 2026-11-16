@@ -13,6 +13,7 @@ import (
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/delayhistory"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/control"
 	"github.com/tmaykov/openwrt-hybrid-failover/internal/engine/plan"
+	"github.com/tmaykov/openwrt-hybrid-failover/internal/secrets"
 )
 
 type Handler interface {
@@ -30,6 +31,7 @@ type Registry struct {
 	counters  map[string]*countingHandler
 	groups    map[string]*fallbackHandler
 	ctrl      *control.Control
+	failed    map[string]error
 }
 
 // NewRegistry builds outbound handlers. ctx bounds the lifetime of any
@@ -44,12 +46,23 @@ func NewRegistry(ctx context.Context, plans []plan.OutboundPlan) (*Registry, err
 		selectors: make(map[string]*selectorHandler),
 		counters:  make(map[string]*countingHandler),
 		groups:    make(map[string]*fallbackHandler),
+		failed:    make(map[string]error),
 	}
 	for _, p := range plans {
 		h, err := newHandler(ctx, p)
 		if err != nil {
-			r.Stop()
-			return nil, fmt.Errorf("outbound %q: %w", p.Tag, err)
+			switch p.Kind {
+			case plan.OutboundVLESS, plan.OutboundTrojan, plan.OutboundShadowsocks, plan.OutboundSocks, plan.OutboundHysteria2:
+				// A broken server stays visible and fails closed. Other servers,
+				// DNS and routing must survive its initialization failure.
+				err = fmt.Errorf("outbound %q unavailable: %s", p.Tag, secrets.MaskSecrets(err.Error()))
+				r.failed[p.Tag] = err
+				h = &unavailableHandler{tag: p.Tag, err: err}
+				log.Printf("hybrid-failover: %v", err)
+			default:
+				r.Stop()
+				return nil, fmt.Errorf("outbound %q: %w", p.Tag, err)
+			}
 		}
 		switch p.Kind {
 		case plan.OutboundSelector:
@@ -162,6 +175,9 @@ func (r *Registry) StartURLTests(ctx context.Context, ctrl *control.Control) err
 	r.mu.Lock()
 	r.ctrl = ctrl
 	r.mu.Unlock()
+	for tag, err := range r.failed {
+		ctrl.SetDelay(tag, plan.DelaySample{Tag: tag, OK: false, Error: err.Error()})
+	}
 	for _, ut := range r.urltests {
 		if err := ut.Start(ctx, ctrl); err != nil {
 			return err
@@ -351,10 +367,29 @@ func (u *urlTestRunner) bestMember() (string, error) {
 	u.mu.RLock()
 	active := u.active
 	u.mu.RUnlock()
-	if active != "" {
+	if active != "" && u.registry.failed[active] == nil {
 		return active, nil
 	}
-	return u.plan.Members[0], nil
+	for _, member := range u.plan.Members {
+		if u.registry.failed[member] == nil {
+			return member, nil
+		}
+	}
+	return "", fmt.Errorf("urltest %q has no usable members", u.plan.Tag)
+}
+
+type unavailableHandler struct {
+	tag string
+	err error
+}
+
+func (h *unavailableHandler) Tag() string  { return h.tag }
+func (h *unavailableHandler) Close() error { return nil }
+func (h *unavailableHandler) DialTCP(context.Context, string, string) (net.Conn, error) {
+	return nil, h.err
+}
+func (h *unavailableHandler) DialUDP(context.Context, string, string) (net.PacketConn, error) {
+	return nil, h.err
 }
 
 func (u *urlTestRunner) Start(ctx context.Context, ctrl *control.Control) error {

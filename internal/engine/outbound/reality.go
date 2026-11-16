@@ -48,8 +48,18 @@ func newRealityConfig(opt tlsOptions) (aTLS.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Legacy TLS 1.2-only browser profiles cannot carry REALITY's TLS 1.3
+	// authentication. Reject that channel at construction, not on every dial.
+	client := u.(*utlsConfig)
+	hello := utls.UClient(nil, client.cfg.Clone(), client.id)
+	if err := hello.BuildHandshakeState(); err != nil {
+		return nil, fmt.Errorf("reality fingerprint %q: %w", opt.fingerprint, err)
+	}
+	if realityECDHE(hello.HandshakeState.State13.KeyShareKeys) == nil {
+		return nil, fmt.Errorf("reality fingerprint %q does not support TLS 1.3 with X25519", opt.fingerprint)
+	}
 	return &realityConfig{
-		uClient:   u.(*utlsConfig),
+		uClient:   client,
 		publicKey: opt.publicKey,
 		shortID:   opt.shortID,
 	}, nil

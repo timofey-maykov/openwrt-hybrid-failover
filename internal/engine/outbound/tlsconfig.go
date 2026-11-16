@@ -2,11 +2,13 @@ package outbound
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"net"
 	"strings"
 
@@ -42,7 +44,7 @@ func tlsFromFields(fields map[string]any, serverHost string) (tlsOptions, error)
 	}
 	opt.alpn = alpnFromField(raw["alpn"])
 	if utlsMap, ok := raw["utls"].(map[string]any); ok {
-		if fp, ok := utlsMap["fingerprint"].(string); ok {
+		if fp, ok := utlsMap["fingerprint"].(string); ok && utlsMap["enabled"] != false {
 			opt.fingerprint = fp
 		}
 	}
@@ -83,9 +85,12 @@ func buildTLSConfig(fields map[string]any, serverHost string) (aTLS.Config, erro
 		return nil, nil
 	}
 	if opt.reality {
+		if strings.EqualFold(strings.TrimSpace(opt.fingerprint), "none") {
+			return nil, fmt.Errorf("reality requires a uTLS fingerprint")
+		}
 		return newRealityConfig(opt)
 	}
-	if opt.fingerprint != "" {
+	if opt.fingerprint != "" && !strings.EqualFold(strings.TrimSpace(opt.fingerprint), "none") {
 		return newUTLSConfig(opt)
 	}
 	return newSTDConfig(opt), nil
@@ -130,6 +135,7 @@ func newUTLSConfig(opt tlsOptions) (aTLS.Config, error) {
 		ServerName:         opt.serverName,
 		InsecureSkipVerify: opt.insecure,
 		NextProtos:         nextProtosOrDefault(opt.alpn),
+		OmitEmptyPsk:       true,
 	}
 	return &utlsConfig{cfg: cfg, id: id}, nil
 }
@@ -188,6 +194,50 @@ func utlsFingerprint(name string) (utls.ClientHelloID, error) {
 		return utls.HelloIOS_Auto, nil
 	case "android":
 		return utls.HelloAndroid_11_OkHttp, nil
+	case "qq":
+		return utls.HelloQQ_Auto, nil
+	case "360":
+		return utls.Hello360_Auto, nil
+	case "chrome120":
+		return utls.HelloChrome_120, nil
+	case "firefox120":
+		return utls.HelloFirefox_120, nil
+	case "safari16":
+		return utls.HelloSafari_16_0, nil
+	case "chrome_psk":
+		return utls.HelloChrome_100_PSK, nil
+	case "chrome_psk_shuffle":
+		return utls.HelloChrome_106_Shuffle, nil
+	case "chrome_padding_psk_shuffle":
+		return utls.HelloChrome_114_Padding_PSK_Shuf, nil
+	case "chrome_pq":
+		return utls.HelloChrome_115_PQ, nil
+	case "chrome_pq_psk":
+		return utls.HelloChrome_115_PQ_PSK, nil
+	case "random":
+		ids := []utls.ClientHelloID{utls.HelloChrome_Auto, utls.HelloFirefox_Auto, utls.HelloSafari_Auto, utls.HelloIOS_Auto}
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(ids))))
+		if err != nil {
+			return utls.ClientHelloID{}, err
+		}
+		return ids[n.Int64()], nil
+	case "randomized", "randomizedalpn", "randomizednoalpn":
+		id := utls.HelloRandomized
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "randomizedalpn":
+			id = utls.HelloRandomizedALPN
+		case "randomizednoalpn":
+			id = utls.HelloRandomizedNoALPN
+		}
+		seed, err := utls.NewPRNGSeed()
+		if err != nil {
+			return utls.ClientHelloID{}, err
+		}
+		weights := utls.DefaultWeights
+		weights.TLSVersMax_Set_VersionTLS13 = 1
+		weights.FirstKeyShare_Set_CurveP256 = 0
+		id.Seed, id.Weights = seed, &weights
+		return id, nil
 	default:
 		return utls.ClientHelloID{}, fmt.Errorf("unknown uTLS fingerprint %q", name)
 	}
