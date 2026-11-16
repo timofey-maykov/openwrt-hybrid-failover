@@ -176,6 +176,11 @@ func (c *utlsConnWrap) ConnectionState() tls.ConnectionState {
 	}
 }
 func (c *utlsConnWrap) Upstream() any { return c.UConn }
+
+// Vision discovers the underlying TLS record buffers through sing's
+// replaceable-reader/writer interfaces, as it does for the REALITY wrapper.
+func (c *utlsConnWrap) ReaderReplaceable() bool { return true }
+func (c *utlsConnWrap) WriterReplaceable() bool { return true }
 func (c *utlsConfig) Clone() aTLS.Config {
 	return &utlsConfig{cfg: c.cfg.Clone(), id: c.id}
 }
