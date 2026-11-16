@@ -3,6 +3,9 @@ package singbox
 import "testing"
 
 func TestCommunityServiceDomainURL(t *testing.T) {
+	if got := CommunityServiceDomainURL("netflix"); got != "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.list" {
+		t.Fatalf("Netflix source: %s", got)
+	}
 	if got := CommunityServiceDomainURL("russia_inside"); got != GitHubRawURL+"/Russia/inside-clashx.lst" {
 		t.Fatalf("russia_inside URL = %q", got)
 	}
@@ -76,5 +79,18 @@ func TestParseDomainListBody(t *testing.T) {
 		if !want[d] {
 			t.Fatalf("unexpected domain %q in %v", d, got)
 		}
+	}
+}
+
+func TestNetflixMihomoSuffixesAndFallback(t *testing.T) {
+	if got := CommunitySRSURL("netflix"); got != "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/netflix.srs" {
+		t.Fatalf("Netflix SRS: %s", got)
+	}
+	got := ParseDomainListBody("+.netflix.com\n+.nflxvideo.net\n# comment\n")
+	if len(got) != 2 || got[0] != "netflix.com" || got[1] != "nflxvideo.net" {
+		t.Fatalf("invalid suffixes: %v", got)
+	}
+	if got := MergeCommunityDomains("netflix", nil); len(got) < 7 {
+		t.Fatal("Netflix fallback is empty")
 	}
 }

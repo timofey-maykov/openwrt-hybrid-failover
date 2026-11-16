@@ -1,6 +1,7 @@
 package lists
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -111,9 +112,10 @@ func (u *Updater) UpdateOnce() (UpdateResult, error) {
 	}
 
 	var result UpdateResult
+	var updateErrs []error
 	changed, err := u.syncCommunityDomainRulesets()
 	if err != nil {
-		return result, err
+		updateErrs = append(updateErrs, err)
 	}
 	result.Changed = result.Changed || changed
 	for _, svc := range services {
@@ -127,11 +129,12 @@ func (u *Updater) UpdateOnce() (UpdateResult, error) {
 			if u.cachedListValid(filename) {
 				continue
 			}
-			return result, err
+			updateErrs = append(updateErrs, err)
+			continue
 		}
 		result.Changed = result.Changed || changed
 	}
-	return result, nil
+	return result, errors.Join(updateErrs...)
 }
 
 // HasValidCache reports whether configured community lists have usable local cache.

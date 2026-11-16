@@ -17,6 +17,7 @@ var communityDomainListPaths = map[string]string{
 
 // CommunityDomainSupplements adds domains required by apps but missing from upstream .lst files.
 var CommunityDomainSupplements = map[string][]string{
+	"netflix": {"netflix.com", "netflix.net", "nflxext.com", "nflximg.com", "nflximg.net", "nflxvideo.net", "fast.com"},
 	"youtube": {
 		"youtube.com",
 		"youtu.be",
@@ -152,6 +153,9 @@ func filterCommunityRemovals(service string, domains []string) []string {
 }
 
 func CommunityServiceDomainURL(service string) string {
+	if service == "netflix" {
+		return "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.list"
+	}
 	if rel, ok := communityDomainListPaths[service]; ok {
 		return GitHubRawURL + "/" + rel
 	}
@@ -165,6 +169,7 @@ func ParseDomainListBody(raw string) []string {
 	var out []string
 	add := func(domain string) {
 		domain = strings.TrimSpace(domain)
+		domain = strings.TrimPrefix(domain, "+.")
 		domain = strings.TrimPrefix(domain, ".")
 		domain = strings.ToLower(domain)
 		if domain == "" {

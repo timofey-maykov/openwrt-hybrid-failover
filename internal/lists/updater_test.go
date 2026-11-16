@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -173,5 +174,35 @@ func localHTTPClient(srv *httptest.Server) *http.Client {
 			req.Host = target.Host
 			return base.RoundTrip(req)
 		}),
+	}
+}
+
+func TestUpdateContinuesAfterDomainAndSubnetErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "missing") || strings.Contains(r.URL.Path, "Subnets/IPv4/telegram") {
+			http.NotFound(w, r)
+			return
+		}
+		if strings.Contains(r.URL.Path, "Subnets/") {
+			fmt.Fprintln(w, "192.0.2.0/24")
+		} else {
+			fmt.Fprintln(w, "example.com")
+		}
+	}))
+	defer srv.Close()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config")
+	if err := os.WriteFile(path, []byte("config section 'main'\n option connection_type 'vpn'\n list community_lists 'missing'\n list community_lists 'telegram'\n list community_lists 'meta'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	u := NewFromUCI(path)
+	u.RulesetDir = dir
+	u.HTTP = localHTTPClient(srv)
+	result, err := u.UpdateOnce()
+	if err == nil || !result.Changed {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if !u.cachedListValid("meta.lst") {
+		t.Fatal("later subnet list was not downloaded")
 	}
 }

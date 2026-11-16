@@ -65,5 +65,8 @@ var SubnetListURLs = map[string]string{
 }
 
 func CommunitySRSURL(service string) string {
+	if service == "netflix" {
+		return "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/netflix.srs"
+	}
 	return SRSMainURL + "/" + service + ".srs"
 }
