@@ -30,7 +30,7 @@ func xhttp3Server(t *testing.T, cert tls.Certificate, handler http.Handler) int 
 }
 
 func TestVLESSOverXHTTP3(t *testing.T) {
-	for _, mode := range []string{"auto", "stream-one"} {
+	for _, mode := range []string{"stream-one"} {
 		t.Run(mode, func(t *testing.T) {
 			rec := &seen{}
 			var requests atomic.Int32
@@ -98,7 +98,7 @@ func TestXHTTP3CertificateValidation(t *testing.T) {
 }
 
 func TestXHTTP3UnsupportedModesAndVision(t *testing.T) {
-	for _, options := range []string{"mode=packet-up", "mode=stream-up", "flow=xtls-rprx-vision"} {
+	for _, options := range []string{"mode=invalid", "flow=xtls-rprx-vision"} {
 		h := newTestVLESSLink(t, "vless://"+vlessTestUUID+"@127.0.0.1:1?security=tls&type=xhttp&alpn=h3&"+options).(*vlessHandler)
 		if _, err := h.dialStream(context.Background()); err == nil || strings.Contains(err.Error(), "connection refused") {
 			t.Fatalf("%s: %v", options, err)
@@ -136,7 +136,7 @@ func TestXHTTP3UDPOutlivesDialContext(t *testing.T) {
 		f.Flush()
 		serve(svc, &rawHTTPBodyConn{body: r.Body, w: w, f: f})
 	}))
-	h := newTestVLESSLink(t, fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&allowInsecure=1&type=xhttp&alpn=h3", vlessTestUUID, port))
+	h := newTestVLESSLink(t, fmt.Sprintf("vless://%s@127.0.0.1:%d?security=tls&sni=localhost&allowInsecure=1&type=xhttp&mode=stream-one&alpn=h3", vlessTestUUID, port))
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	c, err := h.DialUDP(ctx, "udp", "203.0.113.5:5353")
 	cancel()
@@ -169,7 +169,7 @@ func TestXHTTP3UDPOutlivesDialContext(t *testing.T) {
 
 func TestXHTTP3RejectsRealityAndTCPFragmentation(t *testing.T) {
 	for _, tc := range []struct{ options, want string }{
-		{"security=reality&pbk=" + strings.Repeat("A", 43), "REALITY"},
+
 		{"security=tls&fm=" + url.QueryEscape(`{"tcp":[{"type":"fragment","settings":{"length":"10-20","interval":"1-2","packets":"tlshello"}}]}`), "fragmentation"},
 	} {
 		h := newTestVLESSLink(t, "vless://"+vlessTestUUID+"@127.0.0.1:1?type=xhttp&alpn=h3&"+tc.options).(*vlessHandler)
@@ -177,5 +177,12 @@ func TestXHTTP3RejectsRealityAndTCPFragmentation(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Fatalf("want %q, got %v", tc.want, err)
 		}
+	}
+}
+
+func TestXHTTPRealitySelectsH2(t *testing.T) {
+	h := newTestVLESSLink(t, "vless://"+vlessTestUUID+"@127.0.0.1:1?type=xhttp&alpn=h3&security=reality&pbk="+strings.Repeat("A", 43)).(*vlessHandler)
+	if h.initErr != nil || h.transport.http3 || h.transport.http1 || h.transport.mode != "stream-one" || strings.Join(h.tls.NextProtos(), ",") != "h2" {
+		t.Fatalf("REALITY transport: %+v error=%v", h.transport, h.initErr)
 	}
 }

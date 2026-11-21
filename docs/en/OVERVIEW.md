@@ -145,7 +145,7 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 
 | Scheme | Supported | Notes |
 |--------|-----------|-------|
-| `vless://` | yes | Reality and TLS, XTLS Vision, TCP and UDP (XUDP). Transports tcp, ws, grpc, httpupgrade and xhttp/splithttp over HTTP/2 or HTTP/3 (stream-one; `auto` is treated as stream-one). `packet-up` and `stream-up` are not supported yet. These link parameters are used: `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision works on plain TCP only, not over ws, grpc, httpupgrade or xhttp |
+| `vless://` | yes | Reality and TLS, XTLS Vision, TCP and UDP (XUDP). Transports tcp, ws, grpc, httpupgrade and xhttp/splithttp over HTTP/1.1, HTTP/2 or HTTP/3, with `packet-up`, `stream-up`, `stream-one` and `auto` modes. These link parameters are used: `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision works on plain TCP only, not over ws, grpc, httpupgrade or xhttp |
 | `ss://` | yes | Shadowsocks |
 | `trojan://` | yes | |
 | `socks4://`, `socks4a://`, `socks5://` | yes | |
@@ -155,9 +155,9 @@ Links are parsed in Go (`internal/uri`). Amnezia `vpn://` is decoded by `interna
 | `amneziawg://` | subscriptions only | A whole AmneziaWG client config in base64, as subscription panels hand it out. Converted to `awg2://` when the subscription is loaded, the first peer is used |
 | `http://`, `https://` | no | Fails with `unsupported uri scheme` |
 
-For XHTTP over HTTP/3, use `type=xhttp&security=tls&alpn=h3&mode=stream-one` in the VLESS link. `mode=auto` also uses `stream-one`. The server or CDN must support HTTP/3 and its UDP port must be reachable. Without `alpn=h3`, XHTTP continues to use HTTP/2.
+For XHTTP over HTTP/3, use `type=xhttp&security=tls&alpn=h3&mode=stream-one` in the VLESS link. `mode=auto` selects `packet-up`, or `stream-one` with REALITY, matching Xray. `packet-up` and `stream-up` use separate HTTP requests for uploads and downloads. The server or CDN must support HTTP/3 and its UDP port must be reachable. Use `alpn=http/1.1` for HTTP/1.1 or `alpn=h2` for HTTP/2. Without TLS, HTTP/1.1 is used. Streaming uploads over HTTP/1.1 require full-duplex support in the server and any proxies; the direct HTTP/1.1 listener in Xray 26.11.9 supports `packet-up`.
 
-The `sni`, `host`, `path` and `pcs` parameters are preserved. HTTP/3 uses standard QUIC/TLS 1.3; the TCP fingerprint `fp` is not applied. REALITY and TCP fragmentation (`fm`) are unsupported with HTTP/3 and produce an explicit channel error.
+The `sni`, `host`, `path` and `pcs` parameters are preserved. HTTP/3 uses standard QUIC/TLS 1.3; the TCP fingerprint `fp` is not applied. REALITY always uses HTTP/2, even with `alpn=h3`; the core logs this choice. TCP fragmentation (`fm`) works with HTTP/1.1 and HTTP/2. It returns an explicit error for HTTP/3 because QUIC uses UDP.
 
 ### Amnezia `vpn://`
 

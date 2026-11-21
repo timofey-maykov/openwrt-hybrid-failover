@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,17 +19,17 @@ import (
 // newXHTTPStreamOne opens one bidirectional HTTP/2 stream (Xray "stream-one"):
 // POST body is upload, response body is download. mode must already be
 // normalized to "stream-one".
-func newXHTTPStreamOne(ctx context.Context, tlsConn net.Conn, host, path string, headers map[string]string) (net.Conn, error) {
+func (h *vlessHandler) dialXHTTP2(ctx context.Context, tlsConn net.Conn) (net.Conn, error) {
 	cc, err := (&http2.Transport{}).NewClientConn(tlsConn)
 	if err != nil {
 		_ = tlsConn.Close()
 		return nil, fmt.Errorf("xhttp: http2 client: %w", err)
 	}
-	return newXHTTPStream(ctx, cc, cc, tlsConn.LocalAddr(), tlsConn.RemoteAddr(), host, path, headers)
+	return h.openXHTTP(ctx, cc, cc, tlsConn.LocalAddr(), tlsConn.RemoteAddr())
 }
 
 // The POST framing is the same over HTTP/2 and HTTP/3.
-func newXHTTPStream(ctx context.Context, rt http.RoundTripper, closer io.Closer, local, remote net.Addr, host, path string, headers map[string]string) (net.Conn, error) {
+func newXHTTPStream(ctx context.Context, rt http.RoundTripper, closer io.Closer, local, remote net.Addr, scheme, host, path string, headers map[string]string) (net.Conn, error) {
 	if host == "" {
 		_ = closer.Close()
 		return nil, fmt.Errorf("xhttp: missing host")
@@ -43,7 +44,7 @@ func newXHTTPStream(ctx context.Context, rt http.RoundTripper, closer io.Closer,
 	// session. Like net.Dialer, the returned connection lives until Close.
 	requestCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	pr, pw := io.Pipe()
-	req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, "https://"+host+path, pr)
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, scheme+"://"+host+path, pr)
 	if err != nil {
 		_ = pw.Close()
 		cancel()
@@ -116,7 +117,7 @@ func applyDefaultXPadding(req *http.Request) {
 }
 
 type xhttpConn struct {
-	w          *io.PipeWriter
+	w          io.WriteCloser
 	r          atomic.Pointer[io.ReadCloser]
 	ready      chan struct{}
 	readyOnce  sync.Once
@@ -124,10 +125,11 @@ type xhttpConn struct {
 	localAddr  net.Addr
 	remoteAddr net.Addr
 
-	mu     sync.Mutex
-	cc     io.Closer
-	cancel context.CancelFunc
-	closed bool
+	mu                    sync.Mutex
+	cc                    io.Closer
+	cancel                context.CancelFunc
+	closed                bool
+	readTimer, writeTimer *time.Timer
 }
 
 func (c *xhttpConn) setReader(rc io.ReadCloser) {
@@ -142,8 +144,7 @@ func (c *xhttpConn) setReader(rc io.ReadCloser) {
 }
 
 func (c *xhttpConn) fail(err error) {
-	c.err.Store(&err)
-	_ = c.w.CloseWithError(err)
+	c.err.CompareAndSwap(nil, &err)
 	c.readyOnce.Do(func() { close(c.ready) })
 	_ = c.Close()
 }
@@ -154,7 +155,9 @@ func (c *xhttpConn) Read(p []byte) (int, error) {
 		select {
 		case <-c.ready:
 		case <-time.After(30 * time.Second):
-			return 0, fmt.Errorf("xhttp: timed out waiting for response headers")
+			err := fmt.Errorf("xhttp response headers: %w", os.ErrDeadlineExceeded)
+			c.fail(err)
+			return 0, err
 		}
 		if e := c.err.Load(); e != nil {
 			return 0, *e
@@ -164,11 +167,26 @@ func (c *xhttpConn) Read(p []byte) (int, error) {
 			return 0, io.ErrClosedPipe
 		}
 	}
-	return (*rc).Read(p)
+	n, err := (*rc).Read(p)
+	if err != nil {
+		if stored := c.err.Load(); stored != nil {
+			return n, *stored
+		}
+	}
+	return n, err
 }
 
 func (c *xhttpConn) Write(p []byte) (int, error) {
-	return c.w.Write(p)
+	if err := c.err.Load(); err != nil {
+		return 0, *err
+	}
+	n, err := c.w.Write(p)
+	if err != nil {
+		if stored := c.err.Load(); stored != nil {
+			return n, *stored
+		}
+	}
+	return n, err
 }
 
 func (c *xhttpConn) Close() error {
@@ -178,6 +196,14 @@ func (c *xhttpConn) Close() error {
 		return nil
 	}
 	c.closed = true
+	closedErr := error(io.ErrClosedPipe)
+	c.err.CompareAndSwap(nil, &closedErr)
+	if c.readTimer != nil {
+		c.readTimer.Stop()
+	}
+	if c.writeTimer != nil {
+		c.writeTimer.Stop()
+	}
 	c.cancel()
 	c.readyOnce.Do(func() { close(c.ready) })
 	_ = c.w.Close()
@@ -190,8 +216,52 @@ func (c *xhttpConn) Close() error {
 	return nil
 }
 
-func (c *xhttpConn) LocalAddr() net.Addr                { return c.localAddr }
-func (c *xhttpConn) RemoteAddr() net.Addr               { return c.remoteAddr }
-func (c *xhttpConn) SetDeadline(t time.Time) error      { return nil }
-func (c *xhttpConn) SetReadDeadline(t time.Time) error  { return nil }
-func (c *xhttpConn) SetWriteDeadline(t time.Time) error { return nil }
+func (c *xhttpConn) LocalAddr() net.Addr  { return c.localAddr }
+func (c *xhttpConn) RemoteAddr() net.Addr { return c.remoteAddr }
+func (c *xhttpConn) setTimer(slot **time.Timer, t time.Time) {
+	if *slot != nil {
+		(*slot).Stop()
+	}
+	*slot = nil
+	if t.IsZero() {
+		return
+	}
+	var timer *time.Timer
+	timer = time.AfterFunc(time.Until(t), func() {
+		c.mu.Lock()
+		valid := !c.closed && *slot == timer
+		c.mu.Unlock()
+		if valid {
+			c.fail(os.ErrDeadlineExceeded)
+		}
+	})
+	*slot = timer
+}
+func (c *xhttpConn) SetDeadline(t time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return net.ErrClosed
+	}
+	c.setTimer(&c.readTimer, t)
+	c.setTimer(&c.writeTimer, t)
+	return nil
+}
+func (c *xhttpConn) SetReadDeadline(t time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return net.ErrClosed
+	}
+	c.setTimer(&c.readTimer, t)
+	return nil
+}
+func (c *xhttpConn) SetWriteDeadline(t time.Time) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return net.ErrClosed
+	}
+	c.setTimer(&c.writeTimer, t)
+	return nil
+}

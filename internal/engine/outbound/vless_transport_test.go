@@ -41,6 +41,7 @@ func vlessService(flow string) *vless.Service[int] {
 
 // serve runs the VLESS service on c and returns when the stream is finished.
 func serve(svc *vless.Service[int], c net.Conn) {
+	defer c.Close()
 	done := make(chan struct{})
 	var once sync.Once
 	finish := func(error) { once.Do(func() { close(done) }) }
@@ -302,7 +303,7 @@ func TestVLESSUnsupportedLinkFailsOnUseNotOnCreation(t *testing.T) {
 	if _, err := h.DialUDP(context.Background(), "udp", "203.0.113.5:53"); err == nil {
 		t.Fatal("UDP dialled over a link that cannot work")
 	}
-	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "xhttp", "mode": "packet-up"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "packet-up") {
+	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "xhttp", "mode": "invalid"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "invalid") {
 		t.Fatalf("unsupported xhttp mode: %v", err)
 	}
 	if _, err := vlessTransportFrom(map[string]any{"transport": map[string]any{"type": "meek"}}, "", "x"); err == nil || !strings.Contains(err.Error(), "meek") {
@@ -370,21 +371,25 @@ func xhttpServer(t *testing.T, path string, rec *seen) int {
 }
 
 type rawHTTPBodyConn struct {
-	body io.Reader
-	w    http.ResponseWriter
-	f    http.Flusher
-	wmu  sync.Mutex
+	body   io.Reader
+	w      http.ResponseWriter
+	f      http.Flusher
+	wmu    sync.Mutex
+	closed bool
 }
 
 func (c *rawHTTPBodyConn) Read(p []byte) (int, error) { return c.body.Read(p) }
 func (c *rawHTTPBodyConn) Write(p []byte) (int, error) {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
+	if c.closed {
+		return 0, net.ErrClosed
+	}
 	n, err := c.w.Write(p)
 	c.f.Flush()
 	return n, err
 }
-func (c *rawHTTPBodyConn) Close() error                       { return nil }
+func (c *rawHTTPBodyConn) Close() error                       { c.wmu.Lock(); c.closed = true; c.wmu.Unlock(); return nil }
 func (c *rawHTTPBodyConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
 func (c *rawHTTPBodyConn) RemoteAddr() net.Addr               { return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1)} }
 func (c *rawHTTPBodyConn) SetDeadline(t time.Time) error      { return nil }

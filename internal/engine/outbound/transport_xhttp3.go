@@ -46,5 +46,5 @@ func (h *vlessHandler) dialXHTTP3(ctx context.Context) (net.Conn, error) {
 		return tr.Close()
 	})
 	cc := (&http3.Transport{DisableCompression: true}).NewClientConn(conn)
-	return newXHTTPStream(ctx, cc, closer, udp.LocalAddr(), udp.RemoteAddr(), h.transport.host, h.transport.path, h.transport.headers)
+	return h.openXHTTP(ctx, cc, closer, udp.LocalAddr(), udp.RemoteAddr())
 }

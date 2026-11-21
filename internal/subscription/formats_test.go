@@ -80,7 +80,7 @@ func TestUnsupportedSecurityFeaturesAreNotSilentlyRemoved(t *testing.T) {
 	for _, body := range []string{
 		`{"outbounds":[{"type":"vless","server":"192.0.2.20","server_port":443,"uuid":"test","tls":{"enabled":true,"certificate_public_key_sha256":["pin"]}}]}`,
 		`{"outbounds":[{"type":"vless","server":"192.0.2.20","server_port":443,"uuid":"test","transport":{"type":"ws","headers":{"Authorization":"SECRET"}}}]}`,
-		`{"outbounds":[{"type":"vless","server":"192.0.2.20","server_port":443,"uuid":"test","transport":{"type":"xhttp","mode":"packet-up"}}]}`,
+		`{"outbounds":[{"type":"vless","server":"192.0.2.20","server_port":443,"uuid":"test","transport":{"type":"xhttp","mode":"invalid"}}]}`,
 		`{"outbounds":[{"type":"shadowsocks","server":"192.0.2.20","server_port":443,"method":"aes-128-gcm","password":"secret","tls":{"enabled":true}}]}`,
 	} {
 		entries, err := parseSubscription([]byte(body))
@@ -112,20 +112,22 @@ func TestStructuredXHTTP3(t *testing.T) {
 		"xray":    `{"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"192.0.2.20","port":8443,"users":[{"id":"11111111-1111-4111-8111-111111111111"}]}]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"tls.example.com","alpn":["h3"]},"xhttpSettings":{"host":"cdn.example.com","path":"/x?token=test","mode":"stream-one"}}}]}`,
 		"clash":   "proxies:\n - type: vless\n   server: 192.0.2.20\n   port: 8443\n   uuid: 11111111-1111-4111-8111-111111111111\n   tls: true\n   servername: tls.example.com\n   alpn: [h3]\n   network: xhttp\n   xhttp-opts:\n     host: cdn.example.com\n     path: '/x?token=test'\n     mode: stream-one\n",
 	} {
-		t.Run(name, func(t *testing.T) {
-			entries, err := parseSubscription([]byte(body))
-			if err != nil || len(entries) != 1 {
-				t.Fatalf("entries=%d err=%v", len(entries), err)
-			}
-			link, err := url.Parse(entries[0])
-			if err != nil {
-				t.Fatal(err)
-			}
-			for key, want := range map[string]string{"type": "xhttp", "security": "tls", "alpn": "h3", "mode": "stream-one", "host": "cdn.example.com", "sni": "tls.example.com", "path": "/x?token=test"} {
-				if got := link.Query().Get(key); got != want {
-					t.Errorf("%s=%q want %q", key, got, want)
+		for _, mode := range []string{"auto", "stream-one", "stream-up", "packet-up"} {
+			t.Run(name+"/"+mode, func(t *testing.T) {
+				entries, err := parseSubscription([]byte(strings.ReplaceAll(body, "stream-one", mode)))
+				if err != nil || len(entries) != 1 {
+					t.Fatalf("entries=%d err=%v", len(entries), err)
 				}
-			}
-		})
+				link, err := url.Parse(entries[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				for key, want := range map[string]string{"type": "xhttp", "security": "tls", "alpn": "h3", "mode": mode, "host": "cdn.example.com", "sni": "tls.example.com", "path": "/x?token=test"} {
+					if got := link.Query().Get(key); got != want {
+						t.Errorf("%s=%q want %q", key, got, want)
+					}
+				}
+			})
+		}
 	}
 }

@@ -145,7 +145,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 
 | Схема | Поддержка | Примечание |
 |-------|-----------|------------|
-| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws, grpc, httpupgrade и xhttp/splithttp поверх HTTP/2 или HTTP/3 (режим stream-one; `auto` тоже ведёт себя как stream-one). `packet-up` и `stream-up` пока не поддерживаются. Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws, grpc, httpupgrade и xhttp |
+| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws, grpc, httpupgrade и xhttp/splithttp поверх HTTP/1.1, HTTP/2 или HTTP/3, режимы `packet-up`, `stream-up`, `stream-one` и `auto`. Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws, grpc, httpupgrade и xhttp |
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
 | `socks4://`, `socks4a://`, `socks5://` | да | |
@@ -155,9 +155,9 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 | `amneziawg://` | только в подписках | Целиком клиентский конфиг AmneziaWG в base64, так его отдают панели подписок. При загрузке подписки превращается в `awg2://`, берётся первый peer |
 | `http://`, `https://` | нет | Ошибка `unsupported uri scheme` |
 
-Для XHTTP поверх HTTP/3 укажите `type=xhttp&security=tls&alpn=h3&mode=stream-one` в VLESS-ссылке. `mode=auto` тоже использует `stream-one`. На сервере или CDN должен работать HTTP/3, а UDP-порт сервера должен быть доступен. Без `alpn=h3` XHTTP продолжает работать через HTTP/2.
+Для XHTTP поверх HTTP/3 укажите `type=xhttp&security=tls&alpn=h3&mode=stream-one` в VLESS-ссылке. `mode=auto` выбирает `packet-up`, а с REALITY использует `stream-one`, как Xray. Режимы `packet-up` и `stream-up` разделяют загрузку и отдачу по отдельным HTTP-запросам. На сервере или CDN должен работать HTTP/3, а UDP-порт сервера должен быть доступен. Для HTTP/1.1 укажите `alpn=http/1.1`, для HTTP/2 - `alpn=h2`. Без TLS используется HTTP/1.1. Для потоковой загрузки через HTTP/1.1 сервер и промежуточные прокси должны поддерживать full duplex; прямой HTTP/1.1 listener Xray 26.11.9 подходит для `packet-up`.
 
-Параметры `sni`, `host`, `path` и `pcs` сохраняются. Для HTTP/3 используется стандартный QUIC/TLS 1.3, TCP-отпечаток `fp` не применяется. REALITY и TCP-фрагментация `fm` с HTTP/3 не поддерживаются, такой канал вернёт явную ошибку.
+Параметры `sni`, `host`, `path` и `pcs` сохраняются. Для HTTP/3 используется стандартный QUIC/TLS 1.3, TCP-отпечаток `fp` не применяется. REALITY всегда использует HTTP/2, даже если в ссылке указан `alpn=h3`; об этом core пишет в журнал. TCP-фрагментация `fm` работает с HTTP/1.1 и HTTP/2. Для HTTP/3 она возвращает явную ошибку, поскольку QUIC передаёт данные через UDP.
 
 ### Amnezia `vpn://`
 

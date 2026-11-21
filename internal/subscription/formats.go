@@ -307,7 +307,7 @@ func transportQuery(q url.Values, tr map[string]any) bool {
 		}
 		if kind == "xhttp" {
 			mode := textValue(tr, "mode")
-			if mode != "" && mode != "auto" && mode != "stream-one" {
+			if mode != "" && mode != "auto" && mode != "stream-one" && mode != "stream-up" && mode != "packet-up" {
 				return false
 			}
 			put(q, "mode", mode)

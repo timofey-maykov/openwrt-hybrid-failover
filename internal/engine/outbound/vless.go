@@ -3,6 +3,7 @@ package outbound
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
@@ -37,6 +38,8 @@ type vlessHandler struct {
 // WebSocket, HTTP Upgrade, XHTTP stream-one or gRPC.
 type vlessTransport struct {
 	http3   bool
+	http1   bool
+	mode    string
 	kind    string // "", "ws", "httpupgrade", "xhttp" or "grpc"
 	host    string // Host header / HTTP authority
 	path    string
@@ -78,12 +81,15 @@ func vlessTransportFrom(fields map[string]any, flow, tlsName string) (vlessTrans
 		if kind == "xhttp" {
 			mode, _ := raw["mode"].(string)
 			mode = strings.TrimSpace(strings.ToLower(mode))
-			if mode == "" || mode == "auto" {
-				mode = "stream-one"
+			if mode == "" {
+				mode = "auto"
 			}
-			if mode != "stream-one" {
-				return t, fmt.Errorf("vless: xhttp mode %q is not supported (only stream-one)", mode)
+			switch mode {
+			case "auto", "stream-one", "stream-up", "packet-up":
+			default:
+				return t, fmt.Errorf("vless: unsupported xhttp mode %q", mode)
 			}
+			t.mode = mode
 		}
 	case "grpc":
 		t.kind = "grpc"
@@ -135,13 +141,22 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 		if err != nil {
 			return nil, err
 		}
-		transport.http3 = len(opt.alpn) == 1 && opt.alpn[0] == "h3"
+		requestedH3 := len(opt.alpn) == 1 && opt.alpn[0] == "h3"
+		transport.http3 = requestedH3 && !opt.reality
+		if requestedH3 && opt.reality {
+			log.Printf("hybrid-failover: xhttp REALITY uses HTTP/2; ignoring alpn=h3")
+		}
+		transport.http1 = !opt.enabled || (!opt.reality && len(opt.alpn) == 1 && opt.alpn[0] == "http/1.1")
+		if transport.mode == "auto" {
+			transport.mode = "packet-up"
+			if opt.reality {
+				transport.mode = "stream-one"
+			}
+		}
 		if transport.http3 {
 			switch {
 			case !opt.enabled:
 				initErr = fmt.Errorf("vless: xhttp HTTP/3 requires TLS")
-			case opt.reality:
-				initErr = fmt.Errorf("vless: xhttp HTTP/3 does not support REALITY")
 			case opt.fragment != nil:
 				initErr = fmt.Errorf("vless: xhttp HTTP/3 does not support TCP TLS fragmentation")
 			}
@@ -165,6 +180,8 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 		case "grpc", "xhttp":
 			if transport.http3 {
 				tlsCfg.SetNextProtos([]string{"h3"})
+			} else if transport.http1 {
+				tlsCfg.SetNextProtos([]string{"http/1.1"})
 			} else {
 				tlsCfg.SetNextProtos([]string{"h2"})
 			}
@@ -189,6 +206,9 @@ func (h *vlessHandler) Tag() string { return h.tag }
 func (h *vlessHandler) dialStream(ctx context.Context) (net.Conn, error) {
 	if h.initErr != nil {
 		return nil, h.initErr
+	}
+	if h.transport.kind == "xhttp" && h.transport.http1 {
+		return h.dialXHTTP1(ctx)
 	}
 	if h.transport.http3 {
 		return h.dialXHTTP3(ctx)
@@ -217,7 +237,7 @@ func (h *vlessHandler) dialStream(ctx context.Context) (net.Conn, error) {
 		}
 		return hu, nil
 	case "xhttp":
-		xh, err := newXHTTPStreamOne(ctx, tlsConn, h.transport.host, h.transport.path, h.transport.headers)
+		xh, err := h.dialXHTTP2(ctx, tlsConn)
 		if err != nil {
 			_ = tlsConn.Close()
 			return nil, err
