@@ -344,7 +344,7 @@ func xhttpServer(t *testing.T, path string, rec *seen) int {
 	t.Helper()
 	svc := vlessService("")
 	mux := http.NewServeMux()
-	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(strings.TrimSuffix(path, "/")+"/", func(w http.ResponseWriter, r *http.Request) {
 		rec.set(r)
 		if r.Method != http.MethodPost {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
@@ -416,7 +416,7 @@ func TestVLESSOverXHTTPStreamOne(t *testing.T) {
 	echoTCP(t, h)
 	rec.mu.Lock()
 	defer rec.mu.Unlock()
-	if rec.path != "/x" || !strings.HasPrefix(rec.ctype, "application/grpc") {
+	if rec.path != "/x/" || !strings.HasPrefix(rec.ctype, "application/grpc") {
 		t.Fatalf("request path %q ctype %q", rec.path, rec.ctype)
 	}
 	if rec.host != "cdn.example.com" {

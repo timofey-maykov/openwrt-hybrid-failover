@@ -36,6 +36,7 @@ type vlessHandler struct {
 // vlessTransport is what the link says about carrying the stream: plain TCP,
 // WebSocket, HTTP Upgrade, XHTTP stream-one or gRPC.
 type vlessTransport struct {
+	http3   bool
 	kind    string // "", "ws", "httpupgrade", "xhttp" or "grpc"
 	host    string // Host header / HTTP authority
 	path    string
@@ -129,6 +130,26 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 		name = tlsCfg.ServerName()
 	}
 	transport, initErr := vlessTransportFrom(ob.Fields, flow, name)
+	if transport.kind == "xhttp" {
+		opt, err := tlsFromFields(ob.Fields, server)
+		if err != nil {
+			return nil, err
+		}
+		transport.http3 = len(opt.alpn) == 1 && opt.alpn[0] == "h3"
+		if transport.http3 {
+			switch {
+			case !opt.enabled:
+				initErr = fmt.Errorf("vless: xhttp HTTP/3 requires TLS")
+			case opt.reality:
+				initErr = fmt.Errorf("vless: xhttp HTTP/3 does not support REALITY")
+			case opt.fragment != nil:
+				initErr = fmt.Errorf("vless: xhttp HTTP/3 does not support TCP TLS fragmentation")
+			}
+			// QUIC uses TLS 1.3 directly, not a TCP uTLS ClientHello. Preserve
+			// certificate validation, SNI and certificate pins.
+			tlsCfg = newSTDConfig(opt)
+		}
+	}
 	if tlsCfg != nil {
 		// The ALPN has to match the transport: a server that picks h2 for a
 		// WebSocket upgrade, or http/1.1 for gRPC, answers nothing useful.
@@ -142,7 +163,11 @@ func newVLESSHandler(p plan.OutboundPlan) (Handler, error) {
 				tlsCfg.SetNextProtos([]string{"http/1.1"})
 			}
 		case "grpc", "xhttp":
-			tlsCfg.SetNextProtos([]string{"h2"})
+			if transport.http3 {
+				tlsCfg.SetNextProtos([]string{"h3"})
+			} else {
+				tlsCfg.SetNextProtos([]string{"h2"})
+			}
 		}
 	}
 	return &vlessHandler{
@@ -164,6 +189,9 @@ func (h *vlessHandler) Tag() string { return h.tag }
 func (h *vlessHandler) dialStream(ctx context.Context) (net.Conn, error) {
 	if h.initErr != nil {
 		return nil, h.initErr
+	}
+	if h.transport.http3 {
+		return h.dialXHTTP3(ctx)
 	}
 	conn, err := h.dialer.DialContext(ctx, "tcp", h.server)
 	if err != nil {

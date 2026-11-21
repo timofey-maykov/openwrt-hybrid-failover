@@ -36,3 +36,5 @@ require (
 )
 
 replace github.com/tmaykov/openwrt-hybrid-failover => ../
+
+replace github.com/sagernet/sing-vmess => ../third_party/sing-vmess

@@ -155,6 +155,14 @@ func clashURI(proxy map[string]any) (string, bool) {
 		opts := object(proxy[network+"-opts"])
 		tr["path"] = opts["path"]
 		tr["headers"] = opts["headers"]
+		if network == "xhttp" && textValue(opts, "host") != "" {
+			for key := range object(opts["headers"]) {
+				if !strings.EqualFold(key, "Host") {
+					return "", false
+				}
+			}
+			tr["headers"] = map[string]any{"Host": opts["host"]}
+		}
 		tr["mode"] = opts["mode"]
 		if number(opts["max-early-data"]) > 0 || textValue(opts, "early-data-header-name") != "" {
 			return "", false

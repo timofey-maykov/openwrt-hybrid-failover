@@ -19,8 +19,18 @@ import (
 // POST body is upload, response body is download. mode must already be
 // normalized to "stream-one".
 func newXHTTPStreamOne(ctx context.Context, tlsConn net.Conn, host, path string, headers map[string]string) (net.Conn, error) {
-	_ = ctx
+	cc, err := (&http2.Transport{}).NewClientConn(tlsConn)
+	if err != nil {
+		_ = tlsConn.Close()
+		return nil, fmt.Errorf("xhttp: http2 client: %w", err)
+	}
+	return newXHTTPStream(ctx, cc, cc, tlsConn.LocalAddr(), tlsConn.RemoteAddr(), host, path, headers)
+}
+
+// The POST framing is the same over HTTP/2 and HTTP/3.
+func newXHTTPStream(ctx context.Context, rt http.RoundTripper, closer io.Closer, local, remote net.Addr, host, path string, headers map[string]string) (net.Conn, error) {
 	if host == "" {
+		_ = closer.Close()
 		return nil, fmt.Errorf("xhttp: missing host")
 	}
 	if path == "" {
@@ -29,19 +39,24 @@ func newXHTTPStreamOne(ctx context.Context, tlsConn net.Conn, host, path string,
 	if !strings.HasPrefix(path, "/") {
 		path = "/" + path
 	}
-
-	cc, err := (&http2.Transport{}).NewClientConn(tlsConn)
-	if err != nil {
-		_ = tlsConn.Close()
-		return nil, fmt.Errorf("xhttp: http2 client: %w", err)
-	}
-
+	// The dial context is canceled by the caller after establishing a UDP
+	// session. Like net.Dialer, the returned connection lives until Close.
+	requestCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	pr, pw := io.Pipe()
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://"+host+path, pr)
+	req, err := http.NewRequestWithContext(requestCtx, http.MethodPost, "https://"+host+path, pr)
 	if err != nil {
 		_ = pw.Close()
-		_ = cc.Close()
+		cancel()
+		_ = closer.Close()
 		return nil, err
+	}
+	// Xray normalizes the base path with a trailing slash before appending
+	// session metadata. Preserve the configured query and encoded path.
+	if !strings.HasSuffix(req.URL.Path, "/") {
+		req.URL.Path += "/"
+		if req.URL.RawPath != "" {
+			req.URL.RawPath += "/"
+		}
 	}
 	req.Host = host
 	req.Header.Set("Content-Type", "application/grpc")
@@ -60,24 +75,24 @@ func newXHTTPStreamOne(ctx context.Context, tlsConn net.Conn, host, path string,
 
 	out := &xhttpConn{
 		w:          pw,
-		localAddr:  tlsConn.LocalAddr(),
-		remoteAddr: tlsConn.RemoteAddr(),
+		localAddr:  local,
+		remoteAddr: remote,
 		ready:      make(chan struct{}),
-		cc:         cc,
+		cc:         closer,
+		cancel:     cancel,
 	}
 
 	// Return before RoundTrip finishes: VLESS must Write into the POST body
 	// while the server may still be sending response headers. Waiting here
 	// deadlocks when the peer waits for body before answering.
 	go func() {
-		resp, err := cc.RoundTrip(req)
+		resp, err := rt.RoundTrip(req)
 		if err != nil {
 			_ = pr.Close()
 			out.fail(err)
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
-			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			_ = pr.Close()
 			out.fail(fmt.Errorf("xhttp: unexpected status %s", resp.Status))
@@ -110,18 +125,27 @@ type xhttpConn struct {
 	remoteAddr net.Addr
 
 	mu     sync.Mutex
-	cc     *http2.ClientConn
+	cc     io.Closer
+	cancel context.CancelFunc
 	closed bool
 }
 
 func (c *xhttpConn) setReader(rc io.ReadCloser) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		_ = rc.Close()
+		return
+	}
 	c.r.Store(&rc)
 	c.readyOnce.Do(func() { close(c.ready) })
 }
 
 func (c *xhttpConn) fail(err error) {
 	c.err.Store(&err)
+	_ = c.w.CloseWithError(err)
 	c.readyOnce.Do(func() { close(c.ready) })
+	_ = c.Close()
 }
 
 func (c *xhttpConn) Read(p []byte) (int, error) {
@@ -154,6 +178,8 @@ func (c *xhttpConn) Close() error {
 		return nil
 	}
 	c.closed = true
+	c.cancel()
+	c.readyOnce.Do(func() { close(c.ready) })
 	_ = c.w.Close()
 	if rc := c.r.Load(); rc != nil {
 		_ = (*rc).Close()

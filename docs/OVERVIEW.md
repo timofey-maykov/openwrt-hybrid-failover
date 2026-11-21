@@ -145,7 +145,7 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 
 | Схема | Поддержка | Примечание |
 |-------|-----------|------------|
-| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws, grpc, httpupgrade и xhttp/splithttp (режим stream-one; `auto` тоже ведёт себя как stream-one). `packet-up` и `stream-up` пока не поддерживаются. Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws, grpc, httpupgrade и xhttp |
+| `vless://` | да | Reality и TLS, XTLS Vision, TCP и UDP (XUDP). Транспорт tcp, ws, grpc, httpupgrade и xhttp/splithttp поверх HTTP/2 или HTTP/3 (режим stream-one; `auto` тоже ведёт себя как stream-one). `packet-up` и `stream-up` пока не поддерживаются. Из параметров ссылки учитываются `sni`, `alpn`, `fp`, `allowInsecure`, `path`, `host`, `mode`, `serviceName`, `authority`. Vision работает только на обычном TCP, не поверх ws, grpc, httpupgrade и xhttp |
 | `ss://` | да | Shadowsocks |
 | `trojan://` | да | |
 | `socks4://`, `socks4a://`, `socks5://` | да | |
@@ -154,6 +154,10 @@ LuCI и бот не коммитят UCI сразу. Они ставят изм�
 | `awg2://` | да (служебный URI) | Не протокол, см. [ниже](#amnezia-awg2-awg2) |
 | `amneziawg://` | только в подписках | Целиком клиентский конфиг AmneziaWG в base64, так его отдают панели подписок. При загрузке подписки превращается в `awg2://`, берётся первый peer |
 | `http://`, `https://` | нет | Ошибка `unsupported uri scheme` |
+
+Для XHTTP поверх HTTP/3 укажите `type=xhttp&security=tls&alpn=h3&mode=stream-one` в VLESS-ссылке. `mode=auto` тоже использует `stream-one`. На сервере или CDN должен работать HTTP/3, а UDP-порт сервера должен быть доступен. Без `alpn=h3` XHTTP продолжает работать через HTTP/2.
+
+Параметры `sni`, `host`, `path` и `pcs` сохраняются. Для HTTP/3 используется стандартный QUIC/TLS 1.3, TCP-отпечаток `fp` не применяется. REALITY и TCP-фрагментация `fm` с HTTP/3 не поддерживаются, такой канал вернёт явную ошибку.
 
 ### Amnezia `vpn://`
 

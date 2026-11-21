@@ -22,6 +22,10 @@ jobs:
         env:
           GOTOOLCHAIN: local
         run: GOFLAGS="-mod=mod -tags=with_utls" go test ./...
+      - name: Vision and transport race regressions
+        env:
+          GOTOOLCHAIN: local
+        run: GOFLAGS=-mod=mod go test -race -tags=with_utls github.com/sagernet/sing-vmess/vless ./internal/engine/outbound
       - name: Native engine smoke
         run: chmod +x ./scripts/verify-smoke.sh ./scripts/verify-native.sh && ./scripts/verify-smoke.sh
       - name: Test bot

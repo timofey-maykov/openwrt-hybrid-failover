@@ -105,3 +105,27 @@ func TestXrayDoesNotDiscardChainedProxyOrAuthorization(t *testing.T) {
 		}
 	}
 }
+
+func TestStructuredXHTTP3(t *testing.T) {
+	for name, body := range map[string]string{
+		"singbox": `{"outbounds":[{"type":"vless","server":"192.0.2.20","server_port":8443,"uuid":"11111111-1111-4111-8111-111111111111","tls":{"enabled":true,"server_name":"tls.example.com","alpn":["h3"]},"transport":{"type":"xhttp","path":"/x?token=test","mode":"stream-one","headers":{"Host":"cdn.example.com"}}}]}`,
+		"xray":    `{"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"192.0.2.20","port":8443,"users":[{"id":"11111111-1111-4111-8111-111111111111"}]}]},"streamSettings":{"network":"xhttp","security":"tls","tlsSettings":{"serverName":"tls.example.com","alpn":["h3"]},"xhttpSettings":{"host":"cdn.example.com","path":"/x?token=test","mode":"stream-one"}}}]}`,
+		"clash":   "proxies:\n - type: vless\n   server: 192.0.2.20\n   port: 8443\n   uuid: 11111111-1111-4111-8111-111111111111\n   tls: true\n   servername: tls.example.com\n   alpn: [h3]\n   network: xhttp\n   xhttp-opts:\n     host: cdn.example.com\n     path: '/x?token=test'\n     mode: stream-one\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			entries, err := parseSubscription([]byte(body))
+			if err != nil || len(entries) != 1 {
+				t.Fatalf("entries=%d err=%v", len(entries), err)
+			}
+			link, err := url.Parse(entries[0])
+			if err != nil {
+				t.Fatal(err)
+			}
+			for key, want := range map[string]string{"type": "xhttp", "security": "tls", "alpn": "h3", "mode": "stream-one", "host": "cdn.example.com", "sni": "tls.example.com", "path": "/x?token=test"} {
+				if got := link.Query().Get(key); got != want {
+					t.Errorf("%s=%q want %q", key, got, want)
+				}
+			}
+		})
+	}
+}

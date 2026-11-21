@@ -263,6 +263,9 @@ func addTLSAndTransport(ob map[string]any, q url.Values) {
 				"short_id":   q.Get("sid"),
 			},
 		}
+		if alpn := q.Get("alpn"); alpn != "" {
+			ob["tls"].(map[string]any)["alpn"] = strings.Split(alpn, ",")
+		}
 	} else if sec == "tls" {
 		tlsMap := map[string]any{
 			"enabled":     true,

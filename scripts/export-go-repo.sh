@@ -20,6 +20,7 @@ copy go.mod go.mod
 copy go.sum go.sum 2>/dev/null || true
 copy core core
 copy internal internal
+copy third_party third_party
 copy bot bot
 
 # OpenWrt integration
